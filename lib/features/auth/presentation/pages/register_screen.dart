@@ -78,22 +78,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // Translate any dirty name fields before API call
-    await registrationController.translateNameFieldOnUnfocus(
-      text: firstNameController.text,
-      targetModel: registrationController.firstNameLanguages,
-      isDirty: registrationController.isFirstNameDirty,
-    );
-    await registrationController.translateNameFieldOnUnfocus(
-      text: middleNameController.text,
-      targetModel: registrationController.middleNameLanguages,
-      isDirty: registrationController.isMiddleNameDirty,
-    );
-    await registrationController.translateNameFieldOnUnfocus(
-      text: surnameController.text,
-      targetModel: registrationController.surnameLanguages,
-      isDirty: registrationController.isSurnameDirty,
-    );
+    // Translate only fields that still have empty language strings
+    // (i.e. unfocus translation was not triggered yet for that field)
+    if (registrationController.needsTranslation(
+      registrationController.firstNameLanguages.value,
+    )) {
+      await registrationController.translateNameFieldOnUnfocus(
+        text: firstNameController.text,
+        targetModel: registrationController.firstNameLanguages,
+        isDirty: registrationController.isFirstNameDirty,
+      );
+    }
+
+    if (registrationController.needsTranslation(
+      registrationController.middleNameLanguages.value,
+    )) {
+      await registrationController.translateNameFieldOnUnfocus(
+        text: middleNameController.text,
+        targetModel: registrationController.middleNameLanguages,
+        isDirty: registrationController.isMiddleNameDirty,
+      );
+    }
+
+    if (registrationController.needsTranslation(
+      registrationController.surnameLanguages.value,
+    )) {
+      await registrationController.translateNameFieldOnUnfocus(
+        text: surnameController.text,
+        targetModel: registrationController.surnameLanguages,
+        isDirty: registrationController.isSurnameDirty,
+      );
+    }
 
     final firstName = firstNameController.text.trim();
     final middleName = middleNameController.text.trim();

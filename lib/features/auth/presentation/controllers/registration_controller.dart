@@ -223,6 +223,24 @@ class RegistrationController extends GetxController {
   }
 
   // ============================================================
+  // NEEDS TRANSLATION CHECK
+  // ============================================================
+
+  /// Returns true when the model has a non-empty [original] value but
+  /// at least one language string (english / hindi / gujarati) is still
+  /// empty, meaning the translation API must be called.
+  ///
+  /// Returns false when:
+  ///   • [original] is empty  (nothing to translate)
+  ///   • all three language fields are already populated
+  bool needsTranslation(LocalizedTextModel model) {
+    if (model.original.isEmpty) return false;
+    return model.english.isEmpty ||
+        model.hindi.isEmpty ||
+        model.gujarati.isEmpty;
+  }
+
+  // ============================================================
   // SAVE MEMBER STEP 1
   // ============================================================
 
