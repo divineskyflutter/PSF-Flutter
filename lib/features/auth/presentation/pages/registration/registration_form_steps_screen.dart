@@ -1,324 +1,1405 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
+import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/signature/app_signature_bottom_sheet.dart';
+import 'package:psf_application/shared/utils/app_validators.dart';
+import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
+import 'package:psf_application/shared/widgets/upload/app_upload_container.dart';
 
-class RegistrationFlowScreen extends StatefulWidget {
-  const RegistrationFlowScreen({super.key});
+class MemberRegistrationScreen
+    extends StatefulWidget {
+  const MemberRegistrationScreen({
+    super.key,
+  });
+
   @override
-  State<RegistrationFlowScreen> createState() => _RegistrationFlowScreenState();
+  State<MemberRegistrationScreen> createState() =>
+      _MemberRegistrationScreenState();
 }
 
-class _RegistrationFlowScreenState extends State<RegistrationFlowScreen> {
-  final _pageController = PageController();
-  final _personalForm = GlobalKey<FormState>();
-  final _nomineeForm = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _father = TextEditingController();
-  final _mobile = TextEditingController();
-  final _address = TextEditingController();
-  final _dob = TextEditingController();
-  final _aadhaar = TextEditingController();
-  final _nomineeName = TextEditingController();
-  final _nomineeRelation = TextEditingController();
-  final _nomineeMobile = TextEditingController();
-  int _step = 0;
-  String _gender = 'male';
-  String? _photoPath;
-  String? _aadhaarPath;
-  bool _acceptedTerms = false;
-  final List<Nominee> _nominees = [];
+class _MemberRegistrationScreenState
+    extends State<MemberRegistrationScreen> {
+  final controller =
+  Get.find<RegistrationController>();
+
+  final PageController pageController =
+  PageController();
+
+  final GlobalKey<FormState>
+  memberFormKey =
+  GlobalKey<FormState>();
+
+  final GlobalKey<FormState>
+  nomineeFormKey =
+  GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) {
+      _loadMember();
+    });
+  }
+
+  Future<void> _loadMember() async {
+    final currentMember =
+        controller.member.value;
+
+    if (currentMember == null) {
+      return;
+    }
+
+    await controller.getMemberStatus(
+      isRegistered: true,
+      firstName:
+      currentMember.firstName ?? '',
+      middleName:
+      currentMember.lastName ?? '',
+      surname:
+      currentMember.surname ?? '',
+      mobile:
+      currentMember.mobile ?? '',
+    );
+  }
+
+  // ============================================================
+  // NEXT
+  // ============================================================
+
+  Future<void> _next() async {
+    final step =
+        controller.currentStep.value;
+
+    if (step == 0) {
+      if (!memberFormKey.currentState!
+          .validate()) {
+        return;
+      }
+
+      if (controller.profileImage.value ==
+          null) {
+        _showError(
+          'Please upload profile photo',
+        );
+        return;
+      }
+
+      if (controller.signatureFile.value ==
+          null) {
+        _showError(
+          'Please enter your signature',
+        );
+        return;
+      }
+
+      controller.nextStep();
+
+      await pageController.animateToPage(
+        1,
+        duration:
+        const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+
+      return;
+    }
+
+    if (step == 1) {
+      if (!nomineeFormKey.currentState!
+          .validate()) {
+        return;
+      }
+
+      if (controller.nomineeImage.value ==
+          null) {
+        _showError(
+          'Please upload nominee photo',
+        );
+        return;
+      }
+
+      controller.nextStep();
+
+      await pageController.animateToPage(
+        2,
+        duration:
+        const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+
+      return;
+    }
+
+    await _finishRegistration();
+  }
+
+  // ============================================================
+  // BACK
+  // ============================================================
+
+  Future<void> _back() async {
+    if (controller.currentStep.value == 0) {
+      Get.back();
+      return;
+    }
+
+    controller.previousStep();
+
+    await pageController.animateToPage(
+      controller.currentStep.value,
+      duration:
+      const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  // ============================================================
+  // FINISH
+  // ============================================================
+
+  Future<void> _finishRegistration() async {
+    if (!controller.acceptedRules.value) {
+      _showError(
+        'Please accept the rules and conditions',
+      );
+      return;
+    }
+
+    // ==========================================================
+    // TODO:
+    // Call final registration API here.
+    //
+    // Example:
+    //
+    // await controller.submitRegistration();
+    // ==========================================================
+
+    Get.snackbar(
+      'Success',
+      'Registration completed successfully',
+    );
+
+    Get.offAllNamed(
+      AppRoutes.home,
+    );
+  }
+
+  void _showError(String message) {
+    Get.snackbar(
+      'Required',
+      message,
+      snackPosition: SnackPosition.BOTTOM,
+    );
+  }
+
+  Future<void> _openSignature() async {
+    final File? signature =
+    await Get.bottomSheet<File>(
+      const AppSignatureBottomSheet(),
+      isScrollControlled: true,
+    );
+
+    if (signature != null) {
+      controller.setSignature(
+        signature,
+      );
+    }
+  }
 
   @override
   void dispose() {
-    _pageController.dispose();
-    for (final controller in [
-      _name,
-      _father,
-      _mobile,
-      _address,
-      _dob,
-      _aadhaar,
-      _nomineeName,
-      _nomineeRelation,
-      _nomineeMobile
-    ]) {
-      controller.dispose();
-    }
+    pageController.dispose();
     super.dispose();
   }
 
-  Future<void> _chooseFile(bool photo) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result?.files.single.path != null && mounted)
-      setState(() {
-        if (photo)
-          _photoPath = result!.files.single.path;
-        else
-          _aadhaarPath = result!.files.single.path;
-      });
-  }
-
-  void _next() {
-    if (_step == 0 && !(_personalForm.currentState?.validate() ?? false))
-      return;
-    if (_step == 1) {
-      if (!(_nomineeForm.currentState?.validate() ?? false)) return;
-      _nominees.add(Nominee(
-          name: _nomineeName.text.trim(),
-          relationship: _nomineeRelation.text.trim(),
-          mobile: _nomineeMobile.text.trim()));
-    }
-    if (_step == 2 && !_acceptedTerms) {
-      Get.snackbar('required'.tr, 'accept_terms_error'.tr,
-          snackPosition: SnackPosition.BOTTOM);
-      return;
-    }
-    if (_step == 2) {
-      _openPreview();
-      return;
-    }
-    setState(() => _step++);
-    _pageController.animateToPage(_step,
-        duration: const Duration(milliseconds: 280), curve: Curves.easeOut);
-  }
-
-  void _openPreview() {
-    final application = RegistrationApplication(
-        fullName: _name.text.trim(),
-        fatherName: _father.text.trim(),
-        mobile: _mobile.text.trim(),
-        address: _address.text.trim(),
-        dateOfBirth: _dob.text.trim(),
-        gender: _gender,
-        aadhaarNumber: _aadhaar.text.trim(),
-        photoPath: _photoPath,
-        aadhaarPath: _aadhaarPath,
-        nominees: _nominees,
-        acceptedTerms: _acceptedTerms);
-    Get.toNamed(AppRoutes.registrationPreview, arguments: application);
-  }
+  // ============================================================
+  // BUILD
+  // ============================================================
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: AppColors.background,
-        body: SafeArea(
-            child: Column(children: [
-          _topBar(),
-          Expanded(
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor:
+      AppColors.background,
+
+      appBar: AppBar(
+        title: const Text(
+          'Member Registration',
+        ),
+        backgroundColor:
+        AppColors.background,
+        elevation: 0,
+      ),
+
+      body: SafeArea(
+        child: Column(
+          children: [
+            Obx(
+                  () => _StepIndicator(
+                currentStep:
+                controller.currentStep.value,
+              ),
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            Expanded(
               child: PageView(
-                  controller: _pageController,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [_personalStep(), _nomineeStep(), _reviewStep()])),
-          _bottomButton(),
-        ])),
-      );
+                controller:
+                pageController,
+                physics:
+                const NeverScrollableScrollPhysics(),
+                children: [
+                  _buildMemberStep(
+                    context,
+                  ),
+                  _buildNomineeStep(
+                    context,
+                  ),
+                  _buildRulesStep(
+                    context,
+                  ),
+                ],
+              ),
+            ),
 
-  Widget _topBar() => Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      child: Column(children: [
-        Row(children: [
-          IconButton(
-              onPressed: () {
-                if (_step == 0)
-                  Get.back();
-                else {
-                  setState(() => _step--);
-                  _pageController.animateToPage(_step,
-                      duration: const Duration(milliseconds: 250),
-                      curve: Curves.easeOut);
+            _buildBottomButtons(
+              context,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // STEP 1
+  // ============================================================
+
+  Widget _buildMemberStep(
+      BuildContext context,
+      ) {
+    return Form(
+      key: memberFormKey,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(
+          horizontal: 20.px(context),
+          vertical: 10.px(context),
+        ),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            _sectionTitle(
+              context,
+              'Personal Details',
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            Center(
+              child: Obx(
+                    () => AppUploadContainer(
+                  title: 'Profile Photo',
+                  subtitle:
+                  'Tap to upload',
+                  isCircle: true,
+                  width:
+                  130.px(context),
+                  height:
+                  130.px(context),
+                  file: controller
+                      .profileImage.value,
+                  onTap: () {
+                    controller
+                        .showImageSourceSheet(
+                      onSelected:
+                      controller
+                          .pickProfileImage,
+                    );
+                  },
+                  onRemove: controller
+                      .profileImage
+                      .value !=
+                      null
+                      ? () {
+                    controller
+                        .profileImage
+                        .value = null;
+                  }
+                      : null,
+                ),
+              ),
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Father Name',
+              controller:
+              controller.fatherNameController,
+              validator:
+              AppValidators.name,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(
+                    r'[a-zA-Z\s]',
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Date of Birth',
+              controller:
+              controller.dateOfBirthController,
+              readOnly: true,
+              validator:
+              AppValidators.date,
+              suffixIcon: const Icon(
+                Icons.calendar_today_outlined,
+              ),
+              onTap: () {
+                controller.pickDateOfBirth(
+                  context,
+                );
+              },
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            Obx(
+                  () => _dropdown(
+                context: context,
+                label: 'Gender',
+                value: controller
+                    .selectedGender
+                    .value
+                    .isEmpty
+                    ? null
+                    : controller
+                    .selectedGender
+                    .value,
+                items: const [
+                  'Male',
+                  'Female',
+                  'Other',
+                ],
+                onChanged: (value) {
+                  controller
+                      .selectedGender
+                      .value = value ?? '';
+                },
+                validator: (value) {
+                  if (value == null ||
+                      value.isEmpty) {
+                    return 'Please select gender';
+                  }
+
+                  return null;
+                },
+              ),
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            Obx(
+                  () => _dropdown(
+                context: context,
+                label: 'Marital Status',
+                value: controller
+                    .selectedMaritalStatus
+                    .value
+                    .isEmpty
+                    ? null
+                    : controller
+                    .selectedMaritalStatus
+                    .value,
+                items: const [
+                  'Single',
+                  'Married',
+                ],
+                onChanged: (value) {
+                  controller
+                      .selectedMaritalStatus
+                      .value =
+                      value ?? '';
+                },
+              ),
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            _sectionTitle(
+              context,
+              'Address Details',
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Address',
+              controller:
+              controller.addressController,
+              maxLines: 3,
+              validator:
+              AppValidators.requiredField,
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Village',
+              controller:
+              controller.villageController,
+              validator:
+              AppValidators.name,
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Taluka',
+              controller:
+              controller.talukaController,
+              validator:
+              AppValidators.name,
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'District',
+              controller:
+              controller.districtController,
+              validator:
+              AppValidators.name,
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'State',
+              controller:
+              controller.stateController,
+              validator:
+              AppValidators.name,
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            _sectionTitle(
+              context,
+              'Identity Documents',
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Aadhaar Number',
+              controller:
+              controller
+                  .aadharNumberController,
+              keyboardType:
+              TextInputType.number,
+              maxLength: 12,
+              validator:
+              AppValidators.aadhar,
+              inputFormatters: [
+                FilteringTextInputFormatter
+                    .digitsOnly,
+              ],
+            ),
+
+            SizedBox(
+              height: 12.px(context),
+            ),
+
+            Obx(
+                  () => AppUploadContainer(
+                title:
+                'Upload Aadhaar Card',
+                subtitle:
+                'Tap to upload image',
+                height:
+                180.px(context),
+                file: controller
+                    .aadharImage.value,
+                onTap: () {
+                  controller
+                      .showImageSourceSheet(
+                    onSelected:
+                    controller
+                        .pickAadharImage,
+                  );
+                },
+                onRemove: controller
+                    .aadharImage
+                    .value !=
+                    null
+                    ? () {
+                  controller
+                      .aadharImage
+                      .value = null;
                 }
+                    : null,
+              ),
+            ),
+
+            SizedBox(
+              height: 20.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'PAN Number',
+              controller:
+              controller.panNumberController,
+              textCapitalization:
+              TextCapitalization.characters,
+              validator:
+              AppValidators.pan,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'[a-zA-Z0-9]'),
+                ),
+              ],
+            ),
+
+            SizedBox(
+              height: 12.px(context),
+            ),
+
+            Obx(
+                  () => AppUploadContainer(
+                title: 'Upload PAN Card',
+                subtitle:
+                'Tap to upload image',
+                height:
+                180.px(context),
+                file: controller
+                    .panImage.value,
+                onTap: () {
+                  controller
+                      .showImageSourceSheet(
+                    onSelected:
+                    controller
+                        .pickPanImage,
+                  );
+                },
+                onRemove: controller
+                    .panImage
+                    .value !=
+                    null
+                    ? () {
+                  controller
+                      .panImage
+                      .value = null;
+                }
+                    : null,
+              ),
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            _sectionTitle(
+              context,
+              'Occupation',
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Occupation',
+              controller:
+              controller.occupationController,
+              validator:
+              AppValidators.name,
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            _sectionTitle(
+              context,
+              'Signature',
+            ),
+
+            SizedBox(
+              height: 12.px(context),
+            ),
+
+            Obx(
+                  () => AppUploadContainer(
+                title: 'Your Signature',
+                subtitle:
+                'Tap to enter signature',
+                height:
+                160.px(context),
+                file: controller
+                    .signatureFile.value,
+                onTap: _openSignature,
+                onRemove: controller
+                    .signatureFile.value !=
+                    null
+                    ? controller.clearSignature
+                    : null,
+              ),
+            ),
+
+            SizedBox(
+              height: 30.px(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // STEP 2
+  // ============================================================
+
+  Widget _buildNomineeStep(
+      BuildContext context,
+      ) {
+    return Form(
+      key: nomineeFormKey,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(
+          horizontal: 20.px(context),
+          vertical: 10.px(context),
+        ),
+        child: Column(
+          crossAxisAlignment:
+          CrossAxisAlignment.start,
+          children: [
+            _sectionTitle(
+              context,
+              'Nominee Details',
+            ),
+
+            SizedBox(
+              height: 8.px(context),
+            ),
+
+            Text(
+              'Please provide the nominee information.',
+              style: TextStyle(
+                fontSize: 14.px(context),
+                color: AppColors.primaryDark
+                    .withOpacity(0.65),
+              ),
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            Center(
+              child: Obx(
+                    () => AppUploadContainer(
+                  title: 'Nominee Photo',
+                  subtitle:
+                  'Tap to upload',
+                  isCircle: true,
+                  width:
+                  120.px(context),
+                  height:
+                  120.px(context),
+                  file: controller
+                      .nomineeImage.value,
+                  onTap: () {
+                    controller
+                        .showImageSourceSheet(
+                      onSelected:
+                      controller
+                          .pickNomineeImage,
+                    );
+                  },
+                  onRemove: controller
+                      .nomineeImage
+                      .value !=
+                      null
+                      ? () {
+                    controller
+                        .nomineeImage
+                        .value = null;
+                  }
+                      : null,
+                ),
+              ),
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'First Name',
+              controller:
+              controller
+                  .nomineeFirstNameController,
+              validator:
+              AppValidators.name,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(
+                    r'[a-zA-Z\s]',
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Middle Name',
+              controller:
+              controller
+                  .nomineeMiddleNameController,
+              validator:
+              AppValidators.name,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(
+                    r'[a-zA-Z\s]',
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Surname',
+              controller:
+              controller
+                  .nomineeSurnameController,
+              validator:
+              AppValidators.name,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(
+                    r'[a-zA-Z\s]',
+                  ),
+                ),
+              ],
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Relation',
+              controller:
+              controller
+                  .nomineeRelationController,
+              validator:
+              AppValidators.requiredField,
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Mobile Number',
+              controller:
+              controller
+                  .nomineeMobileController,
+              keyboardType:
+              TextInputType.phone,
+              maxLength: 10,
+              validator:
+              AppValidators.mobile,
+              inputFormatters: [
+                FilteringTextInputFormatter
+                    .digitsOnly,
+              ],
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Date of Birth',
+              controller:
+              controller
+                  .nomineeDateOfBirthController,
+              readOnly: true,
+              validator:
+              AppValidators.date,
+              suffixIcon: const Icon(
+                Icons.calendar_today_outlined,
+              ),
+              onTap: () {
+                controller
+                    .pickNomineeDateOfBirth(
+                  context,
+                );
               },
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 19)),
-          const Spacer(),
-          Text('${'step'.tr} ${_step + 1}/3',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, color: AppColors.primaryDark)),
-          const Spacer(),
-          const SizedBox(width: 48)
-        ]),
-        const SizedBox(height: 8),
-        LinearProgressIndicator(
-            value: (_step + 1) / 3,
-            minHeight: 6,
-            borderRadius: BorderRadius.circular(8),
+            ),
+
+            SizedBox(
+              height: 24.px(context),
+            ),
+
+            _sectionTitle(
+              context,
+              'Identity Documents',
+            ),
+
+            SizedBox(
+              height: 16.px(context),
+            ),
+
+            AppTextField.form(
+              label:
+              'Nominee Aadhaar Number',
+              keyboardType:
+              TextInputType.number,
+              maxLength: 12,
+              inputFormatters: [
+                FilteringTextInputFormatter
+                    .digitsOnly,
+              ],
+              validator:
+              AppValidators.aadhar,
+            ),
+
+            SizedBox(
+              height: 12.px(context),
+            ),
+
+            Obx(
+                  () => AppUploadContainer(
+                title:
+                'Upload Nominee Aadhaar',
+                subtitle:
+                'Tap to upload image',
+                height:
+                180.px(context),
+                file: controller
+                    .nomineeAadharImage
+                    .value,
+                onTap: () {
+                  controller
+                      .showImageSourceSheet(
+                    onSelected:
+                    controller
+                        .pickNomineeAadharImage,
+                  );
+                },
+                onRemove: controller
+                    .nomineeAadharImage
+                    .value !=
+                    null
+                    ? () {
+                  controller
+                      .nomineeAadharImage
+                      .value = null;
+                }
+                    : null,
+              ),
+            ),
+
+            SizedBox(
+              height: 20.px(context),
+            ),
+
+            AppTextField.form(
+              label: 'Nominee PAN Number',
+              textCapitalization:
+              TextCapitalization.characters,
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'[a-zA-Z0-9]'),
+                ),
+              ],
+              validator:
+              AppValidators.pan,
+            ),
+
+            SizedBox(
+              height: 12.px(context),
+            ),
+
+            Obx(
+                  () => AppUploadContainer(
+                title:
+                'Upload Nominee PAN',
+                subtitle:
+                'Tap to upload image',
+                height:
+                180.px(context),
+                file: controller
+                    .nomineePanImage.value,
+                onTap: () {
+                  controller
+                      .showImageSourceSheet(
+                    onSelected:
+                    controller
+                        .pickNomineePanImage,
+                  );
+                },
+                onRemove: controller
+                    .nomineePanImage
+                    .value !=
+                    null
+                    ? () {
+                  controller
+                      .nomineePanImage
+                      .value = null;
+                }
+                    : null,
+              ),
+            ),
+
+            SizedBox(
+              height: 30.px(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // STEP 3
+  // ============================================================
+
+  Widget _buildRulesStep(
+      BuildContext context,
+      ) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.all(
+        20.px(context),
+      ),
+      child: Column(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+          _sectionTitle(
+            context,
+            'Rules & Declaration',
+          ),
+
+          SizedBox(
+            height: 16.px(context),
+          ),
+
+          Container(
+            padding:
+            EdgeInsets.all(
+              18.px(context),
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+              BorderRadius.circular(
+                16.px(context),
+              ),
+              border: Border.all(
+                color: AppColors.border,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment:
+              CrossAxisAlignment.start,
+              children: [
+                _rule(
+                  'I confirm that all information provided by me is correct.',
+                ),
+                _rule(
+                  'I understand that incorrect information may result in rejection of my registration.',
+                ),
+                _rule(
+                  'I agree to provide the required documents when requested.',
+                ),
+                _rule(
+                  'I agree to the terms and conditions of Parivar Suraksha Foundation.',
+                ),
+              ],
+            ),
+          ),
+
+          SizedBox(
+            height: 20.px(context),
+          ),
+
+          Obx(
+                () => CheckboxListTile(
+              value: controller
+                  .acceptedRules.value,
+              onChanged: (value) {
+                controller
+                    .acceptedRules
+                    .value = value ?? false;
+              },
+              contentPadding:
+              EdgeInsets.zero,
+              controlAffinity:
+              ListTileControlAffinity.leading,
+              title: const Text(
+                'I have read and agree to all the above rules and declarations.',
+              ),
+            ),
+          ),
+
+          SizedBox(
+            height: 30.px(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rule(String text) {
+    return Padding(
+      padding:
+      const EdgeInsets.only(
+        bottom: 14,
+      ),
+      child: Row(
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
             color: AppColors.primary,
-            backgroundColor: AppColors.primary.withOpacity(.14)),
-      ]));
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _personalStep() => _scroll(Form(
-      key: _personalForm,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _title('personal_information'.tr, 'personal_information_hint'.tr),
-        _field(_name, 'full_name'.tr, Icons.person_outline),
-        _field(_father, 'fathers_name'.tr, Icons.person_outline),
-        _field(_mobile, 'phone_number'.tr, Icons.phone_outlined,
-            keyboard: TextInputType.phone, digits: 10),
-        _field(_dob, 'date_of_birth'.tr, Icons.calendar_today_outlined),
-        _field(_address, 'address'.tr, Icons.location_on_outlined, maxLines: 3),
-        _field(_aadhaar, 'aadhaar_number'.tr, Icons.badge_outlined, digits: 12),
-        Text('gender'.tr, style: _labelStyle),
-        Row(
-            children: ['male', 'female', 'other']
-                .map((value) => Expanded(
-                    child: RadioListTile<String>(
-                        contentPadding: EdgeInsets.zero,
-                        value: value,
-                        groupValue: _gender,
-                        title: Text(value.tr),
-                        activeColor: AppColors.primary,
-                        onChanged: (value) =>
-                            setState(() => _gender = value!))))
-                .toList()),
-        _upload('profile_photo'.tr, _photoPath, () => _chooseFile(true)),
-        _upload('aadhaar_photo'.tr, _aadhaarPath, () => _chooseFile(false)),
-      ])));
+  // ============================================================
+  // BOTTOM BUTTONS
+  // ============================================================
 
-  Widget _nomineeStep() => _scroll(Form(
-      key: _nomineeForm,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _title('nominee_details'.tr, 'nominee_hint'.tr),
-        _field(_nomineeName, 'nominee_name'.tr, Icons.person_outline),
-        _field(_nomineeRelation, 'relationship'.tr, Icons.people_outline),
-        _field(_nomineeMobile, 'phone_number'.tr, Icons.phone_outlined,
-            keyboard: TextInputType.phone, digits: 10),
-        Container(
-            padding: const EdgeInsets.all(16),
-            decoration: _cardDecoration,
-            child: Row(children: [
-              const Icon(Icons.info_outline, color: AppColors.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Text('nominee_note'.tr,
-                      style: const TextStyle(height: 1.4)))
-            ])),
-      ])));
+  Widget _buildBottomButtons(
+      BuildContext context,
+      ) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        20.px(context),
+        12.px(context),
+        20.px(context),
+        20.px(context),
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 12,
+            color:
+            Colors.black.withOpacity(0.08),
+            offset:
+            const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Obx(
+            () {
+          final step =
+              controller.currentStep.value;
 
-  Widget _reviewStep() =>
-      _scroll(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _title('confirm_information'.tr, 'confirm_information_hint'.tr),
-        _summaryCard('personal_information'.tr,
-            [_name.text, _mobile.text, _aadhaar.text]),
-        _summaryCard(
-            'nominee_details'.tr,
-            _nominees.isEmpty
-                ? ['nominee_will_be_added'.tr]
-                : _nominees
-                    .map((item) => '${item.name} - ${item.relationship}')
-                    .toList()),
-        CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _acceptedTerms,
-            activeColor: AppColors.primary,
-            onChanged: (value) =>
-                setState(() => _acceptedTerms = value ?? false),
-            title: Text('agree_terms'.tr,
-                style: const TextStyle(fontSize: 14, height: 1.35))),
-      ]));
+          final isFinish =
+              step == 2;
 
-  Widget _bottomButton() => SafeArea(
-      top: false,
-      child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                  onPressed: _next,
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14))),
-                  child: Text(_step == 2 ? 'preview_application'.tr : 'next'.tr,
-                      style: const TextStyle(fontWeight: FontWeight.w700))))));
-  Widget _scroll(Widget child) => SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 16), child: child);
-  Widget _title(String title, String caption) => Padding(
-      padding: const EdgeInsets.only(bottom: 24),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w800,
-                color: AppColors.primaryDark)),
-        const SizedBox(height: 7),
-        Text(caption,
-            style: TextStyle(
-                color: AppColors.primaryDark.withOpacity(.65), height: 1.4))
-      ]));
-  final _labelStyle = const TextStyle(
-      fontWeight: FontWeight.w600, color: AppColors.primaryDark);
-  Widget _field(TextEditingController controller, String label, IconData icon,
-          {TextInputType? keyboard, int? digits, int maxLines = 1}) =>
-      Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: TextFormField(
-              controller: controller,
-              keyboardType: keyboard,
-              maxLength: digits,
-              maxLines: maxLines,
-              validator: (value) {
-                if (value == null || value.trim().isEmpty)
-                  return 'field_required'.tr;
-                if (digits != null &&
-                    value.replaceAll(RegExp(r'\\D'), '').length != digits)
-                  return 'invalid_number'.tr;
-                return null;
-              },
-              decoration: InputDecoration(
-                  labelText: label,
-                  prefixIcon: Icon(icon),
-                  counterText: '',
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(color: AppColors.border)))));
-  BoxDecoration get _cardDecoration => BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: AppColors.border));
-  Widget _upload(String label, String? path, VoidCallback select) => Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-          onTap: select,
-          borderRadius: BorderRadius.circular(14),
-          child: Container(
-              height: 76,
-              padding: const EdgeInsets.all(12),
-              decoration: _cardDecoration,
-              child: Row(children: [
-                if (path != null)
-                  ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(File(path),
-                          width: 52, height: 52, fit: BoxFit.cover))
-                else
-                  const Icon(Icons.cloud_upload_outlined,
-                      color: AppColors.primary, size: 30),
-                const SizedBox(width: 14),
+          return Row(
+            children: [
+              if (step > 0) ...[
                 Expanded(
-                    child: Text(path == null ? label : 'file_selected'.tr,
-                        style: _labelStyle)),
-                Icon(Icons.chevron_right,
-                    color: AppColors.primaryDark.withOpacity(.5))
-              ]))));
-  Widget _summaryCard(String heading, List<String> lines) => Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(heading, style: _labelStyle),
-        const SizedBox(height: 8),
-        ...lines.map((item) => Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Text(item,
-                style:
-                    TextStyle(color: AppColors.primaryDark.withOpacity(.7)))))
-      ]));
+                  child: OutlinedButton(
+                    onPressed: _back,
+                    child:
+                    const Text('Back'),
+                  ),
+                ),
+                SizedBox(
+                  width: 12.px(context),
+                ),
+              ],
+
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: isFinish &&
+                      !controller
+                          .acceptedRules
+                          .value
+                      ? null
+                      : _next,
+                  child: Text(
+                    isFinish
+                        ? 'Finish'
+                        : 'Next',
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // DROPDOWN
+  // ============================================================
+
+  Widget _dropdown({
+    required BuildContext context,
+    required String label,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?>
+    onChanged,
+    String? Function(String?)?
+    validator,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration:
+      InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.white,
+        border:
+        OutlineInputBorder(
+          borderRadius:
+          BorderRadius.circular(
+            14,
+          ),
+        ),
+      ),
+      items: items
+          .map(
+            (item) =>
+            DropdownMenuItem<String>(
+              value: item,
+              child: Text(item),
+            ),
+      )
+          .toList(),
+      onChanged: onChanged,
+      validator: validator,
+    );
+  }
+
+  // ============================================================
+  // SECTION TITLE
+  // ============================================================
+
+  Widget _sectionTitle(
+      BuildContext context,
+      String title,
+      ) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 20.px(context),
+        fontWeight:
+        FontWeight.w700,
+        color:
+        AppColors.primaryDark,
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// STEP INDICATOR
+// ============================================================================
+
+class _StepIndicator
+    extends StatelessWidget {
+  final int currentStep;
+
+  const _StepIndicator({
+    required this.currentStep,
+  });
+
+  @override
+  Widget build(
+      BuildContext context,
+      ) {
+    const titles = [
+      'Member',
+      'Nominee',
+      'Finish',
+    ];
+
+    return Padding(
+      padding:
+      EdgeInsets.symmetric(
+        horizontal: 20.px(context),
+        vertical: 8.px(context),
+      ),
+      child: Row(
+        children: List.generate(
+          titles.length,
+              (index) {
+            final completed =
+                index < currentStep;
+
+            final active =
+                index == currentStep;
+
+            return Expanded(
+              child: Row(
+                children: [
+                  Column(
+                    children: [
+                      AnimatedContainer(
+                        duration:
+                        const Duration(
+                          milliseconds: 250,
+                        ),
+                        width: 34,
+                        height: 34,
+                        decoration:
+                        BoxDecoration(
+                          shape:
+                          BoxShape.circle,
+                          color: completed ||
+                              active
+                              ? AppColors.primary
+                              : Colors.white,
+                          border:
+                          Border.all(
+                            color: AppColors
+                                .primary,
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Center(
+                          child: completed
+                              ? const Icon(
+                            Icons.check,
+                            color:
+                            Colors.white,
+                            size: 18,
+                          )
+                              : Text(
+                            '${index + 1}',
+                            style:
+                            TextStyle(
+                              color: active
+                                  ? Colors.white
+                                  : AppColors.primaryDark,
+                              fontWeight:
+                              FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(
+                        height: 6,
+                      ),
+                      Text(
+                        titles[index],
+                        style:
+                        TextStyle(
+                          fontSize: 11,
+                          fontWeight:
+                          active
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color:
+                          active
+                              ? AppColors.primaryDark
+                              : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  if (index <
+                      titles.length - 1)
+                    Expanded(
+                      child:
+                      Container(
+                        height: 2,
+                        margin:
+                        const EdgeInsets
+                            .only(
+                          bottom: 22,
+                        ),
+                        color:
+                        index < currentStep
+                            ? AppColors.primary
+                            : Colors.grey.shade300,
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
