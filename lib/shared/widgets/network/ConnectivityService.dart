@@ -56,7 +56,7 @@ class ConnectivityService extends GetxService with WidgetsBindingObserver {
   /// event, on top of the stream reacting immediately to OS connectivity
   /// changes.
   final InternetConnection _checker = InternetConnection.createInstance(
-    checkInterval: const Duration(seconds: 3),
+    checkInterval: const Duration(seconds: 2),
   );
 
   StreamSubscription<InternetStatus>? _subscription;
@@ -73,11 +73,14 @@ class ConnectivityService extends GetxService with WidgetsBindingObserver {
   int _interruptionVersion = 0;
 
   // See class doc (1) — a disconnected signal only takes effect once it
-  // survives this long. Long enough to swallow the camera/call-style
-  // blips reported, short enough that a real outage still shows the
-  // dialog almost immediately.
+  // survives this long. Kept short (not the ~1.2s this used to be) because
+  // the app-lifecycle guard in didChangeAppLifecycleState below already
+  // absorbs the camera/call-style blips this debounce originally existed
+  // for — while this one, real signal (still in the foreground, still
+  // disconnected a moment later) should show the dialog immediately, not
+  // after a noticeable pause.
   Timer? _disconnectDebounce;
-  static const _disconnectDebounceDuration = Duration(milliseconds: 1200);
+  static const _disconnectDebounceDuration = Duration(milliseconds: 250);
 
   // See class doc (2).
   bool _appInForeground = true;
@@ -132,8 +135,42 @@ class ConnectivityService extends GetxService with WidgetsBindingObserver {
     }
   }
 
+  /// Probes real connectivity, tolerating a transient false negative
+  /// instead of trusting a single check.
+  ///
+  /// A single one-shot check run right at the moment the OS actually
+  /// reconnects — mobile data resuming a beat after a phone call ends,
+  /// Wi-Fi still finishing its handshake, DNS still catching up — can
+  /// legitimately time out or come back "disconnected" even though the
+  /// connection is genuinely back a moment later. That was exactly what
+  /// made Retry look like it did nothing (spinner, then silently
+  /// reverting to the same dialog, over and over) and made the
+  /// post-phone-call case never recover on its own — until the slow
+  /// ambient background poll eventually happened to catch the real state
+  /// on its own, several seconds later. A few quick attempts here catch a
+  /// real reconnect on the very tap (or the very moment the app comes back
+  /// to the foreground) instead of making the member wait for that
+  /// background poll — while a device that is genuinely still offline
+  /// still gets a bounded, prompt answer instead of hanging.
+  Future<InternetStatus> _probeConnection() async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final status = await _checker.internetStatus.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => InternetStatus.disconnected,
+      );
+
+      if (status == InternetStatus.connected) return status;
+
+      if (attempt < 2) {
+        await Future.delayed(const Duration(milliseconds: 350));
+      }
+    }
+
+    return InternetStatus.disconnected;
+  }
+
   Future<void> _checkInitialConnection() async {
-    final status = await _checker.internetStatus;
+    final status = await _probeConnection();
 
     _handleInternetStatus(status);
   }
@@ -264,14 +301,7 @@ class ConnectivityService extends GetxService with WidgetsBindingObserver {
 
     isCheckingConnection.value = true;
     try {
-      // A manual retry must never hang indefinitely — if the real probe
-      // takes too long, treat it as "still disconnected" (the dialog just
-      // stays up, which is harmless) instead of leaving the Retry tap
-      // looking like it did nothing.
-      final status = await _checker.internetStatus.timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => InternetStatus.disconnected,
-      );
+      final status = await _probeConnection();
       _handleInternetStatus(status);
     } finally {
       isCheckingConnection.value = false;

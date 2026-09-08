@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
+import 'package:psf_application/shared/utils/image_picker_util.dart';
 
 class LanguageOption {
   const LanguageOption({
@@ -80,6 +81,14 @@ class LanguageSelectionController extends GetxController {
     await _languageController.changeLanguage(
       language.locale,
     );
+
+    // Ask for Camera + Gallery/Photos permission here, right after
+    // language selection and before moving on — see
+    // ImagePickerUtil.requestStartupPermissions' doc comment. Awaited so
+    // the native OS prompts appear before the next screen does, rather
+    // than popping up over onboarding/auth-choice a moment after it's
+    // already visible.
+    await ImagePickerUtil.requestStartupPermissions();
 
     if (AppPrefs.isOnboardingCompleted) {
       Get.offAllNamed(AppRoutes.authChoice);

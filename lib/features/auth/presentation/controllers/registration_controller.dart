@@ -2246,28 +2246,14 @@ class RegistrationController extends GetxController {
       final storedMemberId =
           (await AppSecureStorage.getMemberId()) ?? 0;
 
-      // The stored memberId is only safe to send when it still belongs to
-      // the identity currently being submitted. Without this check, once
-      // ANY member had been looked up/created on this device, every LATER
-      // call here for a *different* name+mobile — a second family member
-      // registering on the same phone, or a corrected typo — would still
-      // attach the OLD memberId to the request. The backend resolves the
-      // lookup by memberId when one is present, so it kept handing back
-      // the OLD member's data/resume-route instead of searching fresh by
-      // the newly typed name+mobile: the screen would silently show/resume
-      // the wrong person's registration.
-      //
-      // `member.value` is the in-memory record the stored id actually
-      // belongs to — the two are always set together, here and in
-      // saveMemberStep1. If it's missing, belongs to a different id, or
-      // its name/mobile no longer match what's being submitted now, the
-      // stored id can't be trusted for THIS request — fall back to
-      // memberId 0, which makes the backend do a genuine name+mobile
-      // search instead, exactly like a brand-new registrant.
+      // `member.value` is the in-memory record the locally stored id
+      // belongs to (the two are always set together, here and in
+      // saveMemberStep1) — still checked below so a stale record can be
+      // cleared out when a genuinely different name+mobile is submitted
+      // (see the result == null branch), but no longer used to decide
+      // what this request itself sends.
       final knownMember = member.value;
-      final identityChanged = storedMemberId == 0 ||
-          knownMember == null ||
-          knownMember.memberId != storedMemberId ||
+      final identityChanged = knownMember == null ||
           !_memberMatchesIdentity(
             knownMember,
             firstName: firstName,
@@ -2276,16 +2262,23 @@ class RegistrationController extends GetxController {
             mobile: mobile,
           );
 
-      final memberId = identityChanged ? 0 : storedMemberId;
-
+      // Always search fresh by name+mobile — never attach a locally
+      // stored memberId to this request, and always pass isRegistered as
+      // true. Sending a stored id here used to let the backend resolve
+      // the lookup by that id instead of the name/mobile actually being
+      // submitted, which meant a second family member registering on the
+      // same phone (or a corrected typo) could silently get shown a
+      // previous member's data/resume-route instead of a fresh
+      // name+mobile search. Always sending memberId 0 removes that risk
+      // entirely, by design, rather than only when a mismatch is detected.
       final request =
       GetMemberStatusRequestModel(
-        isRegistered: memberId == 0 ? isRegistered : false,
+        isRegistered: true,
         firstName: firstName,
         lastName: middleName,
         surname: surname,
         mobile: mobile,
-        memberId: memberId,
+        memberId: 0,
       );
 
       final result =

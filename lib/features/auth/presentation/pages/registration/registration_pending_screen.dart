@@ -220,6 +220,7 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
                         sparks: _show.sparks,
                         rockets: _show.rockets,
                         glitter: _show.glitter,
+                        flashes: _show.flashes,
                         progress: _fireworkController.value,
                       ),
                     ),
@@ -318,11 +319,13 @@ class _FireworkShow {
     required this.rockets,
     required this.sparks,
     required this.glitter,
+    required this.flashes,
   });
 
   final List<_RocketTrail> rockets;
   final List<_FireworkSpark> sparks;
   final List<_GlitterDot> glitter;
+  final List<_BurstFlash> flashes;
 }
 
 /// Builds the whole show up front (once, in initState) so the animation
@@ -333,6 +336,7 @@ _FireworkShow _buildFireworks() {
   final rockets = <_RocketTrail>[];
   final sparks = <_FireworkSpark>[];
   final glitter = <_GlitterDot>[];
+  final flashes = <_BurstFlash>[];
 
   const palette = [
     AppColors.primary,
@@ -371,7 +375,11 @@ _FireworkShow _buildFireworks() {
     final ignitionTime =
         (i / rocketOrigins.length) * 0.55 + 0.14 + random.nextDouble() * 0.04;
 
-    final launchDuration = 0.09 + random.nextDouble() * 0.05;
+    // Shorter climb + a snappier (less quadratic) ease below makes the
+    // rocket look like it's shooting up fast and steady, closer to a real
+    // launch, instead of visibly decelerating the way a longer/quadratic
+    // climb reads as "floaty".
+    final launchDuration = 0.055 + random.nextDouble() * 0.035;
 
     rockets.add(
       _RocketTrail(
@@ -390,6 +398,7 @@ _FireworkShow _buildFireworks() {
     _addBurst(
       sparks: sparks,
       glitter: glitter,
+      flashes: flashes,
       random: random,
       originX: origin.dx,
       originY: origin.dy,
@@ -422,6 +431,7 @@ _FireworkShow _buildFireworks() {
     _addBurst(
       sparks: sparks,
       glitter: glitter,
+      flashes: flashes,
       random: random,
       originX: originX,
       originY: originY,
@@ -434,7 +444,12 @@ _FireworkShow _buildFireworks() {
     );
   }
 
-  return _FireworkShow(rockets: rockets, sparks: sparks, glitter: glitter);
+  return _FireworkShow(
+    rockets: rockets,
+    sparks: sparks,
+    glitter: glitter,
+    flashes: flashes,
+  );
 }
 
 /// Adds one burst's worth of sparks (the main flash) plus its glitter
@@ -445,6 +460,7 @@ _FireworkShow _buildFireworks() {
 void _addBurst({
   required List<_FireworkSpark> sparks,
   required List<_GlitterDot> glitter,
+  required List<_BurstFlash> flashes,
   required Random random,
   required double originX,
   required double originY,
@@ -454,6 +470,20 @@ void _addBurst({
   required double sparkSpeed,
   required double sparkSize,
 }) {
+  // A quick, bright expand-and-fade right at the moment of ignition — the
+  // "bang" a real firework/cracker flash has before you can even make out
+  // individual sparks. Short and fixed-length like the sparks below, not
+  // proportional to how much show time is left.
+  flashes.add(
+    _BurstFlash(
+      originX: originX,
+      originY: originY,
+      startDelay: startDelay,
+      lifeSpan: 0.045 + random.nextDouble() * 0.02,
+      color: color,
+    ),
+  );
+
   for (var i = 0; i < sparkCount; i++) {
     // Evenly spaced around the circle, each with a little jitter so the
     // burst doesn't look like a perfectly uniform starburst.
@@ -467,9 +497,15 @@ void _addBurst({
         angle: angle,
         // Fraction of the canvas's shorter side this spark travels once
         // its burst has fully played out.
-        speed: sparkSpeed + random.nextDouble() * 0.03,
+        speed: sparkSpeed + random.nextDouble() * 0.06,
         size: sparkSize + random.nextDouble() * 2.2,
         startDelay: startDelay,
+        // A real spark burns out in well under a second regardless of
+        // when in the show it fired — fixed here (not scaled by however
+        // much of the animation happens to remain after startDelay) so
+        // every spark, early or late, has the same quick, punchy life
+        // instead of the earliest bursts lingering for several seconds.
+        lifeSpan: 0.08 + random.nextDouble() * 0.05,
         color: color,
       ),
     );
@@ -483,7 +519,7 @@ void _addBurst({
   final glitterCount = 5 + random.nextInt(4);
 
   for (var i = 0; i < glitterCount; i++) {
-    final appearAt = (startDelay + 0.05).clamp(0.0, 1.0);
+    final appearAt = (startDelay + 0.04).clamp(0.0, 1.0);
 
     glitter.add(
       _GlitterDot(
@@ -494,9 +530,12 @@ void _addBurst({
         size: 1.4 + random.nextDouble() * 1.6,
         color: color,
         appearAt: appearAt,
+        // Fades out well within a second of the flash rather than
+        // lingering for several — same "fixed short life, not
+        // remaining-time-proportional" fix as the sparks above.
         fadeOutAt:
-            (startDelay + 0.28 + random.nextDouble() * 0.22).clamp(0.0, 1.0),
-        twinkleSpeed: 5 + random.nextDouble() * 7,
+            (startDelay + 0.14 + random.nextDouble() * 0.08).clamp(0.0, 1.0),
+        twinkleSpeed: 7 + random.nextDouble() * 8,
         twinklePhase: random.nextDouble() * pi * 2,
       ),
     );
@@ -545,6 +584,7 @@ class _FireworkSpark {
     required this.speed,
     required this.size,
     required this.startDelay,
+    required this.lifeSpan,
     required this.color,
   });
 
@@ -556,7 +596,7 @@ class _FireworkSpark {
   final double angle;
 
   /// How far this spark travels, as a fraction of the canvas's shorter
-  /// side, once its burst has fully played out.
+  /// side, once its life span has fully played out.
   final double speed;
 
   final double size;
@@ -566,6 +606,14 @@ class _FireworkSpark {
   /// together), but different between bursts (so bursts fire in
   /// sequence, not all at once).
   final double startDelay;
+
+  /// Fixed fraction of the overall animation this spark takes to travel
+  /// out and fade, starting from [startDelay] — NOT proportional to how
+  /// much show time happens to remain after it ignites. Every spark gets
+  /// the same short, punchy life regardless of when it fires; without
+  /// this, an early burst's sparks would linger fading for most of the
+  /// show, which read as slow and unrealistic.
+  final double lifeSpan;
 
   final Color color;
 }
@@ -617,17 +665,38 @@ class _GlitterDot {
   final double twinklePhase;
 }
 
+/// A quick, bright expand-and-fade flash right at a burst's ignition
+/// point — drawn under everything else so the sparks/glitter read as
+/// flying out of it, gone almost as soon as it appears.
+class _BurstFlash {
+  const _BurstFlash({
+    required this.originX,
+    required this.originY,
+    required this.startDelay,
+    required this.lifeSpan,
+    required this.color,
+  });
+
+  final double originX;
+  final double originY;
+  final double startDelay;
+  final double lifeSpan;
+  final Color color;
+}
+
 class _FireworkPainter extends CustomPainter {
   _FireworkPainter({
     required this.rockets,
     required this.sparks,
     required this.glitter,
+    required this.flashes,
     required this.progress,
   });
 
   final List<_RocketTrail> rockets;
   final List<_FireworkSpark> sparks;
   final List<_GlitterDot> glitter;
+  final List<_BurstFlash> flashes;
   final double progress;
 
   @override
@@ -648,10 +717,10 @@ class _FireworkPainter extends CustomPainter {
 
       final t = (progress - launchStart) / rocket.launchDuration;
 
-      // Ease-out: quick off the ground, slowing as it nears the top —
-      // like a real rocket losing thrust rather than flying at a
-      // constant speed the whole way up.
-      final eased = 1 - pow(1 - t, 2).toDouble();
+      // A gentler ease-out (power 1.4, not quadratic) — still slows a
+      // little near the top, but mostly shoots up fast and steady rather
+      // than visibly decelerating the whole way, which read as floaty.
+      final eased = 1 - pow(1 - t, 1.4).toDouble();
 
       final originX = rocket.originX * size.width;
       final originY = rocket.originY * size.height;
@@ -688,47 +757,88 @@ class _FireworkPainter extends CustomPainter {
       );
     }
 
-    for (final spark in sparks) {
-      // Each spark's own 0..1 window starts the moment its burst ignites
-      // and runs to the end of the animation, so every burst gets its
-      // full travel-and-fade regardless of how late it starts.
+    for (final flash in flashes) {
       final localProgress =
-          ((progress - spark.startDelay) / (1 - spark.startDelay))
-              .clamp(0.0, 1.0);
+          ((progress - flash.startDelay) / flash.lifeSpan).clamp(0.0, 1.0);
+
+      if (localProgress <= 0 || localProgress >= 1) continue;
+
+      final opacity = (1 - localProgress) * (1 - localProgress);
+      if (opacity <= 0.02) continue;
+
+      final radius = shortSide * (0.02 + localProgress * 0.05);
+
+      canvas.drawCircle(
+        Offset(flash.originX * size.width, flash.originY * size.height),
+        radius,
+        Paint()..color = Colors.white.withOpacity(opacity * 0.85),
+      );
+    }
+
+    // Helper: a spark's traveled distance + gravity drop at any point in
+    // its own 0..1 life, reused below to draw both the current position
+    // and a slightly-earlier trailing position for a streaked look.
+    double sparkDistance(double localT) =>
+        (1 - pow(1 - localT, 2).toDouble());
+
+    for (final spark in sparks) {
+      // Each spark burns out over its own short, fixed lifeSpan starting
+      // the moment its burst ignites — not stretched over whatever show
+      // time happens to remain, which used to make early sparks linger
+      // fading for several seconds. This is the fix for the "slow" /
+      // "fake" look: every spark, early or late in the show, now has the
+      // same quick, punchy life a real spark has.
+      final localProgress =
+          ((progress - spark.startDelay) / spark.lifeSpan).clamp(0.0, 1.0);
 
       if (localProgress <= 0) continue;
-
-      // Fast initial burst that decelerates (ease-out) — a real firework
-      // shell's sparks slow down as they travel, they don't fly outward
-      // at a constant speed.
-      final eased = 1 - pow(1 - localProgress, 2).toDouble();
-      final distance = eased * spark.speed * shortSide;
 
       final originX = spark.originX * size.width;
       final originY = spark.originY * size.height;
 
-      // A little gravity so sparks arc downward as they fade, instead of
-      // flying outward in perfectly straight lines forever.
-      final gravity = localProgress * localProgress * shortSide * 0.12;
-
+      // Fast initial burst that decelerates (ease-out) — a real firework
+      // shell's sparks slow down as they travel, they don't fly outward
+      // at a constant speed.
+      final eased = sparkDistance(localProgress);
+      final distance = eased * spark.speed * shortSide;
+      final gravity = localProgress * localProgress * shortSide * 0.10;
       final dx = originX + cos(spark.angle) * distance;
       final dy = originY + sin(spark.angle) * distance + gravity;
 
       // Bright for the first instant (the "bang"), then fades out — a
       // quick flash rather than a slow fade, closer to how an actual
       // spark burns out.
-      final opacity = localProgress < 0.15
+      final opacity = localProgress < 0.2
           ? 1.0
-          : (1 - (localProgress - 0.15) / 0.85).clamp(0.0, 1.0);
+          : (1 - (localProgress - 0.2) / 0.8).clamp(0.0, 1.0);
 
       if (opacity <= 0) continue;
 
-      final paint = Paint()..color = spark.color.withOpacity(opacity);
+      // A short trailing streak (from a slightly-earlier point on the
+      // same path to the current point) instead of a plain shrinking
+      // dot — reads as a real spark burning through the air rather than
+      // a dot fading in place.
+      final trailT = (localProgress - 0.10).clamp(0.0, 1.0);
+      final trailEased = sparkDistance(trailT);
+      final trailDistance = trailEased * spark.speed * shortSide;
+      final trailGravity = trailT * trailT * shortSide * 0.10;
+      final tx = originX + cos(spark.angle) * trailDistance;
+      final ty = originY + sin(spark.angle) * trailDistance + trailGravity;
 
+      final streakPaint = Paint()
+        ..color = spark.color.withOpacity(opacity)
+        ..strokeWidth = spark.size * (1 - localProgress * 0.5)
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawLine(Offset(tx, ty), Offset(dx, dy), streakPaint);
+
+      // A brighter head dot at the very tip of the streak — the "hot"
+      // leading edge of the spark.
       canvas.drawCircle(
         Offset(dx, dy),
-        spark.size * (1 - localProgress * 0.4),
-        paint,
+        spark.size * 0.55 * (1 - localProgress * 0.4),
+        Paint()..color = Color.lerp(spark.color, Colors.white, 0.35)!
+            .withOpacity(opacity),
       );
     }
 
