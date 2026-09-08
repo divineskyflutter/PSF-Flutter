@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:lottie/lottie.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
+import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/widgets/common/ornamental_divider.dart';
 
 /// A single onboarding experience driven by [OnboardingPageData].
 /// Add or update a slide by changing the list below; the layout stays shared.
@@ -65,29 +66,52 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
+  // ============================================================
+  // LAYOUT
+  //
+  // The action bar/indicator used to float on TOP of the PageView (via an
+  // Align inside a Stack), with the slide reserving a guessed pixel gap at
+  // its own bottom so its text wouldn't be covered. That guess didn't
+  // always match the action bar's real height (it changes with the
+  // language's text length and font metrics), so long Hindi/Gujarati
+  // titles/descriptions could end up rendering underneath the floating
+  // bar. Using a plain Column instead — PageView on top (Expanded),
+  // indicator + action bar below as normal siblings — means their real
+  // heights are always accounted for by the layout itself: nothing can
+  // ever sit underneath anything else, with no pixel guessing and no
+  // scrolling required.
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            PageView.builder(
-              controller: _pageController,
-              itemCount: _pages.length,
-              onPageChanged: (page) => setState(() => _currentPage = page),
-              itemBuilder: (context, index) =>
-                  OnboardingSlide(data: _pages[index]),
-            ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: _OnboardingActions(
-                currentPage: _currentPage,
-                pageCount: _pages.length,
-                isLastPage: _isLastPage,
-                onNext: _next,
-                onSkip: _goToAuthSelection,
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _pages.length,
+                onPageChanged: (page) => setState(() => _currentPage = page),
+                itemBuilder: (context, index) =>
+                    OnboardingSlide(data: _pages[index]),
               ),
+            ),
+
+            // Indicator now lives outside the action card, on the plain
+            // background, so it gets its own (non-white) color scheme.
+            _PageIndicator(
+              currentPage: _currentPage,
+              pageCount: _pages.length,
+            ),
+
+            SizedBox(height: 12.px(context)),
+
+            _OnboardingActions(
+              isLastPage: _isLastPage,
+              onNext: _next,
+              onSkip: _goToAuthSelection,
             ),
           ],
         ),
@@ -109,56 +133,174 @@ class OnboardingPageData {
 }
 
 class OnboardingSlide extends StatelessWidget {
-  const OnboardingSlide({required this.data, super.key});
+  const OnboardingSlide({
+    required this.data,
+    super.key,
+  });
 
   final OnboardingPageData data;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
-      builder: (context, constraints) => Padding(
-        padding: const EdgeInsets.fromLTRB(28, 24, 28, 236),
-        child: Column(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+
+        // Fixed responsive heights. Kept smaller than before (was 390/50)
+        // now that the action bar sits below the slide instead of
+        // floating on top of it — the slide only gets whatever height is
+        // left after the indicator + action bar, so it needs to spend
+        // less of that on the hero image and more on the text.
+        final imageHeight = 450.px(context);
+        final overlap = 36.px(context);
+
+        final contentTop = imageHeight - overlap;
+
+        return Stack(
           children: [
-            const SizedBox(height: 18),
-            Expanded(
-              flex: 6,
-              child: Center(
-                  child: Lottie.asset(
+            // ============================================================
+            // IMAGE
+            // ============================================================
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: imageHeight,
+              child: Image.asset(
                 data.assetPath,
-                width: constraints.maxWidth,
-                fit: BoxFit.contain,
-              )),
+                width: screenWidth,
+                height: imageHeight,
+                fit: BoxFit.cover,
+              ),
             ),
-            Expanded(
-              flex: 4,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    data.title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 32,
-                      height: 1.12,
-                      fontWeight: FontWeight.w800,
-                    ),
+
+            // ============================================================
+            // CONTENT CONTAINER
+            // ============================================================
+            Positioned(
+              top: contentTop,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(40.px(context)),
                   ),
-                  const SizedBox(height: 16),
-                  Text(
-                    data.description,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
-                      height: 1.5,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    // ----------------------------------------------------
+                    // TOP DECORATION
+                    // ----------------------------------------------------
+                    SizedBox(
+                      height: 16.px(context),
                     ),
-                  ),
-                ],
+
+                    OrnamentalDivider(
+                      iconSize: 18.px(context),
+                    ),
+
+                    SizedBox(
+                      height: 10.px(context),
+                    ),
+
+                    // ----------------------------------------------------
+                    // TEXT AREA — top-aligned (not centered) and never
+                    // truncated, so a longer Hindi/Gujarati translation
+                    // always renders in full instead of being cut short
+                    // with an ellipsis or centered into the space the
+                    // action bar used to cover.
+                    // ----------------------------------------------------
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 26.px(context),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          // TITLE
+                          Text(
+                            data.title,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 24.px(context),
+                              height: 1.2,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+
+                          SizedBox(
+                            height: 10.px(context),
+                          ),
+
+                          // DESCRIPTION
+                          Text(
+                            data.description,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14.5.px(context),
+                              height: 1.4,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+// ============================================================
+// PAGE INDICATOR — previously drawn inside the gradient action card;
+// moved out to sit on the plain background above it, so it needed its
+// own (non-white) color scheme instead of the one designed to sit on a
+// colored gradient.
+// ============================================================
+
+class _PageIndicator extends StatelessWidget {
+  const _PageIndicator({
+    required this.currentPage,
+    required this.pageCount,
+  });
+
+  final int currentPage;
+  final int pageCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        pageCount,
+            (index) => AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          margin: EdgeInsets.symmetric(
+            horizontal: 3.px(context),
+          ),
+          height: 6.px(context),
+          width: currentPage == index
+              ? 22.px(context)
+              : 6.px(context),
+          decoration: BoxDecoration(
+            color: currentPage == index
+                ? AppColors.primary
+                : AppColors.primary.withOpacity(.20),
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
     );
@@ -167,97 +309,106 @@ class OnboardingSlide extends StatelessWidget {
 
 class _OnboardingActions extends StatelessWidget {
   const _OnboardingActions({
-    required this.currentPage,
-    required this.pageCount,
     required this.isLastPage,
     required this.onNext,
     required this.onSkip,
   });
 
-  final int currentPage;
-  final int pageCount;
   final bool isLastPage;
   final VoidCallback onNext;
   final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(28, 42, 28, 28),
-      decoration: const BoxDecoration(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(42)),
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppColors.primaryLight,
-            AppColors.primary,
-            AppColors.primaryDark
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20.px(context),
+        right: 20.px(context),
+        bottom: 14.px(context),
+      ),
+      child: Container(
+        // Height reduced — was vertical: 12 with the indicator row also
+        // taking space inside; the indicator lives outside now, so this
+        // card only ever needs to fit the action button(s).
+        padding: EdgeInsets.symmetric(
+          horizontal: 16.px(context),
+          vertical: 8.px(context),
+        ),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              AppColors.primaryLight,
+              AppColors.primary,
+              AppColors.primaryDark,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(
+            22.px(context),
+          ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+              color: Colors.black.withOpacity(.16),
+            ),
           ],
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              pageCount,
-              (index) => AnimatedContainer(
-                duration: const Duration(milliseconds: 220),
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                height: 8,
-                width: currentPage == index ? 28 : 8,
-                decoration: BoxDecoration(
-                  color: currentPage == index
-                      ? Colors.white
-                      : Colors.white.withOpacity(.42),
-                  borderRadius: BorderRadius.circular(8),
+        child: isLastPage
+            ? _ActionButton(
+          label: AppStrings.continueText.tr,
+          icon: Icons.arrow_forward_rounded,
+          onTap: onNext,
+        )
+            : Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 42.px(context),
+                child: TextButton(
+                  onPressed: onSkip,
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: Text(
+                    AppStrings.skip.tr,
+                    style: TextStyle(
+                      fontSize: 15.px(context),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 26),
-          if (isLastPage)
-            _ActionButton(
-                label: AppStrings.continueText.tr,
+
+            SizedBox(width: 10.px(context)),
+
+            Expanded(
+              flex: 1,
+              child: _ActionButton(
+                label: AppStrings.next.tr,
                 icon: Icons.arrow_forward_rounded,
-                onTap: onNext)
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: onSkip,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(58),
-                    ),
-                    child: Text(AppStrings.skip.tr,
-                        style: TextStyle(
-                            fontSize: 17, fontWeight: FontWeight.w700)),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 2,
-                  child: _ActionButton(
-                      label: AppStrings.next.tr,
-                      icon: Icons.arrow_forward_rounded,
-                      onTap: onNext),
-                ),
-              ],
+                onTap: onNext,
+              ),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
+
 class _ActionButton extends StatelessWidget {
-  const _ActionButton(
-      {required this.label, required this.icon, required this.onTap});
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   final String label;
   final IconData icon;
@@ -266,23 +417,30 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 58,
+      height: 42.px(context),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22.px(context)),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(14.px(context)),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      color: AppColors.primaryDark,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(width: 9),
-              Icon(icon, color: AppColors.primaryDark),
+              Text(
+                label,
+                style: TextStyle(
+                  color: AppColors.primaryDark,
+                  fontSize: 15.px(context),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              SizedBox(width: 7.px(context)),
+              Icon(
+                icon,
+                color: AppColors.primaryDark,
+                size: 20.px(context),
+              ),
             ],
           ),
         ),

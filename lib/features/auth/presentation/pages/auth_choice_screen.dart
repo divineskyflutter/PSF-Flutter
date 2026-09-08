@@ -212,27 +212,29 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                       // ==================================================
 
                       SizedBox(
-                        height: 220.px(context),
+                        height: 130.px(context),
                       ),
 
                       Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: 24.px(context),
+                          horizontal: 20.px(context),
                         ),
-                        child: Row(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
 
                             // -----------------------------
                             // SIGN IN
                             // -----------------------------
 
-                            Expanded(
+                            SizedBox(
+                              width: double.infinity,
                               child: AppButton(
                                 label: AppStrings.signIn.tr,
                                 onPressed: () {
-                                  Get.toNamed(AppRoutes.login);
+                                  // Get.toNamed(AppRoutes.login);
                                 },
-                                height: 54.px(context),
+                                height: 56.px(context),
                                 borderRadius: 14.px(context),
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
@@ -244,20 +246,21 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                             ),
 
                             SizedBox(
-                              width: 14.px(context),
+                              height: 14.px(context),
                             ),
 
                             // -----------------------------
                             // REGISTER
                             // -----------------------------
 
-                            Expanded(
+                            SizedBox(
+                              width: double.infinity,
                               child: AppButton(
                                 label: AppStrings.register.tr,
                                 onPressed: () {
                                   Get.toNamed(AppRoutes.registerScreen);
                                 },
-                                height: 54.px(context),
+                                height: 56.px(context),
                                 borderRadius: 14.px(context),
                                 backgroundColor: Colors.transparent,
                                 foregroundColor: AppColors.primary,

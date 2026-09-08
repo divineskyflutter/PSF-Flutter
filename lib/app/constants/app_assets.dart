@@ -13,16 +13,23 @@ class AppAssets {
 
   // ------------------------------------------------------------
   // Onboarding
+  //
+  // Static illustrations — replaced the earlier Lottie animations
+  // (onboarding_community.json / onboarding_family.json /
+  // onboarding_finance.json, still in assets/images/onboarding/ but no
+  // longer referenced anywhere) with commissioned artwork matching the
+  // app's design. OnboardingScreen renders these via Image.asset now,
+  // not Lottie.asset — see that file.
   // ------------------------------------------------------------
 
   static const String onboardingCommunity =
-      'assets/images/onboarding/onboarding_community.json';
+      'assets/images/onboarding/onboarding_welcome.png';
 
   static const String onboardingFamily =
-      'assets/images/onboarding/onboarding_family.json';
+      'assets/images/onboarding/onboarding_family.png';
 
   static const String onboardingFinance =
-      'assets/images/onboarding/onboarding_finance.json';
+      'assets/images/onboarding/onboarding_grow.png';
 
   // ------------------------------------------------------------
   // Rules

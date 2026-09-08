@@ -1,8 +1,7 @@
-import 'package:psf_application/core/network/models/api_response_model.dart';
+import 'package:psf_application/core/network/exceptions/api_exceptions.dart';
 import 'package:psf_application/shared/data_source/language_remote_data_source.dart';
 import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/models/localized_text_model.dart';
-import 'package:psf_application/shared/models/translate_text_request_model.dart';
 import 'package:psf_application/shared/repo/language_translation_repository.dart';
 import 'package:psf_application/shared/utils/script_detector_util.dart';
 
@@ -15,58 +14,29 @@ class LanguageTranslationRepositoryImpl
       );
 
   @override
-  Future<String> translate({
+  Future<String> transliterate({
     required String text,
-    required AppLanguage from,
     required AppLanguage to,
   }) async {
-    if (text.trim().isEmpty) {
+    final trimmed = text.trim();
+
+    if (trimmed.isEmpty) {
       return '';
     }
 
-    if (from == to) {
-      return text;
-    }
-
-    final request = TranslateTextRequestModel(
-      text: text.trim(),
+    final response = await _remoteDataSource.transliterate(
+      text: trimmed,
+      targetLanguage: to,
     );
 
-    late final ApiResponseModel response;
-
-    try {
-      if (from == AppLanguage.english && to == AppLanguage.hindi) {
-        response = await _remoteDataSource.translateEnglishToHindi(request);
-      } else if (from == AppLanguage.english && to == AppLanguage.gujarati) {
-        response = await _remoteDataSource.translateEnglishToGujarati(request);
-      } else if (from == AppLanguage.hindi && to == AppLanguage.english) {
-        response = await _remoteDataSource.translateHindiToEnglish(request);
-      } else if (from == AppLanguage.hindi && to == AppLanguage.gujarati) {
-        response = await _remoteDataSource.translateHindiToGujarati(request);
-      } else if (from == AppLanguage.gujarati && to == AppLanguage.english) {
-        response = await _remoteDataSource.translateGujaratiToEnglish(request);
-      } else if (from == AppLanguage.gujarati && to == AppLanguage.hindi) {
-        response = await _remoteDataSource.translateGujaratiToHindi(request);
-      } else {
-        response = await _remoteDataSource.translateDynamic(
-          request: request,
-          fromCode: from.code,
-          toCode: to.code,
-        );
-      }
-
-      if (response.data == null) return text;
-      if (response.data is Map) {
-        return response.data['data']?.toString() ??
-            response.data['translatedText']?.toString() ??
-            response.data['result']?.toString() ??
-            text;
-      }
-      return response.data.toString();
-    } catch (e) {
-      // Return original text on API failure to prevent UI crash or data corruption
-      return text;
+    if (response.status != true || response.transliteratedText.isEmpty) {
+      throw TranslationException(
+        'Could not convert "$trimmed" to ${to.displayName}. '
+            'Please try again.',
+      );
     }
+
+    return response.transliteratedText;
   }
 
   @override
@@ -78,44 +48,46 @@ class LanguageTranslationRepositoryImpl
       return LocalizedTextModel.empty();
     }
 
-    final script = ScriptDetector.detectScript(trimmedText);
+    final inputLanguage = _languageOf(
+      ScriptDetector.detectScript(trimmedText),
+    );
 
-    String english = '';
-    String hindi = '';
-    String gujarati = '';
+    String english =
+    inputLanguage == AppLanguage.english ? trimmedText : '';
+    String hindi =
+    inputLanguage == AppLanguage.hindi ? trimmedText : '';
+    String gujarati =
+    inputLanguage == AppLanguage.gujarati ? trimmedText : '';
 
-    switch (script) {
-      case DetectedScript.hindi:
-        hindi = trimmedText;
-        final results = await Future.wait([
-          translate(text: trimmedText, from: AppLanguage.hindi, to: AppLanguage.english),
-          translate(text: trimmedText, from: AppLanguage.hindi, to: AppLanguage.gujarati),
-        ]);
-        english = results[0];
-        gujarati = results[1];
-        break;
+    // Only call the API for the scripts that aren't already known — the
+    // script the user actually typed in needs no round trip.
+    final pending = <AppLanguage>[
+      if (english.isEmpty) AppLanguage.english,
+      if (hindi.isEmpty) AppLanguage.hindi,
+      if (gujarati.isEmpty) AppLanguage.gujarati,
+    ];
 
-      case DetectedScript.gujarati:
-        gujarati = trimmedText;
-        final results = await Future.wait([
-          translate(text: trimmedText, from: AppLanguage.gujarati, to: AppLanguage.english),
-          translate(text: trimmedText, from: AppLanguage.gujarati, to: AppLanguage.hindi),
-        ]);
-        english = results[0];
-        hindi = results[1];
-        break;
+    final results = await Future.wait(
+      pending.map(
+            (language) => transliterate(
+          text: trimmedText,
+          to: language,
+        ),
+      ),
+    );
 
-      case DetectedScript.english:
-      case DetectedScript.unknown:
-      default:
-        english = trimmedText;
-        final results = await Future.wait([
-          translate(text: trimmedText, from: AppLanguage.english, to: AppLanguage.hindi),
-          translate(text: trimmedText, from: AppLanguage.english, to: AppLanguage.gujarati),
-        ]);
-        hindi = results[0];
-        gujarati = results[1];
-        break;
+    for (var i = 0; i < pending.length; i++) {
+      switch (pending[i]) {
+        case AppLanguage.english:
+          english = results[i];
+          break;
+        case AppLanguage.hindi:
+          hindi = results[i];
+          break;
+        case AppLanguage.gujarati:
+          gujarati = results[i];
+          break;
+      }
     }
 
     return LocalizedTextModel(
@@ -124,5 +96,19 @@ class LanguageTranslationRepositoryImpl
       hindi: hindi,
       gujarati: gujarati,
     );
+  }
+
+  /// Treats undetectable script (numbers, punctuation-only input, etc.) as
+  /// English, matching the previous behaviour.
+  AppLanguage _languageOf(DetectedScript script) {
+    switch (script) {
+      case DetectedScript.hindi:
+        return AppLanguage.hindi;
+      case DetectedScript.gujarati:
+        return AppLanguage.gujarati;
+      case DetectedScript.english:
+      case DetectedScript.unknown:
+        return AppLanguage.english;
+    }
   }
 }

@@ -4,17 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
-import 'package:psf_application/app/routes/app_routes.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/features/auth/domain/entities/banner_entity.dart';
 import 'package:psf_application/features/auth/presentation/widgets/network_banner.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/navigation/registration_navigator.dart';
 import 'package:psf_application/shared/widgets/images/common_image_view.dart';
 import 'package:psf_application/shared/widgets/sliders/app_image_slider.dart';
 import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
 
 import '../controllers/auth_banner_controller.dart';
+import '../controllers/registration_controller.dart';
 
 class LegalRules extends StatefulWidget {
   const LegalRules({super.key});
@@ -28,6 +29,8 @@ class _LegalRulesState extends State<LegalRules> {
   final AuthBannerController bannerController =
   Get.find<AuthBannerController>();
 
+  final RegistrationController registrationController =
+  Get.find<RegistrationController>();
 
   final List<String> ruleImages = [
     AppAssets.registerRulesIncomeText,
@@ -44,6 +47,23 @@ class _LegalRulesState extends State<LegalRules> {
   @override
   void dispose() {
     super.dispose();
+  }
+
+  // ==========================================================
+  // CONTINUE REGISTRATION (SaveRulesRegulationScreen)
+  // ==========================================================
+
+  Future<void> _continueRegistration() async {
+    final nextRoute =
+        await registrationController.saveRulesAcceptance();
+
+    if (nextRoute == null) {
+      // Either a real error was already toasted, or the connectivity
+      // dialog already handled a network drop — stop either way.
+      return;
+    }
+
+    await RegistrationNavigator.navigateToScreen(nextRoute);
   }
 
   @override
@@ -219,9 +239,7 @@ class _LegalRulesState extends State<LegalRules> {
                   width: double.infinity,
                   height: 52,
                   child: ElevatedButton(
-                    onPressed: () {
-                      Get.toNamed(AppRoutes.memberRegistrationStep1);
-                    },
+                    onPressed: _continueRegistration,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: AppColors.background,

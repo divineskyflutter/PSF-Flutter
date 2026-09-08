@@ -46,7 +46,7 @@ android {
         }
         create("dev") {
             dimension = "environment"
-            resValue("string", "app_name", "PSF Finance Dev")
+            resValue("string", "app_name", "PSF Foundation Dev")
             resValue("string", "domain_url", "dev.psf-foundation.com")
         }
     }

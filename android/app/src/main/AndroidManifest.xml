@@ -56,11 +56,20 @@
             </intent-filter>
 
         </activity>
-        
+
+        <!-- Required by the image_cropper package: it launches this activity
+             (from the bundled uCrop library) to show the crop screen. Without
+             this declaration, cropping a picked photo throws
+             ActivityNotFoundException and crashes the app. -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-            
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileProvider"

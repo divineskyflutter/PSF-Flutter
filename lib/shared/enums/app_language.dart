@@ -18,7 +18,14 @@ extension AppLanguageExtension on AppLanguage {
     }
   }
 
-  String get name {
+  /// Human-readable label in that language's own script.
+  ///
+  /// Deliberately NOT named `name`: every Dart enum already has a built-in
+  /// `.name` (from `Enum.name`, e.g. `AppLanguage.hindi.name == 'hindi'`),
+  /// and an extension member with the same name as an existing instance
+  /// member is always shadowed by it — so a `.name` getter here would
+  /// silently never run.
+  String get displayName {
     switch (this) {
       case AppLanguage.english:
         return 'English';

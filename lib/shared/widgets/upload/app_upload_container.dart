@@ -55,12 +55,21 @@ class AppUploadContainer extends StatelessWidget {
       return Stack(
         clipBehavior: Clip.none,
         children: [
-          ClipOval(
-            child: Container(
-              width: widgetWidth,
-              height: widgetHeight,
-              color: Colors.white,
-              child: content,
+          Container(
+            width: widgetWidth,
+            height: widgetHeight,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: AppColors.primary,
+                width: 2,
+              ),
+            ),
+            child: ClipOval(
+              child: Container(
+                color: Colors.white,
+                child: content,
+              ),
             ),
           ),
 
@@ -150,7 +159,8 @@ class AppUploadContainer extends StatelessWidget {
       );
     }
 
-    return Column(
+    final inner = Column(
+      mainAxisSize: MainAxisSize.min,
       mainAxisAlignment:
       MainAxisAlignment.center,
       children: [
@@ -190,6 +200,33 @@ class AppUploadContainer extends StatelessWidget {
           ),
         ),
       ],
+    );
+
+    if (!isCircle) {
+      return inner;
+    }
+
+    // A circle has less usable width near its top/bottom than a rectangle
+    // of the same size, and the translated title/subtitle (Hindi/Gujarati
+    // routinely run longer than the English original — e.g.
+    // registration_strings.dart's profile_photo/tap_to_upload/
+    // nominee_photo keys) can wrap onto more lines than a fixed-size
+    // circle has room for, overflowing this Column and getting visually
+    // cut off (the exact "text not showing properly in native language"
+    // report). Instead of letting that overflow, size the text block at a
+    // slightly inset width — narrower than the full circle, so wrapped
+    // lines don't touch its curved edge — and let FittedBox scale the
+    // whole icon+text block down only as much as actually needed to fit.
+    // In English this is a no-op (it already fits); in Hindi/Gujarati it
+    // shrinks everything uniformly instead of overflowing/cutting text.
+    final circleWidth = width ?? 110.px(context);
+
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: SizedBox(
+        width: circleWidth * 0.8,
+        child: inner,
+      ),
     );
   }
 }

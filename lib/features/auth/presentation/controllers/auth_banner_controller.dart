@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:psf_application/features/auth/domain/repositories/banner_repository.dart';
+import 'package:psf_application/shared/widgets/network/ConnectivityService.dart';
 
 import '../../domain/entities/banner_entity.dart';
 
@@ -7,6 +10,8 @@ class AuthBannerController extends GetxController {
   AuthBannerController(this.repository);
 
   final BannerRepository repository;
+
+  StreamSubscription<void>? _reconnectSubscription;
 
   // ============================================================
   // TYPE 1 - AUTH CHOICE BANNERS
@@ -39,6 +44,23 @@ class AuthBannerController extends GetxController {
 
     fetchBanners();
     fetchRegistrationBanners();
+
+    // Banners load automatically (no button the user could re-tap), so if a
+    // connectivity drop cancelled the initial load, pick it back up on its
+    // own the moment the connection returns — but only when the earlier
+    // attempt actually failed; a reconnect after banners already loaded
+    // fine shouldn't re-fetch for no reason.
+    _reconnectSubscription =
+        Get.find<ConnectivityService>().onReconnected.listen((_) {
+      if (hasBannerError.value) fetchBanners();
+      if (hasRegistrationBannerError.value) fetchRegistrationBanners();
+    });
+  }
+
+  @override
+  void onClose() {
+    _reconnectSubscription?.cancel();
+    super.onClose();
   }
 
   // ============================================================
@@ -73,7 +95,7 @@ class AuthBannerController extends GetxController {
       hasRegistrationBannerError.value = false;
 
       final result =
-      await repository.getBannerListByType(2);
+      await repository.getBannerListByType(3);
 
       registrationBanners.assignAll(result);
     } catch (e) {

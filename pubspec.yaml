@@ -29,6 +29,15 @@ dependencies:
   path_provider: ^2.1.6
   image_cropper: ^12.2.1
 
+  # Re-compresses every picked/cropped photo to a small JPEG before it's
+  # uploaded via SaveDocument (see shared/utils/image_picker_util.dart).
+  # Needed because image_picker's own `imageQuality` only compresses JPEG
+  # output — Android's ImageResizer silently ignores it for PNG output
+  # from image_cropper ("compressing is not supported for type PNG"), so
+  # an uncompressed PNG crop was reaching SaveDocument at full size and
+  # getting rejected by the API's upload limit.
+  flutter_image_compress: ^2.5.1
+
   # UI & Animations
   flutter_svg: ^2.3.0
   shimmer: ^3.0.0
@@ -56,6 +65,20 @@ dependencies:
 
   signature: ^6.4.0
 
+  connectivity_plus: ^7.3.1
+  internet_connection_checker_plus: ^3.1.1
+
+  # Application preview: client-generated PDF (matches the printed
+  # member/nominee form) + the book-style page-turn effect used to
+  # browse it on the Preview screen. Saving the generated PDF reuses
+  # file_picker (already above) via its saveFile()/SAF picker, so no
+  # extra storage-permission dependency is needed for that part.
+  #
+  # Pinned to ^3.12.0, not ^3.13.0 — 3.13.0 requires Dart >=3.12.0, and
+  # this project's pinned Flutter/Dart toolchain (via fvm) is on Dart
+  # 3.11.1, which only 3.12.0 and below support.
+  pdf: ^3.12.0
+  page_flip: ^0.2.5+1
 
 dev_dependencies:
   flutter_test:
@@ -99,3 +122,23 @@ flutter:
 
         - asset: assets/fonts/inter/Inter_24pt-ExtraBold.ttf
           weight: 800
+
+    # Used only by the PDF generator (lib/shared/utils/registration_pdf_builder.dart)
+    # to render Gujarati/Hindi text into the downloaded application PDF —
+    # the pdf package draws its own glyphs and has no access to the
+    # device's system fonts, unlike on-screen Flutter text (which already
+    # renders Gujarati/Hindi fine via the OS's font fallback). Google
+    # Noto fonts, SIL Open Font License — free to bundle/redistribute.
+    - family: NotoSansGujarati
+      fonts:
+        - asset: assets/fonts/noto/NotoSansGujarati-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/noto/NotoSansGujarati-Bold.ttf
+          weight: 700
+
+    - family: NotoSansDevanagari
+      fonts:
+        - asset: assets/fonts/noto/NotoSansDevanagari-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/noto/NotoSansDevanagari-Bold.ttf
+          weight: 700

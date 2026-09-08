@@ -12,6 +12,7 @@ import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
 
 import 'package:psf_application/shared/navigation/registration_navigator.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
+import 'package:psf_application/shared/widgets/network/ConnectivityService.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -46,9 +47,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     registrationController =
         Get.find<RegistrationController>();
 
-    firstNameFocusNode = FocusNode();
-    middleNameFocusNode = FocusNode();
-    surnameFocusNode = FocusNode();
+    firstNameFocusNode = FocusNode()
+      ..addListener(_onFirstNameFocusChange);
+    middleNameFocusNode = FocusNode()
+      ..addListener(_onMiddleNameFocusChange);
+    surnameFocusNode = FocusNode()
+      ..addListener(_onSurnameFocusChange);
     phoneFocusNode = FocusNode();
 
   }
@@ -56,9 +60,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    firstNameFocusNode.dispose();
-    middleNameFocusNode.dispose();
-    surnameFocusNode.dispose();
+    firstNameFocusNode
+      ..removeListener(_onFirstNameFocusChange)
+      ..dispose();
+    middleNameFocusNode
+      ..removeListener(_onMiddleNameFocusChange)
+      ..dispose();
+    surnameFocusNode
+      ..removeListener(_onSurnameFocusChange)
+      ..dispose();
     phoneFocusNode.dispose();
 
     firstNameController.dispose();
@@ -70,6 +80,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // ==========================================================
+  // BACKGROUND TRANSLATION ON FIELD BLUR
+  //
+  // Fired the moment the user leaves a name field, so the hi/gu variants
+  // are usually already cached by the time they reach Continue. Errors
+  // are handled inside translateNameFieldOnUnfocus (toast + isDirty stays
+  // true); the Continue-button flow below re-awaits any field still
+  // incomplete, so this is a speed optimization, not the only path.
+  // ==========================================================
+
+  void _onFirstNameFocusChange() {
+    if (firstNameFocusNode.hasFocus) return;
+
+    registrationController.translateNameFieldOnUnfocus(
+      text: firstNameController.text,
+      targetModel: registrationController.firstNameLanguages,
+      isDirty: registrationController.isFirstNameDirty,
+    );
+  }
+
+  void _onMiddleNameFocusChange() {
+    if (middleNameFocusNode.hasFocus) return;
+
+    registrationController.translateNameFieldOnUnfocus(
+      text: middleNameController.text,
+      targetModel: registrationController.middleNameLanguages,
+      isDirty: registrationController.isMiddleNameDirty,
+    );
+  }
+
+  void _onSurnameFocusChange() {
+    if (surnameFocusNode.hasFocus) return;
+
+    registrationController.translateNameFieldOnUnfocus(
+      text: surnameController.text,
+      targetModel: registrationController.surnameLanguages,
+      isDirty: registrationController.isSurnameDirty,
+    );
+  }
+
+  // ==========================================================
   // CONTINUE (RESUME CHECK & SAVE FLOW)
   // ==========================================================
 
@@ -78,36 +128,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
-    // Translate only fields that still have empty language strings
-    // (i.e. unfocus translation was not triggered yet for that field)
-    if (registrationController.needsTranslation(
-      registrationController.firstNameLanguages.value,
-    )) {
-      await registrationController.translateNameFieldOnUnfocus(
-        text: firstNameController.text,
-        targetModel: registrationController.firstNameLanguages,
-        isDirty: registrationController.isFirstNameDirty,
-      );
-    }
+    // Dismiss keyboard so no focus events fire during the async work
+    FocusScope.of(context).unfocus();
 
-    if (registrationController.needsTranslation(
-      registrationController.middleNameLanguages.value,
-    )) {
-      await registrationController.translateNameFieldOnUnfocus(
-        text: middleNameController.text,
-        targetModel: registrationController.middleNameLanguages,
-        isDirty: registrationController.isMiddleNameDirty,
-      );
-    }
-
-    if (registrationController.needsTranslation(
-      registrationController.surnameLanguages.value,
-    )) {
-      await registrationController.translateNameFieldOnUnfocus(
-        text: surnameController.text,
-        targetModel: registrationController.surnameLanguages,
-        isDirty: registrationController.isSurnameDirty,
-      );
+    final connectivity = Get.find<ConnectivityService>();
+    final interruptionVersion = connectivity.interruptionVersion;
+    if (!connectivity.canContinueFlow(interruptionVersion)) {
+      connectivity.handleNetworkFailure();
+      return;
     }
 
     final firstName = firstNameController.text.trim();
@@ -115,41 +143,111 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final surname = surnameController.text.trim();
     final mobile = phoneController.text.trim();
 
-    // 1. Call getMemberStatus API to check existing member screen status
+    // Translate all dirty / untranslated fields in parallel before calling any API.
+    // A field needs translation when:
+    //   • it is dirty (user typed something new), OR
+    //   • hindi or gujarati is still empty (translation never completed)
+    await Future.wait([
+      if (registrationController.needsTranslation(
+        registrationController.firstNameLanguages.value,
+      ) || registrationController.isFirstNameDirty.value)
+        registrationController.translateNameFieldOnUnfocus(
+          text: firstName,
+          targetModel: registrationController.firstNameLanguages,
+          isDirty: registrationController.isFirstNameDirty,
+        ),
+      if (registrationController.needsTranslation(
+        registrationController.middleNameLanguages.value,
+      ) || registrationController.isMiddleNameDirty.value)
+        registrationController.translateNameFieldOnUnfocus(
+          text: middleName,
+          targetModel: registrationController.middleNameLanguages,
+          isDirty: registrationController.isMiddleNameDirty,
+        ),
+      if (registrationController.needsTranslation(
+        registrationController.surnameLanguages.value,
+      ) || registrationController.isSurnameDirty.value)
+        registrationController.translateNameFieldOnUnfocus(
+          text: surname,
+          targetModel: registrationController.surnameLanguages,
+          isDirty: registrationController.isSurnameDirty,
+        ),
+    ]);
+
+    // Translation calls may be cancelled when the network drops. Never start
+    // the member-status request, save request, or navigation after that.
+    if (!connectivity.canContinueFlow(interruptionVersion)) {
+      return;
+    }
+
+    // A field's translation can still be incomplete here if its API call
+    // failed (translateNameFieldOnUnfocus already showed an error toast for
+    // that) — block the save instead of silently sending blank/duplicated
+    // text for that language.
+    final incompleteField =
+        registrationController.firstIncompleteNameField();
+
+    if (incompleteField != null) {
+      ToastUtil.error(
+        '$incompleteField could not be translated. '
+            'Please check your connection and try again.',
+      );
+      return;
+    }
+
+    // 1. Call getMemberStatus to check whether this name/mobile already
+    // has a registration in progress.
     final memberResult = await registrationController.getMemberStatus(
-      isRegistered: false,
+      isRegistered: true,
       firstName: firstName,
       middleName: middleName,
       surname: surname,
       mobile: mobile,
     );
 
-    final targetRoute = RegistrationNavigator.mapScreenNameToRoute(
-      memberResult?.memberDetailStatus,
-    );
-
-    // 2. If member status returns a screen other than the current registration screen, navigate there
-    if (memberResult?.memberDetailStatus != null &&
-        memberResult!.memberDetailStatus!.trim().isNotEmpty &&
-        targetRoute != AppRoutes.registerScreen) {
-      await RegistrationNavigator.navigateToScreen(
-        memberResult.memberDetailStatus,
-      );
+    // null here means either the connectivity dialog already handled a
+    // network drop, or a real error was already toasted inside
+    // getMemberStatus — either way, stop.
+    if (memberResult == null ||
+        !connectivity.canContinueFlow(interruptionVersion)) {
       return;
     }
 
-    // 3. Otherwise (same screen / no screen returned), call save API and navigate to legal rules / next step
+    // 2. An existing member was found (memberId > 0) — resume wherever
+    // they left off using the backend's *route* (memberDetailStatusName,
+    // e.g. "/member-registration-step2"), never the raw numeric status
+    // code. Do NOT also call SaveMemberStep1 in this case.
+    if (memberResult.memberId > 0) {
+      final targetRoute = RegistrationNavigator.mapScreenNameToRoute(
+        memberResult.memberDetailStatusName,
+      );
+
+      if (targetRoute != AppRoutes.registerScreen) {
+        await RegistrationNavigator.navigateToScreen(
+          memberResult.memberDetailStatusName,
+        );
+
+        return;
+      }
+    }
+
+    // 3. No existing member for this name/mobile — this is the normal
+    // first-time path, create one.
     final success = await registrationController.saveMemberStep1(
       mobile: mobile,
     );
 
-    if (success) {
-      ToastUtil.success('Information saved successfully');
+    if (success && connectivity.canContinueFlow(interruptionVersion)) {
+      ToastUtil.success(
+        'information_saved_successfully'.tr,
+      );
+
       await RegistrationNavigator.navigateToScreen(
         AppRoutes.legalRules,
       );
     }
   }
+
 
   // ==========================================================
   // BUILD
@@ -311,13 +409,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onChanged: (_) {
                           registrationController.isFirstNameDirty.value = true;
                         },
-                        onUnfocus: () {
-                          registrationController.translateNameFieldOnUnfocus(
-                            text: firstNameController.text,
-                            targetModel: registrationController.firstNameLanguages,
-                            isDirty: registrationController.isFirstNameDirty,
-                          );
-                        },
                         prefixIcon: const Icon(
                           Icons.person_outline_rounded,
                         ),
@@ -357,13 +448,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         onChanged: (_) {
                           registrationController.isMiddleNameDirty.value = true;
                         },
-                        onUnfocus: () {
-                          registrationController.translateNameFieldOnUnfocus(
-                            text: middleNameController.text,
-                            targetModel: registrationController.middleNameLanguages,
-                            isDirty: registrationController.isMiddleNameDirty,
-                          );
-                        },
                         prefixIcon: const Icon(
                           Icons.person_outline_rounded,
                         ),
@@ -402,13 +486,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         hintText: 'enter_surname'.tr,
                         onChanged: (_) {
                           registrationController.isSurnameDirty.value = true;
-                        },
-                        onUnfocus: () {
-                          registrationController.translateNameFieldOnUnfocus(
-                            text: surnameController.text,
-                            targetModel: registrationController.surnameLanguages,
-                            isDirty: registrationController.isSurnameDirty,
-                          );
                         },
                         prefixIcon: const Icon(
                           Icons.badge_outlined,
@@ -494,12 +571,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             return 'please_enter_phone_number'.tr;
                           }
 
-                          if (phone.length != 10) {
-                            return 'please_enter_valid_phone_number'.tr;
-                          }
-
+                          // Same format as AppValidators.mobile: exactly
+                          // 10 digits, no restriction on the leading
+                          // digit. Kept in sync with that one so both
+                          // screens accept/reject the same numbers.
                           if (!RegExp(
-                            r'^\d+$',
+                            r'^\d{10}$',
                           ).hasMatch(phone)) {
                             return 'please_enter_valid_phone_number'.tr;
                           }

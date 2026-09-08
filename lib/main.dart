@@ -9,6 +9,7 @@ import 'package:psf_application/core/theme/theme_controller.dart';
 import 'package:psf_application/app/routes/app_pages.dart';
 import 'package:psf_application/shared/widgets/loaders/app_loader.dart';
 import 'package:psf_application/shared/widgets/loaders/app_loader_controller.dart';
+import 'package:psf_application/shared/widgets/network/ConnectivityService.dart';
 
 import 'core/localization/app_translation.dart';
 import 'core/localization/language_controller.dart';
@@ -52,8 +53,6 @@ void startApp(/*FirebaseOptions firebaseOptions*/) async {
     // ============================================================
     // Core Controllers
     // ============================================================
-
-
     Get.put(
       ThemeController(),
       permanent: true,
@@ -68,12 +67,25 @@ void startApp(/*FirebaseOptions firebaseOptions*/) async {
       AppLoaderController(),
       permanent: true,
     );
+
+    // ConnectivityService hides the global loader when a connection is lost,
+    // so the loader must be registered before this service starts listening.
+    Get.put(
+      ConnectivityService(),
+      permanent: true,
+    );
     // Initialize Core Services
     // await Get.putAsync(() => DeepLinkService().init());
     // await Get.putAsync(() => NotificationService().init());
     runApp(const MyApp());
   }, (error, stack) {
-    debugPrint('App Error: $error');
+    // Was just `debugPrint('App Error: $error')` — logging only the
+    // message and dropping the stack trace made every zone error
+    // (like the "Null check operator used on a null value" during the
+    // resume-registration flow) unfindable: no file, no line, nothing
+    // to grep for. Print the stack too so the next occurrence points at
+    // the actual call site.
+    debugPrint('App Error: $error\n$stack');
   });
 }
 

@@ -1,197 +1,173 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:psf_application/core/theme/theme_controller.dart';
 
+import 'package:psf_application/app/constants/app_colors.dart';
+import 'package:psf_application/app/constants/app_strings.dart';
+import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/widgets/common/app_home_sliver_header.dart';
+import 'package:psf_application/shared/widgets/refresh/app_refresh_indicator.dart';
+import 'package:psf_application/shared/widgets/states/app_state_view.dart';
+
+import '../controllers/home_controller.dart';
+import '../widgets/member_summary_card.dart';
+import '../widgets/payment_reminder_card.dart';
+
+/// Home tab — a Foundation dashboard, not a finance one: the member's
+/// membership-scheme progress (via [MemberSummaryCard] /
+/// [PaymentReminderCard]), not a raw balance/loan ledger. All of the data
+/// on this screen — member name, scheme progress, reminder — comes from
+/// the API via [HomeController]; see `features/loans` for the separate,
+/// clearly-labelled Loans tab.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final themeController = Get.find<ThemeController>();
+    final controller = Get.find<HomeController>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashboard'),
-        leading: const Icon(Icons.menu),
-        actions: [
-          IconButton(
-            icon: Icon(themeController.isDarkMode ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () => themeController.toggleTheme(),
-          ),
-          const IconButton(
-            icon: Icon(Icons.notifications_outlined),
-            onPressed: null,
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Balance Card
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: colorScheme.primary,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: colorScheme.primary.withOpacity(0.3),
-                    blurRadius: 10,
-                    offset: const Offset(0, 5),
-                  )
-                ],
+      backgroundColor: AppColors.background,
+      body: Obx(() {
+        final dashboard = controller.dashboard.value;
+
+        return AppRefreshIndicator(
+          onRefresh: controller.refresh,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              AppHomeSliverHeader(
+                greeting: AppStrings.welcomeBack.tr,
+                memberName: (dashboard?.memberName.isNotEmpty ?? false)
+                    ? dashboard!.memberName
+                    : AppStrings.appName.tr,
+                memberIdLabel: dashboard != null
+                    ? '${AppStrings.memberId.tr}: ${dashboard.memberIdLabel}'
+                    : '',
+                collapsedTitle: AppStrings.navHome.tr,
+                notificationCount: dashboard?.unreadNotificationCount ?? 0,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Total Outstanding Balance',
-                    style: TextStyle(color: colorScheme.onPrimary.withOpacity(0.8), fontSize: 14),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    18.px(context),
+                    18.px(context),
+                    18.px(context),
+                    32.px(context),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '\$24,500.00',
-                    style: TextStyle(color: colorScheme.onPrimary, fontSize: 32, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Next Payment: Oct 12',
-                        style: TextStyle(color: colorScheme.onPrimary.withOpacity(0.8)),
-                      ),
-                      Text(
-                        '\$1,250.00',
-                        style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold),
-                      ),
+                      _SchemeSection(controller: controller, dashboard: dashboard),
+                      SizedBox(height: 26.px(context)),
+                      _QuickActionsSection(),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-            const SizedBox(height: 32),
-            
-            // Quick Actions
-            Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildActionItem(context, Icons.payment, 'Make Payment'),
-                _buildActionItem(context, Icons.document_scanner, 'Documents'),
-                _buildActionItem(context, Icons.support_agent, 'Support'),
-                _buildActionItem(context, Icons.add_circle_outline, 'New Loan'),
-              ],
-            ),
-            
-            const SizedBox(height: 32),
-            
-            // Recent Transactions
-            Text(
-              'Recent Transactions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildTransactionItem(context, 'Monthly Payment', 'Sep 12, 2026', '-\$1,250.00', true),
-            _buildTransactionItem(context, 'Loan Disbursement', 'Aug 01, 2026', '+\$25,750.00', false),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      }),
     );
   }
+}
 
-  Widget _buildActionItem(BuildContext context, IconData icon, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
+class _SchemeSection extends StatelessWidget {
+  const _SchemeSection({required this.controller, required this.dashboard});
+
+  final HomeController controller;
+
+  final dynamic dashboard;
+
+  @override
+  Widget build(BuildContext context) {
+    if (controller.isLoading.value && dashboard == null) {
+      return const AppStateView.loading();
+    }
+
+    if (controller.hasError.value && dashboard == null) {
+      return AppStateView.error(
+        message: controller.errorMessage.value.isEmpty
+            ? AppStrings.somethingWentWrong.tr
+            : controller.errorMessage.value,
+        onRetry: controller.fetchDashboard,
+      );
+    }
+
+    if (dashboard == null || dashboard.hasActiveScheme != true) {
+      return AppStateView.empty(message: AppStrings.noActiveSchemeMessage.tr);
+    }
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.onSurface.withOpacity(0.1)),
-          ),
-          child: Icon(icon, color: colorScheme.primary, size: 28),
-        ),
-        const SizedBox(height: 8),
+        MemberSummaryCard(dashboard: dashboard),
+        if (dashboard.remainingAmount > 0) ...[
+          SizedBox(height: 16.px(context)),
+          PaymentReminderCard(dashboard: dashboard),
+        ],
+      ],
+    );
+  }
+}
+
+class _QuickActionsSection extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Text(
-          label,
+          AppStrings.quickActions.tr,
           style: TextStyle(
-            fontSize: 12,
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w500,
+            fontSize: 15.px(context),
+            fontWeight: FontWeight.w700,
+            color: AppColors.textPrimary,
           ),
+        ),
+        SizedBox(height: 14.px(context)),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _ActionItem(icon: Icons.description_outlined, label: AppStrings.documents.tr),
+            _ActionItem(icon: Icons.support_agent_outlined, label: AppStrings.support.tr),
+          ],
         ),
       ],
     );
   }
+}
 
-  Widget _buildTransactionItem(BuildContext context, String title, String date, String amount, bool isDeduction) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.onSurface.withOpacity(0.05)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDeduction ? colorScheme.error.withOpacity(0.1) : colorScheme.secondary.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              isDeduction ? Icons.arrow_upward : Icons.arrow_downward,
-              color: isDeduction ? colorScheme.error : colorScheme.secondary,
-              size: 20,
-            ),
+class _ActionItem extends StatelessWidget {
+  const _ActionItem({required this.icon, required this.label});
+
+  final IconData icon;
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          padding: EdgeInsets.all(16.px(context)),
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(16.px(context)),
+            border: Border.all(color: AppColors.border),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  date,
-                  style: TextStyle(color: colorScheme.onSurface.withOpacity(0.6), fontSize: 12),
-                ),
-              ],
-            ),
+          child: Icon(icon, color: AppColors.primary, size: 26.px(context)),
+        ),
+        SizedBox(height: 8.px(context)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12.px(context),
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w500,
           ),
-          Text(
-            amount,
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

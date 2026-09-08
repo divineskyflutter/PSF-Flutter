@@ -97,4 +97,16 @@ class AppPrefs {
 
   static Future<bool> setRegistrationStatus(String value) =>
       _instance.setString(AppPrefsKeys.registrationStatus, value);
+
+  // ============================================================
+  // Registration completed (see AppPrefsKeys.registrationCompleted)
+  // ============================================================
+
+  static bool get isRegistrationCompleted {
+    return _instance.getBool(AppPrefsKeys.registrationCompleted) ?? false;
+  }
+
+  static Future<bool> setRegistrationCompleted(bool value) {
+    return _instance.setBool(AppPrefsKeys.registrationCompleted, value);
+  }
 }

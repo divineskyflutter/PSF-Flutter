@@ -1,6 +1,9 @@
 // lib/core/network/interceptors/error_interceptor.dart
 import 'package:dio/dio.dart';
+import 'package:get/get_core/src/get_main.dart';
+import 'package:get/get_instance/src/extension_instance.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
+import 'package:psf_application/shared/widgets/network/ConnectivityService.dart';
 import '../exceptions/api_exceptions.dart';
 
 class ErrorInterceptor extends Interceptor {
@@ -12,10 +15,11 @@ class ErrorInterceptor extends Interceptor {
       final status = body['status'] ?? false;
       final message = body['message']?.toString() ?? '';
       final showSuccessToast = response.requestOptions.extra['showSuccessToast'] ?? false;
+      final suppressErrorToast = response.requestOptions.extra['suppressErrorToast'] ?? false;
 
       if (status == true) {
         if (showSuccessToast) ToastUtil.success(message);
-      } else {
+      } else if (!suppressErrorToast) {
         ToastUtil.error(message);
       }
     }
@@ -24,8 +28,26 @@ class ErrorInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
+    // Request was intentionally cancelled
+    if (err.type == DioExceptionType.cancel) {
+      handler.next(err);
+      return;
+    }
+
     final appException = _mapDioException(err);
-    ToastUtil.error(appException.message);
+    final isNetworkIssue = err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.sendTimeout ||
+        err.type == DioExceptionType.receiveTimeout ||
+        err.type == DioExceptionType.connectionError;
+
+    if (isNetworkIssue) {
+      // A connectivity error cancels every in-flight request, removes the
+      // global loader, and displays the single app-wide dialog. Do not emit a
+      // per-request timeout toast.
+      Get.find<ConnectivityService>().handleNetworkFailure();
+    } else {
+      ToastUtil.error(appException.message);
+    }
     handler.reject(
       DioException(
         requestOptions: err.requestOptions,

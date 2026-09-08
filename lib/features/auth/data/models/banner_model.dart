@@ -9,12 +9,39 @@ class BannerModel extends BannerEntity {
   });
 
   factory BannerModel.fromJson(Map<String, dynamic> json) {
-    final path = json['bannerPath']?.toString() ?? '';
+    // GetBannerListByType's response shape isn't documented in the API's
+    // own schema (confirmed against the live swagger spec — it's marked
+    // "200: OK" with no body defined), so `bannerPath`/`bannerId` here are
+    // an assumption, not a confirmed contract. Falling back through a few
+    // plausible alternate key names costs nothing and self-heals if the
+    // backend's actual field names turn out to differ slightly — if
+    // banners still don't render after this, the real key name needs to
+    // be confirmed from an actual response (e.g. a debug print of `json`
+    // here), since no name guessed here would be right.
+    final path = _firstNonEmpty([
+          json['bannerPath'],
+          json['imagePath'],
+          json['bannerImage'],
+          json['path'],
+          json['image'],
+          json['filePath'],
+        ]) ??
+        '';
+
+    final id = json['bannerId'] ?? json['id'] ?? 0;
 
     return BannerModel(
-      bannerId: json['bannerId'] ?? 0,
+      bannerId: id is int ? id : int.tryParse(id.toString()) ?? 0,
       imageUrl: _buildFullUrl(path),
     );
+  }
+
+  static String? _firstNonEmpty(List<dynamic> candidates) {
+    for (final candidate in candidates) {
+      final text = candidate?.toString().trim();
+      if (text != null && text.isNotEmpty) return text;
+    }
+    return null;
   }
 
   static String _buildFullUrl(String path) {

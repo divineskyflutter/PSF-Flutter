@@ -16,6 +16,14 @@ class EnumBundleRepository {
         'platform': true,
         'bannerType': true,
         'memberStatus': true,
+        // Previously omitted, so the backend never returned these blocks —
+        // Gender/MaritalStatus must come from this live API, not a
+        // hardcoded app-side enum, so both are always requested.
+        'gender': true,
+        'maritalStatus': true,
+        // Nominee-relation options for the Nominee step's relationship
+        // dropdown — same reasoning as gender/maritalStatus above.
+        'relation': true,
       },
       requireToken: false, // this endpoint doesn't need a token — flip per call
     );

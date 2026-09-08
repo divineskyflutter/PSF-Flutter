@@ -64,58 +64,66 @@ class AppDialog {
 
     bool closeOnPrimary = true,
     bool closeOnSecondary = true,
+
+    /// When true, the Android/back-gesture "pop" is blocked as well, on top
+    /// of [barrierDismissible]. Use for dialogs the user must act on via a
+    /// button (e.g. [noInternet]) rather than dismiss accidentally.
+    bool preventBackDismiss = false,
   }) async {
     final config = _getConfig(type);
 
     final result = await Get.dialog<bool>(
-      _AppDialogView(
-        title: title,
-        message: message,
+      PopScope(
+        canPop: !preventBackDismiss,
+        child: _AppDialogView(
+          title: title,
+          message: message,
 
-        icon: icon ?? config.icon,
-        customIcon: customIcon,
+          icon: icon ?? config.icon,
+          customIcon: customIcon,
 
-        iconColor:
-        primaryButtonColor ?? config.color,
+          iconColor:
+          primaryButtonColor ?? config.color,
 
-        primaryButtonText:
-        primaryButtonText,
+          primaryButtonText:
+          primaryButtonText,
 
-        secondaryButtonText:
-        secondaryButtonText,
+          secondaryButtonText:
+          secondaryButtonText,
 
-        onPrimaryPressed:
-        onPrimaryPressed,
+          onPrimaryPressed:
+          onPrimaryPressed,
 
-        onSecondaryPressed:
-        onSecondaryPressed,
+          onSecondaryPressed:
+          onSecondaryPressed,
 
-        backgroundColor:
-        backgroundColor ?? Colors.white,
+          backgroundColor:
+          backgroundColor ?? Colors.white,
 
-        primaryButtonColor:
-        primaryButtonColor ?? config.color,
+          primaryButtonColor:
+          primaryButtonColor ?? config.color,
 
-        secondaryButtonColor:
-        secondaryButtonColor ??
-            Colors.grey.shade100,
+          secondaryButtonColor:
+          secondaryButtonColor ??
+              Colors.grey.shade100,
 
-        borderRadius: borderRadius,
-        padding: padding,
+          borderRadius: borderRadius,
+          padding: padding,
 
-        titleStyle: titleStyle,
-        messageStyle: messageStyle,
+          titleStyle: titleStyle,
+          messageStyle: messageStyle,
 
-        customContent: customContent,
+          customContent: customContent,
 
-        showIcon: showIcon,
-        showCloseButton: showCloseButton,
+          showIcon: showIcon,
+          showCloseButton: showCloseButton,
 
-        closeOnPrimary:
-        closeOnPrimary,
+          closeOnPrimary:
+          closeOnPrimary,
 
-        closeOnSecondary:
-        closeOnSecondary,
+          closeOnSecondary:
+          closeOnSecondary,
+        ),
       ),
       barrierDismissible: barrierDismissible,
       barrierColor:
@@ -310,12 +318,28 @@ class AppDialog {
     'Please check your internet connection and try again.',
 
     String retryText = 'Retry',
-    String cancelText = 'Cancel',
+
+    /// Pass a non-null value (e.g. 'Cancel') to also show a secondary
+    /// button. Left null by default because a no-internet dialog is meant
+    /// to block the flow until the connection is restored, so there is
+    /// nothing safe for the user to cancel into.
+    String? cancelText,
 
     VoidCallback? onRetry,
     VoidCallback? onCancel,
 
     bool barrierDismissible = false,
+
+    /// The dialog is state-driven (the caller decides when it should
+    /// actually close, based on real connectivity), so tapping Retry must
+    /// not auto-dismiss it — only re-run the check.
+    bool closeOnPrimary = false,
+
+    /// Optional reactive content shown under the message (e.g. a small
+    /// "Checking connection..." row while a retry is in flight) — so a
+    /// Retry tap gives the user immediate visible feedback instead of
+    /// looking unresponsive while the real check runs.
+    Widget? customContent,
   }) {
     return show(
       title: title,
@@ -337,6 +361,14 @@ class AppDialog {
 
       barrierDismissible:
       barrierDismissible,
+
+      closeOnPrimary: closeOnPrimary,
+
+      customContent: customContent,
+
+      // Block the Android/gesture back action too — the barrier alone only
+      // stops tap-outside dismissal.
+      preventBackDismiss: true,
     );
   }
 

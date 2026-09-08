@@ -48,4 +48,23 @@ class AppDatePicker {
       'dd/MM/yyyy',
     ).format(date);
   }
+
+  /// Whole years between [dateOfBirth] and today — the common "show age
+  /// next to date of birth" calculation, kept in one place instead of
+  /// every screen re-deriving it.
+  static int calculateAge(DateTime dateOfBirth) {
+    final today = DateTime.now();
+
+    var age = today.year - dateOfBirth.year;
+
+    final birthdayHasOccurredThisYear =
+        today.month > dateOfBirth.month ||
+        (today.month == dateOfBirth.month && today.day >= dateOfBirth.day);
+
+    if (!birthdayHasOccurredThisYear) {
+      age--;
+    }
+
+    return age < 0 ? 0 : age;
+  }
 }

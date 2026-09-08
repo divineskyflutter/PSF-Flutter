@@ -52,6 +52,24 @@ class AppColors {
   static const Color shadow = Color(0x15000000);
 
   // ===========================
+  // Status / Semantic
+  //
+  // Shared across Home / Loans / Profile for reminders, dues, progress and
+  // destructive actions. (AppDialog / ToastUtil already use these same
+  // values as private literals for their own icon/snackbar colors — kept
+  // as-is there to avoid touching working shared widgets; these constants
+  // are for any new screen that needs the same palette.)
+  // ===========================
+
+  static const Color success = Color(0xFF2E9D68);
+
+  static const Color warning = Color(0xFFE7A72E);
+
+  static const Color danger = Color(0xFFD94B4B);
+
+  static const Color info = Color(0xFF3985C6);
+
+  // ===========================
   // Header Gradient
   // ===========================
 

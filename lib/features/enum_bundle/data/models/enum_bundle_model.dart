@@ -4,8 +4,12 @@ class EnumItem {
   final String name;
   EnumItem({required this.id, required this.name});
 
-  factory EnumItem.fromJson(Map<String, dynamic> json) =>
-      EnumItem(id: json['id'], name: json['name']);
+  factory EnumItem.fromJson(Map<String, dynamic> json) => EnumItem(
+        id: json['id'] is int
+            ? json['id'] as int
+            : int.tryParse(json['id']?.toString() ?? '') ?? 0,
+        name: json['name']?.toString() ?? '',
+      );
 }
 
 class EnumBundleModel {
@@ -14,11 +18,29 @@ class EnumBundleModel {
   final List<EnumItem> bannerType;
   final List<EnumItem> memberStatus;
 
+  /// Live Gender options (Male/Female/Other) — the app must render these
+  /// directly (e.g. as radio buttons) instead of a hardcoded static enum,
+  /// so the list always matches whatever the backend currently defines.
+  final List<EnumItem> gender;
+
+  /// Live Marital Status options (Single/Married/Divorced/Widowed).
+  final List<EnumItem> maritalStatus;
+
+  /// Live nominee-relation options (e.g. Father/Mother/Spouse/Son...),
+  /// requested via the `relation: true` flag — same "must come from this
+  /// live API, never a hardcoded app-side enum" reasoning as
+  /// Gender/Marital Status above. Used by the Nominee step's relationship
+  /// dropdown, sending the option's `id` as `NomineeModel.relation`.
+  final List<EnumItem> relation;
+
   EnumBundleModel({
     required this.moduleType,
     required this.platform,
     required this.bannerType,
     required this.memberStatus,
+    required this.gender,
+    required this.maritalStatus,
+    required this.relation,
   });
 
   factory EnumBundleModel.fromJson(Map<String, dynamic> json) {
@@ -30,6 +52,24 @@ class EnumBundleModel {
       platform: parse('Platform'),
       bannerType: parse('BannerType'),
       memberStatus: parse('MemberStatus'),
+      gender: parse('Gender'),
+      maritalStatus: parse('MaritalStatus'),
+      // Matches the PascalCase key convention every block above uses for
+      // its response key ('Gender' for the 'gender' request flag,
+      // 'MaritalStatus' for 'maritalStatus', etc.) — not confirmed against
+      // a live response, so double-check this key if the relation dropdown
+      // ever comes back empty on a backend that does define a Relation list.
+      relation: parse('Relation'),
     );
   }
+
+  factory EnumBundleModel.empty() => EnumBundleModel(
+        moduleType: const [],
+        platform: const [],
+        bannerType: const [],
+        memberStatus: const [],
+        gender: const [],
+        maritalStatus: const [],
+        relation: const [],
+      );
 }

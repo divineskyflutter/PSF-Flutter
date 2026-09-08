@@ -19,6 +19,17 @@ class AppPrefsKeys {
 
   static const String isDarkMode = 'is_dark_mode';
   static const String registrationStatus = 'registration_status';
+
+  // ------------------------------------------------------------
+  // Registration completion (splash-screen routing)
+  // ------------------------------------------------------------
+
+  /// Set once the member finishes every registration step AND taps
+  /// "Complete Registration" on the Preview screen — see
+  /// RegistrationPreviewScreen._completeRegistration(). Combined with
+  /// AppSecureStorage's memberId (cleared on logout) to decide, on the
+  /// next app launch, whether SplashScreen should go straight to Home.
+  static const String registrationCompleted = 'registration_completed';
 }
 
 class AppSecureKeys {
