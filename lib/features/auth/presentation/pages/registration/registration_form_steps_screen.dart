@@ -2772,12 +2772,26 @@ class _MemberRegistrationScreenState
                     height: 48.px(context),
                     child: OutlinedButton(
                       style: OutlinedButton.styleFrom(
+                        // Without this, OutlinedButton's own default
+                        // vertical padding stacks on top of the fixed
+                        // 48px height above and can leave too little
+                        // room for the label — see the matching
+                        // ElevatedButton comment below, where the app's
+                        // global button theme made that combination
+                        // actually clip the text.
+                        padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(22),
                         ),
                       ),
                       onPressed: _back,
-                      child: Text('back'.tr),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'back'.tr,
+                          maxLines: 1,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -2791,6 +2805,17 @@ class _MemberRegistrationScreenState
                   height: 48.px(context),
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
+                      // AppTheme's global ElevatedButtonThemeData sets
+                      // padding: EdgeInsets.symmetric(vertical: 16) (meant
+                      // for buttons that size themselves around their
+                      // content) — style.styleFrom here only overrides
+                      // shape, so that 16+16=32px of forced vertical
+                      // padding was still being squeezed into this
+                      // button's own fixed 48px height, leaving too
+                      // little room for the label and clipping it off at
+                      // the bottom. Zeroing it out here lets the label
+                      // actually center in the full 48px instead.
+                      padding: EdgeInsets.zero,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(22),
                       ),
@@ -2799,8 +2824,12 @@ class _MemberRegistrationScreenState
                         !controller.acceptedRules.value
                         ? null
                         : _next,
-                    child: Text(
-                      isFinish ? 'finish'.tr : 'next'.tr,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        isFinish ? 'finish'.tr : 'next'.tr,
+                        maxLines: 1,
+                      ),
                     ),
                   ),
                 ),

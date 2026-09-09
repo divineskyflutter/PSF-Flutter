@@ -150,6 +150,39 @@ class RegistrationNavigator {
         ? {'initialStep': initialStep}
         : null;
 
+    // A member routed straight here because their saved status is already
+    // "preview" (closed the app mid-registration, reopened it, and
+    // Register screen's own getMemberStatus call resolved straight to
+    // preview) would otherwise land on Preview with nothing but the
+    // Register screen underneath it in the navigation stack — so tapping
+    // Preview's back button (a plain pop) went all the way back to
+    // Register instead of to the step wizard. The NORMAL in-session path
+    // (Register -> wizard -> Preview, wizard resting on whatever step it
+    // was last on) never has this problem because the wizard route is
+    // already in the stack by the time Preview gets pushed. Pushing the
+    // wizard here first — resumed on its last step, same as if the member
+    // had just finished it — before pushing Preview on top reproduces
+    // that same stack shape, so Preview's back button lands in the right
+    // place either way.
+    if (route == AppRoutes.registrationPreview) {
+      final wizardArguments = {'initialStep': _stepRoutes.length - 1};
+
+      // Deliberately NOT awaited: Get.toNamed's Future only completes when
+      // that route is later popped (same as Navigator.push), so awaiting
+      // it here would block this whole method until the member navigated
+      // back off the wizard — it would never reach the Preview push
+      // below. Both pushes still land in the stack in the right order
+      // since GetX applies them synchronously.
+      if (offAll) {
+        Get.offAllNamed(_stepRoutes.last, arguments: wizardArguments);
+      } else {
+        Get.toNamed(_stepRoutes.last, arguments: wizardArguments);
+      }
+
+      Get.toNamed(route, arguments: arguments);
+      return;
+    }
+
     if (offAll) {
       Get.offAllNamed(route, arguments: arguments);
     } else {

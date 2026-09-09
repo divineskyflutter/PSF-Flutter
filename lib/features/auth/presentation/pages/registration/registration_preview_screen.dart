@@ -60,6 +60,52 @@ class _RegistrationPreviewScreenState
 
   static const int _totalPages = 4;
 
+  @override
+  void initState() {
+    super.initState();
+
+    // Reaching this screen at all is only possible after the Rules &
+    // Declaration step's checkbox was checked — it gates that step's
+    // Next/Submit button — so if this screen was opened without that ever
+    // happening THIS session (see _loadMissingRegistrationData below), the
+    // checkbox would otherwise read as unchecked purely because it's a
+    // local-only flag the backend never returns, not because it wasn't
+    // actually accepted. Reaching this screen is itself proof it was, so
+    // set it up front rather than waiting on the network call below.
+    controller.acceptedRules.value = true;
+
+    _loadMissingRegistrationData();
+  }
+
+  /// A member can reach this screen two ways: normally, right after
+  /// finishing the step wizard THIS session — which already prefills
+  /// nominee/health data into RegistrationController the moment it opens
+  /// (see MemberRegistrationScreen.initState / loadExistingNominees /
+  /// loadExistingHealthDeclaration) — or by closing the app mid
+  /// registration and reopening it, where GetSingleMemberByRegistredStatus
+  /// resolves straight to this screen without the wizard ever mounting. In
+  /// that second case nothing had a chance to load the nominee/health
+  /// data into the controller, so this screen showed personal details
+  /// only, with the nominee table, health declaration and rules checkbox
+  /// all blank/unchecked even though the member had already filled them
+  /// in before closing the app.
+  ///
+  /// Re-running the exact same "GET, then populate" prefill here is
+  /// harmless and idempotent in the normal case (it just re-fetches
+  /// exactly what's already there and overwrites it with the same
+  /// values) and guarantees this screen always has everything regardless
+  /// of how it was reached. The pages below read these values directly
+  /// (not through Obx — PageFlipWidget builds its page widgets once, up
+  /// front), so a rebuild is forced once the fetch actually settles.
+  Future<void> _loadMissingRegistrationData() async {
+    await Future.wait([
+      controller.loadExistingNominees(),
+      controller.loadExistingHealthDeclaration(),
+    ]);
+
+    if (mounted) setState(() {});
+  }
+
   // ============================================================
   // LANGUAGE-AWARE VALUE RESOLUTION
   //
@@ -430,18 +476,34 @@ class _RegistrationPreviewScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textSecondary,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 1,
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
         ],
       ),
@@ -450,32 +512,72 @@ class _RegistrationPreviewScreenState
 
   /// "Label : ____ value ____" — the underlined-blank style used
   /// throughout the printed form, filled in with the resolved value
-  /// instead of left blank. The value Text has no maxLines/overflow set,
-  /// so it already wraps to as many lines as it needs rather than
-  /// clipping — fine for short values, but a genuinely long one (an
-  /// address especially) squeezed onto the same line as its label leaves
-  /// it little width to wrap into. See _underlineFieldMultiline below for
-  /// fields that need more room.
+  /// instead of left blank.
+  ///
+  /// Used for fields placed two-to-a-row (mobile numbers, Aadhaar/PAN,
+  /// taluka/district, date of birth/age) where each field only gets half
+  /// the paper's width. Two things can otherwise go wrong there: a long
+  /// Hindi/Gujarati label can outgrow its half of the row entirely
+  /// (a RenderFlex overflow, same class of bug already fixed on the
+  /// upload circle), and a value longer than what's left can wrap onto a
+  /// second line and break the underlined "form field" look. Both the
+  /// label and the value now auto-shrink (FittedBox, never enlarging —
+  /// only ever scaling down) to whatever room they actually have instead
+  /// of overflowing, wrapping, or being cut off with "..." — the member
+  /// always sees the whole value, just smaller if it needs to be. The
+  /// label is capped to a share of the row (via LayoutBuilder) so a long
+  /// label can't eat into the value's space; when the label is short (the
+  /// common case) that cap never binds and the value still gets all the
+  /// remaining room exactly as before. See _underlineFieldMultiline below
+  /// for fields that need more room by design (e.g. Address).
   Widget _underlineField(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            '$label : ',
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-          ),
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppColors.border)),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: constraints.maxWidth * 0.42,
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '$label : ',
+                    maxLines: 1,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ),
-              padding: const EdgeInsets.only(bottom: 3),
-              child: Text(value, style: const TextStyle(fontSize: 13)),
-            ),
-          ),
-        ],
+              Expanded(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: AppColors.border)),
+                  ),
+                  padding: const EdgeInsets.only(bottom: 3),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1053,13 +1155,28 @@ class _RegistrationPreviewScreenState
     Widget photoCell(File? file, String? url) {
       final Widget content;
 
+      // Every one of these previously set only `height: 46`, with no
+      // `width` — BoxFit.cover needs a bounded box on BOTH axes to know
+      // what to cover, so without a width the image just rendered at its
+      // own natural width (whatever that happened to be) instead of
+      // filling the cell, and the bordered box below shrink-wrapped to
+      // that same natural width instead of the table column — the photo
+      // visibly didn't fill its frame. `double.infinity` here fills
+      // whatever width the surrounding Container (also now `width:
+      // double.infinity`, filling the table column) actually gives it.
       if (file != null) {
-        content = Image.file(file, height: 46, fit: BoxFit.cover);
+        content = Image.file(
+          file,
+          height: 46,
+          width: double.infinity,
+          fit: BoxFit.cover,
+        );
       } else if (url != null) {
         content = CommonImageView(
           image: url,
           type: CommonImageType.network,
           height: 46,
+          width: double.infinity,
           fit: BoxFit.cover,
           showPlaceholder: false,
           showShimmer: false,
@@ -1067,6 +1184,7 @@ class _RegistrationPreviewScreenState
       } else {
         content = Container(
           height: 46,
+          width: double.infinity,
           alignment: Alignment.center,
           color: AppColors.background,
           child: Text(
@@ -1081,6 +1199,7 @@ class _RegistrationPreviewScreenState
         padding: const EdgeInsets.all(6),
         child: Container(
           height: 46,
+          width: double.infinity,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),

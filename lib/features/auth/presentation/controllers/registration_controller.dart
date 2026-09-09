@@ -8,9 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import 'package:psf_application/app/config/env/env.dart';
-import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/network/exceptions/api_exceptions.dart';
-import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
@@ -18,7 +16,6 @@ import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle
 import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/enums/document_module.dart';
 import 'package:psf_application/shared/models/localized_text_model.dart';
-import 'package:psf_application/shared/navigation/registration_navigator.dart';
 import 'package:psf_application/shared/repo/document_repository.dart';
 import 'package:psf_application/shared/repo/language_translation_repository.dart';
 import 'package:psf_application/shared/utils/app_date_picker.dart';
