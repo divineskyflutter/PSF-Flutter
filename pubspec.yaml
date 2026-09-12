@@ -93,6 +93,21 @@ dependencies:
   # firework animation on the registration-pending screen.
   audioplayers: ^6.1.2
 
+  # Just for the recognizable WhatsApp glyph on the registration-pending
+  # screen's Support section (tap-to-WhatsApp icon) — Flutter's own
+  # Material icon set has no brand icons, only generic chat/message
+  # shapes, which don't read as "this opens WhatsApp" at a glance.
+  #
+  # Pinned to the 10.x line, not ^11.0.0 — 11.0.0 made FaIconData stop
+  # implementing IconData (its own icon constants, e.g.
+  # FontAwesomeIcons.whatsapp, are no longer assignable to a plain
+  # IconData parameter and require its own FaIcon widget instead of
+  # Flutter's Icon). 10.12.0's icons are still ordinary IconData, which
+  # is what lets FontAwesomeIcons.whatsapp drop straight into
+  # _SupportIconButton's existing Icon(icon, ...) alongside the Material
+  # call icon with no other code changes.
+  font_awesome_flutter: ^10.12.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

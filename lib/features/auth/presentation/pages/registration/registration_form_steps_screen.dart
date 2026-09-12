@@ -123,9 +123,15 @@ class _AadharInputFormatter extends TextInputFormatter {
 /// or tapping to a new position mid-string.
 TextInputType _panKeyboardTypeFor(int cursorPosition) {
   final slot = cursorPosition.clamp(0, 9);
+  // .phone (not .number) for the digit zone — same reason as the date
+  // picker's day/month/year segments and the mobile-number field: under
+  // .number, a Hindi/Gujarati keyboard's native-script numeral keys type
+  // non-ASCII digits that FilteringTextInputFormatter/this formatter's
+  // own digit regex then silently strip, so digits the member typed
+  // never actually appear. .phone reliably gets ASCII 0-9.
   return _PanInputFormatter._letterSlots.contains(slot)
       ? TextInputType.visiblePassword
-      : TextInputType.number;
+      : TextInputType.phone;
 }
 
 /// Enforces the PAN format's fixed letter/digit layout as the member
@@ -155,11 +161,33 @@ class _PanInputFormatter extends TextInputFormatter {
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    final raw = newValue.text.toUpperCase();
-
     final cursorOffset = newValue.selection.end < 0
-        ? raw.length
-        : newValue.selection.end.clamp(0, raw.length);
+        ? newValue.text.length
+        : newValue.selection.end.clamp(0, newValue.text.length);
+
+    // A pure deletion (backspace/cut, nothing typed) must only ever
+    // remove the character(s) that were actually removed — it must NOT
+    // re-run the slot-type check below on what's left. That check keys
+    // each character to its POSITION IN THE OUTPUT BUFFER as it's
+    // rebuilt, and deleting a character from the middle shifts every
+    // character after it back by one slot. E.g. "ABCDE1234F" with the
+    // '2' deleted mid-string becomes "ABCDE134F" — the trailing 'F' has
+    // now shifted into what the buffer counts as a digit slot, so the
+    // old code silently dropped it too, making one backspace appear to
+    // delete two characters (the intended one AND the last one). A
+    // deletion just shortens the string; nothing needs re-validating.
+    if (newValue.text.length < oldValue.text.length) {
+      final capped = newValue.text.toUpperCase();
+      final result = capped.length > 10 ? capped.substring(0, 10) : capped;
+      return TextEditingValue(
+        text: result,
+        selection: TextSelection.collapsed(
+          offset: cursorOffset.clamp(0, result.length),
+        ),
+      );
+    }
+
+    final raw = newValue.text.toUpperCase();
 
     final buffer = StringBuffer();
     var cursorIndex = 0;
@@ -313,6 +341,14 @@ class _MemberRegistrationScreenState
   /// (a brand new FocusNode on remount would read as "nothing focused",
   /// closing the keyboard instead of reopening it with the right type).
   final FocusNode _panFocusNode = FocusNode();
+
+  /// Tracks which keyboard zone (letters vs digits — see
+  /// _PanInputFormatter._letterSlots) the PAN cursor was in as of the last
+  /// check, so _handlePanKeyboardSwitch only acts on an actual zone
+  /// CROSSING instead of re-running on every keystroke within the same
+  /// zone. Starts null so the very first check never counts as a
+  /// crossing.
+  bool? _panLastZoneWasLetters;
 
   /// Nominee checkpoints are per-slot (each slot is its own Form, same
   /// reasoning as [nomineeSlotFormKeys]) — only the last visible slot is
@@ -672,6 +708,47 @@ class _MemberRegistrationScreenState
     }
   }
 
+  /// Forces Android to actually redraw the PAN field's on-screen keyboard
+  /// when the cursor crosses between the letters zone and the digits zone
+  /// (see _panKeyboardTypeFor/_PanInputFormatter._letterSlots). Just
+  /// changing TextField.keyboardType on an already-focused field — even
+  /// through a full element remount via a changing ValueKey, which was
+  /// tried before this — doesn't reliably make every device's IME
+  /// re-render an already-open keyboard; some stock keyboards (reported
+  /// on this Motorola device) keep showing whatever layout is already up
+  /// regardless. Dropping focus and picking it back up on the NEXT frame
+  /// is the same trick segmented OTP fields use elsewhere: unfocus tears
+  /// the platform text-input connection all the way down, and refocusing
+  /// opens a brand new one with whatever TextInputType the field wants by
+  /// then — that round trip is what actually makes the OS redraw it.
+  void _handlePanKeyboardSwitch() {
+    final value = controller.panNumberController.value;
+    final cursorOffset = value.selection.end < 0
+        ? value.text.length
+        : value.selection.end.clamp(0, value.text.length);
+    final isLetterZone =
+        _PanInputFormatter._letterSlots.contains(cursorOffset.clamp(0, 9));
+
+    if (_panLastZoneWasLetters == isLetterZone) return;
+    _panLastZoneWasLetters = isLetterZone;
+
+    // Nothing to redraw if the field isn't even focused right now (e.g.
+    // this fired from a programmatic text change, not the member typing)
+    // — the next time it IS focused, _panKeyboardTypeFor already picks
+    // the right keyboard for wherever the cursor lands.
+    if (!_panFocusNode.hasFocus) return;
+
+    final selectionToRestore = value.selection;
+    _panFocusNode.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _panFocusNode.requestFocus();
+      // unfocus/refocus alone would otherwise leave the cursor jumped to
+      // the end instead of wherever the member actually left it.
+      controller.panNumberController.selection = selectionToRestore;
+    });
+  }
+
   // Devanagari (Hindi) and Gujarati Unicode letter/matra blocks, alongside
   // plain a-zA-Z — matches AppValidators._scriptLetters so a name field's
   // live typing never blocks a script its own validator would accept.
@@ -757,6 +834,8 @@ class _MemberRegistrationScreenState
 
     controller.mobileController.addListener(_formatMobileDisplay);
     _formatMobileDisplay();
+
+    controller.panNumberController.addListener(_handlePanKeyboardSwitch);
 
     fatherNameFocusNode = FocusNode()..addListener(_onFatherNameFocusChange);
     addressFocusNode = FocusNode()..addListener(_onAddressFocusChange);
@@ -1280,6 +1359,7 @@ class _MemberRegistrationScreenState
   @override
   void dispose() {
     controller.mobileController.removeListener(_formatMobileDisplay);
+    controller.panNumberController.removeListener(_handlePanKeyboardSwitch);
     _panFocusNode.dispose();
     fatherNameFocusNode
       ..removeListener(_onFatherNameFocusChange)
@@ -2031,9 +2111,9 @@ class _MemberRegistrationScreenState
             // Keyboard type follows the CURSOR through PAN's fixed
             // 5-letters / 4-digits / 1-letter layout — plain Latin
             // (visiblePassword — no Hindi/Gujarati IME) for the first 5
-            // characters and the last one, number pad for the 4 digits in
-            // between — instead of making the member manually flip the
-            // keyboard themselves. ValueListenableBuilder (a
+            // characters and the last one, phone-style number pad for the
+            // 4 digits in between — instead of making the member manually
+            // flip the keyboard themselves. ValueListenableBuilder (a
             // TextEditingController is a ValueListenable<TextEditingValue>)
             // rebuilds this field whenever its text OR its selection
             // changes — the selection change is what makes tapping to a
@@ -2044,22 +2124,15 @@ class _MemberRegistrationScreenState
             // not just wherever typing last stopped.
             //
             // Just handing TextField a new `keyboardType` on rebuild isn't
-            // enough by itself — Android often keeps showing whatever
-            // keyboard is already on screen instead of redrawing it, even
-            // though Flutter's own state says the field wants a different
-            // one now. Forcing a fresh element via a ValueKey tied to the
-            // zone (letters vs digits) makes the field actually close and
-            // reopen its platform connection with the new keyboard type —
-            // the same trick segmented OTP-style fields use. The outer
-            // Container keeps the original _panNumberKey stable (still the
-            // scroll-to-error target — see _step0Checkpoints), while
-            // _panFocusNode is the one thing that has to survive the
-            // remount unchanged so the field doesn't just lose focus and
-            // close the keyboard instead of reopening it correctly — that
-            // also covers re-tapping into the field after dismissing the
-            // keyboard, or after backspacing back across a zone boundary:
-            // either way lands on a new cursor position, which recomputes
-            // the zone and remounts with the right keyboard again.
+            // enough by itself to make an already-open Android keyboard
+            // redraw — a full element remount (previously tried here via a
+            // ValueKey keyed to the zone) didn't reliably fix that either
+            // on this device. See _handlePanKeyboardSwitch (listening on
+            // controller.panNumberController, added in initState) for what
+            // actually forces the redraw: an explicit unfocus-then-refocus
+            // across a frame boundary whenever the cursor crosses zones.
+            // _panFocusNode itself just stays put here — the switch is
+            // handled entirely by that listener now.
             Container(
               key: _panNumberKey,
               child: ValueListenableBuilder<TextEditingValue>(
@@ -2069,13 +2142,7 @@ class _MemberRegistrationScreenState
                       ? value.text.length
                       : value.selection.end.clamp(0, value.text.length);
 
-                  final isLetterZone = _PanInputFormatter._letterSlots
-                      .contains(cursorOffset.clamp(0, 9));
-
                   return AppTextField.form(
-                    key: ValueKey(
-                      isLetterZone ? 'pan-letters' : 'pan-digits',
-                    ),
                     focusNode: _panFocusNode,
                     label: 'pan_number'.tr,
                     controller:

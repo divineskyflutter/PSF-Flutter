@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -59,7 +60,7 @@ class RegistrationPendingScreen extends StatefulWidget {
 }
 
 class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late final _FireworkShow _show;
   late final AnimationController _fireworkController;
   late final AnimationController _successController;
@@ -68,6 +69,11 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
   @override
   void initState() {
     super.initState();
+
+    // So didChangeAppLifecycleState below actually gets called — see
+    // that method for why this screen needs to know about backgrounding
+    // at all.
+    WidgetsBinding.instance.addObserver(this);
 
     _show = _buildFireworks();
 
@@ -116,9 +122,21 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
             usageType: AndroidUsageType.media,
             audioFocus: AndroidAudioFocus.gain,
           ),
+          // AudioContextIOS's own constructor asserts that
+          // mixWithOthers may only be paired with the playback,
+          // playAndRecord, or multiRoute categories — pairing it with
+          // ambient (as this did before) throws that assertion the
+          // moment this const object is built, on EVERY platform
+          // (Android included, since this whole AudioContext literal is
+          // constructed unconditionally regardless of which OS is
+          // actually running) — which is exactly why sound still wasn't
+          // playing on this Android device even after the audio-focus
+          // fix: _startFireworkAudio was throwing before it ever reached
+          // setAudioContext/play. The ambient category already mixes
+          // with other apps' audio by default on iOS, so it doesn't need
+          // the option spelled out at all.
           iOS: AudioContextIOS(
             category: AVAudioSessionCategory.ambient,
-            options: const {AVAudioSessionOptions.mixWithOthers},
           ),
         ),
       );
@@ -140,8 +158,43 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
     }
   }
 
+  // Tapping Call or WhatsApp below (_callContact/_whatsAppContact) opens
+  // the phone dialer or WhatsApp itself via an external-application
+  // intent — that backgrounds this Flutter app without ever popping or
+  // disposing this screen, so nothing else here would otherwise notice.
+  // Left alone, the firework loop — ReleaseMode.loop, so it never stops
+  // on its own — just kept playing underneath whatever the member
+  // switched to, indefinitely, until they came back and left this screen
+  // some other way. Pausing on anything other than "resumed" (and
+  // resuming when the member returns) covers that, plus the ordinary
+  // case of leaving the app to the home screen or another app entirely.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    unawaited(_syncFireworkAudioWithLifecycle(state));
+  }
+
+  Future<void> _syncFireworkAudioWithLifecycle(AppLifecycleState state) async {
+    try {
+      if (state == AppLifecycleState.resumed) {
+        await _fireworkAudioPlayer.resume();
+      } else {
+        await _fireworkAudioPlayer.pause();
+      }
+    } catch (error, stackTrace) {
+      // Same reasoning as _startFireworkAudio's own catch — this is
+      // decorative sound, never worth crashing or blocking the screen
+      // over (e.g. if playback never actually started in the first
+      // place, pause()/resume() here have nothing to act on).
+      debugPrint(
+        '[fireworks-audio] lifecycle pause/resume failed: $error\n$stackTrace',
+      );
+    }
+  }
+
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _fireworkController.dispose();
     _successController.dispose();
     unawaited(_fireworkAudioPlayer.dispose());
@@ -409,7 +462,12 @@ class _SupportContactRow extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         _SupportIconButton(
-          icon: Icons.chat_rounded,
+          // The actual WhatsApp glyph, not a generic Material chat
+          // bubble — FontAwesomeIcons.whatsapp is a real IconData (it
+          // carries its own fontFamily/fontPackage), so it drops
+          // straight into _SupportIconButton's existing Icon(...) below
+          // with no other changes needed there.
+          icon: FontAwesomeIcons.whatsapp,
           tooltip: 'whatsapp'.tr,
           onTap: onWhatsApp,
         ),
