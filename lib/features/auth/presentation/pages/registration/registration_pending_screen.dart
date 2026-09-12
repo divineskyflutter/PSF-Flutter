@@ -1,12 +1,39 @@
+import 'dart:async';
 import 'dart:math';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
+import 'package:psf_application/shared/utils/app_validators.dart';
+import 'package:psf_application/shared/utils/toast_util.dart';
 import 'package:psf_application/shared/widgets/dialogs/app_dialog.dart';
+
+/// One Support-section contact — the client's requirements doc lists
+/// these by name/number directly (not fetched from the API), so they're
+/// plain constants here rather than a model/request round-trip.
+class _SupportContact {
+  const _SupportContact({
+    required this.nameKey,
+    required this.phone,
+  });
+
+  final String nameKey;
+
+  /// Plain 10-digit number, no formatting — [_formattedPhone] groups it
+  /// for display, [_telUri]/[_whatsAppUri] use it as-is.
+  final String phone;
+}
+
+const List<_SupportContact> _supportContacts = [
+  _SupportContact(nameKey: 'support_contact_office_name', phone: '9664698982'),
+  _SupportContact(nameKey: 'support_contact_1_name', phone: '9825635110'),
+  _SupportContact(nameKey: 'support_contact_2_name', phone: '8000212041'),
+];
 
 /// Shown right after RegistrationPreviewScreen submits the application
 /// (see its _completeRegistration), and again on any later app launch —
@@ -36,6 +63,7 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
   late final _FireworkShow _show;
   late final AnimationController _fireworkController;
   late final AnimationController _successController;
+  late final AudioPlayer _fireworkAudioPlayer;
 
   @override
   void initState() {
@@ -43,26 +71,80 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
 
     _show = _buildFireworks();
 
-    // One-shot celebration on entry — not looped, so it doesn't keep
-    // distracting the member if this screen stays open while they wait
-    // for approval. Long enough for every staggered rocket AND every
-    // ground cracker below to fire, ignite, and fade before it stops —
-    // a proper, busier little show rather than one quick flash.
+    // Loops continuously per the client's requirements doc — the
+    // celebration animation on this screen must stay visible and never
+    // stop on its own. Long enough for every staggered rocket AND every
+    // ground cracker below to fire, ignite, and fade before looping back
+    // to the start — a proper, busier little show each time round,
+    // rather than one quick flash repeated.
     _fireworkController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 7500),
-    )..forward();
+    )..repeat();
 
     _successController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 950),
     )..forward();
+
+    // Rocket-launch + firecracker crackle, looping continuously right
+    // alongside the animation above — a short (~7s), trimmed-down clip
+    // from a real fireworks recording, not the full multi-minute file.
+    // ReleaseMode.loop makes the player itself restart the clip the
+    // instant it ends, so there's no gap of silence waiting for this
+    // code to notice completion and call play() again.
+    _fireworkAudioPlayer = AudioPlayer();
+    unawaited(_startFireworkAudio());
+  }
+
+  Future<void> _startFireworkAudio() async {
+    try {
+      // Without an explicit AudioContext, audioplayers leaves Android's
+      // audio-focus request at whatever its own default is — on some
+      // OEM audio stacks (Motorola's included) a player that never
+      // explicitly asks for and is granted focus just plays into
+      // silence: no exception, nothing in the logs, it simply never
+      // becomes audible. Asking for it outright, as ordinary media
+      // audio, is what those stacks expect before they'll actually
+      // route sound to the speaker.
+      await AudioPlayer.global.setAudioContext(
+        AudioContext(
+          android: const AudioContextAndroid(
+            isSpeakerphoneOn: false,
+            stayAwake: false,
+            contentType: AndroidContentType.music,
+            usageType: AndroidUsageType.media,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.ambient,
+            options: const {AVAudioSessionOptions.mixWithOthers},
+          ),
+        ),
+      );
+
+      await _fireworkAudioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _fireworkAudioPlayer.setVolume(1.0);
+      await _fireworkAudioPlayer.play(
+        AssetSource('audio/fireworks_loop.mp3'),
+      );
+
+      debugPrint('[fireworks-audio] playback started');
+    } catch (error, stackTrace) {
+      // Playback failing should never block or crash this screen — the
+      // celebration is still fully there visually either way, sound is
+      // a nice-to-have on top — but log it (instead of swallowing it
+      // silently) so a "no sound, no error" report can actually be
+      // tracked down from the console next time.
+      debugPrint('[fireworks-audio] failed to start: $error\n$stackTrace');
+    }
   }
 
   @override
   void dispose() {
     _fireworkController.dispose();
     _successController.dispose();
+    unawaited(_fireworkAudioPlayer.dispose());
     super.dispose();
   }
 
@@ -82,6 +164,32 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
       SystemNavigator.pop();
     }
   }
+
+  // ============================================================
+  // SUPPORT — CALL / WHATSAPP
+  // ============================================================
+
+  Future<void> _launchOrError(Uri uri) async {
+    final launched = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!launched) {
+      ToastUtil.error('could_not_open_app_error'.tr);
+    }
+  }
+
+  Future<void> _callContact(String phone) => _launchOrError(
+        Uri(scheme: 'tel', path: phone),
+      );
+
+  Future<void> _whatsAppContact(String phone) => _launchOrError(
+        // "91" = India's country code — every number here is a local
+        // 10-digit Indian mobile number, same assumption AppValidators
+        // .mobile already makes.
+        Uri.parse('https://wa.me/91$phone'),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +310,26 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
                           ),
                           const SizedBox(height: 5),
                           Text('support_contact'.tr),
+                          const SizedBox(height: 4),
+                          Text(
+                            'support_office_hours_title'.tr,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primaryDark,
+                            ),
+                          ),
+                          Text('support_office_hours_morning'.tr),
+                          Text('support_office_hours_afternoon'.tr),
+                          const SizedBox(height: 12),
+                          for (final contact in _supportContacts) ...[
+                            _SupportContactRow(
+                              contact: contact,
+                              onCall: () => _callContact(contact.phone),
+                              onWhatsApp: () =>
+                                  _whatsAppContact(contact.phone),
+                            ),
+                            const SizedBox(height: 10),
+                          ],
                         ],
                       ),
                     ),
@@ -229,6 +357,92 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// SUPPORT CONTACT ROW — name/number + tap-to-call/WhatsApp icons
+// ============================================================
+
+class _SupportContactRow extends StatelessWidget {
+  const _SupportContactRow({
+    required this.contact,
+    required this.onCall,
+    required this.onWhatsApp,
+  });
+
+  final _SupportContact contact;
+  final VoidCallback onCall;
+  final VoidCallback onWhatsApp;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                contact.nameKey.tr,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primaryDark,
+                ),
+              ),
+              Text(
+                AppValidators.formatMobile(contact.phone),
+                style: TextStyle(
+                  color: AppColors.primaryDark.withOpacity(.7),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _SupportIconButton(
+          icon: Icons.call_rounded,
+          tooltip: 'call'.tr,
+          onTap: onCall,
+        ),
+        const SizedBox(width: 8),
+        _SupportIconButton(
+          icon: Icons.chat_rounded,
+          tooltip: 'whatsapp'.tr,
+          onTap: onWhatsApp,
+        ),
+      ],
+    );
+  }
+}
+
+class _SupportIconButton extends StatelessWidget {
+  const _SupportIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: AppColors.primary, size: 18),
         ),
       ),
     );
@@ -367,13 +581,17 @@ _FireworkShow _buildFireworks() {
     final origin = rocketOrigins[i];
     final color = palette[i % palette.length];
 
-    // Staggered so rockets launch one after another across most of the
-    // animation, leaving comfortable room at the end for the last one's
-    // sparks to still fully burst and fade rather than being cut off —
-    // and enough of a head start (base 0.14) that even the first
-    // rocket's full climb fits before it ignites, see launchDuration.
+    // Staggered so rockets launch one after another across almost the
+    // *entire* animation — spread out to 0.74 (was 0.55) so the last
+    // rocket now ignites close to the very end of the cycle instead of
+    // leaving the final ~30% of every loop with nothing left to watch.
+    // That trailing dead patch, followed by AnimationController.repeat()
+    // snapping straight back to the start, was exactly what read as
+    // "stops, then starts again" instead of one continuous show. Still
+    // enough head start (base 0.10) that even the first rocket's full
+    // climb fits before it ignites, see launchDuration.
     final ignitionTime =
-        (i / rocketOrigins.length) * 0.55 + 0.14 + random.nextDouble() * 0.04;
+        (i / rocketOrigins.length) * 0.74 + 0.10 + random.nextDouble() * 0.04;
 
     // Shorter climb + a snappier (less quadratic) ease below makes the
     // rocket look like it's shooting up fast and steady, closer to a real
@@ -419,13 +637,25 @@ _FireworkShow _buildFireworks() {
   // rockets-in-the-sky plus ground crackers going off than a handful of
   // isolated single bursts. Sizes/speeds/colors are randomized per
   // cracker so they don't all look identical.
-  const crackerCount = 10;
+  const crackerCount = 14;
+
+  // One cracker per equal-width slice of the whole cycle (0..0.97, with a
+  // small random jitter inside its own slice) instead of pure random
+  // placement across only the first 0.82 of the loop. Pure randomness
+  // could — and did — leave a stretch near the end of every loop with
+  // nothing popping at all, right before AnimationController.repeat()
+  // snapped straight back to the start; that dead patch plus the abrupt
+  // jump was exactly the "stops, then starts again" feeling reported.
+  // Slicing guarantees something is always going off, right up to the
+  // loop boundary, so it reads as one continuous show instead.
+  final crackerSliceWidth = 0.97 / crackerCount;
 
   for (var i = 0; i < crackerCount; i++) {
     final color = palette[random.nextInt(palette.length)];
     final originX = 0.12 + random.nextDouble() * 0.76;
     final originY = 0.46 + random.nextDouble() * 0.28;
-    final startDelay = random.nextDouble() * 0.82;
+    final startDelay =
+        i * crackerSliceWidth + random.nextDouble() * crackerSliceWidth;
     final isSmallPop = random.nextBool();
 
     _addBurst(

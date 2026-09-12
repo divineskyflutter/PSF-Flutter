@@ -51,9 +51,9 @@ const Map<String, String> enUS = {
   // Authentication
   'welcome_to_psf': 'Welcome to PSF',
   'auth_header_subtitle':
-  'Your trusted partner for a secure financial journey.',
+  'A True promise of family security',
   'auth_welcome_title':
-  'Your financial journey starts here',
+  "Your family's Security starts Here",
   'auth_welcome_description':
   'Sign in to continue or register to become part of our trusted community.',
   'sign_in': 'Sign In',

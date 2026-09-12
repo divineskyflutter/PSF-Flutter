@@ -38,6 +38,7 @@ import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_mod
 import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/models/localized_text_model.dart';
 import 'package:psf_application/shared/utils/app_date_picker.dart';
+import 'package:psf_application/shared/utils/enum_option_translator.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 import 'package:psf_application/shared/widgets/buttons/app_button.dart';
 import 'package:psf_application/shared/widgets/images/common_image_view.dart';
@@ -153,43 +154,9 @@ class _RegistrationPreviewScreenState
   // `name` untranslated instead of showing blank.
   // ============================================================
 
-  static const Map<String, Map<String, String>> _optionTranslations = {
-    'male': {'hi': 'पुरुष', 'gu': 'પુરુષ'},
-    'female': {'hi': 'महिला', 'gu': 'સ્ત્રી'},
-    'other': {'hi': 'अन्य', 'gu': 'અન્ય'},
-    'single': {'hi': 'अविवाहित', 'gu': 'અપરિણીત'},
-    'married': {'hi': 'विवाहित', 'gu': 'પરિણીત'},
-    'divorced': {'hi': 'तलाकशुदा', 'gu': 'છૂટાછેડા લીધેલ'},
-    'widowed': {'hi': 'विधवा/विधुर', 'gu': 'વિધવા/વિધુર'},
-    'father': {'hi': 'पिता', 'gu': 'પિતા'},
-    'mother': {'hi': 'माता', 'gu': 'માતા'},
-    'husband': {'hi': 'पति', 'gu': 'પતિ'},
-    'wife': {'hi': 'पत्नी', 'gu': 'પત્ની'},
-    'son': {'hi': 'बेटा', 'gu': 'દીકરો'},
-    'daughter': {'hi': 'बेटी', 'gu': 'દીકરી'},
-    'brother': {'hi': 'भाई', 'gu': 'ભાઈ'},
-    'sister': {'hi': 'बहन', 'gu': 'બહેન'},
-    'grandson': {'hi': 'पौत्र', 'gu': 'પૌત્ર'},
-    'granddaughter': {'hi': 'पौत्री', 'gu': 'પૌત્રી'},
-    'son in law': {'hi': 'दामाद', 'gu': 'જમાઈ'},
-    'daughter in law': {'hi': 'बहू', 'gu': 'વહુ'},
-    'father in law': {'hi': 'ससुर', 'gu': 'સસરા'},
-    'mother in law': {'hi': 'सास', 'gu': 'સાસુ'},
-    'other relative': {'hi': 'अन्य रिश्तेदार', 'gu': 'અન્ય સંબંધી'},
-  };
 
   String _translatedOptionName(String englishName) {
-    final language = languageController.currentAppLanguage;
-    if (language == AppLanguage.english) return englishName;
-
-    final entry = _optionTranslations[englishName.trim().toLowerCase()];
-    if (entry == null) return englishName;
-
-    final translated =
-        language == AppLanguage.hindi ? entry['hi'] : entry['gu'];
-    return (translated != null && translated.isNotEmpty)
-        ? translated
-        : englishName;
+    return EnumOptionTranslator.translate(englishName);
   }
 
   /// First + middle + surname in the selected language, falling back to
@@ -224,7 +191,7 @@ class _RegistrationPreviewScreenState
   // actual member number yet; once it does, wire that field in here
   // instead of memberId.
   String _resolvedMemberNo() {
-    return _orNotProvided('');
+    return _orDash('');
   }
 
   @override
@@ -806,20 +773,30 @@ class _RegistrationPreviewScreenState
         children: [
           Text('your_faithfully'.tr, style: const TextStyle(fontSize: 12.5)),
           const SizedBox(height: 8),
-          if (signature != null)
-            Image.file(signature, height: 44, fit: BoxFit.contain)
-          else if (signatureUrl != null && signatureUrl.isNotEmpty)
-            SizedBox(
-              height: 44,
-              child: CommonImageView(
-                image: signatureUrl,
-                type: CommonImageType.network,
-                fit: BoxFit.contain,
-                showShimmer: false,
-              ),
-            )
-          else
-            const SizedBox(height: 44),
+          // Fixed box the same width as the "Member's Signature" line
+          // below, with the (now trimmed-to-ink — see
+          // AppSignatureBottomSheet._trimSignature) image centered inside
+          // it — a comfortable, consistent size and position regardless
+          // of the source image's own exact aspect ratio, sitting right
+          // above its own line instead of off to one side of it.
+          SizedBox(
+            width: 170,
+            height: 60,
+            child: signature != null
+                ? Center(
+                    child: Image.file(signature, fit: BoxFit.contain),
+                  )
+                : (signatureUrl != null && signatureUrl.isNotEmpty)
+                    ? Center(
+                        child: CommonImageView(
+                          image: signatureUrl,
+                          type: CommonImageType.network,
+                          fit: BoxFit.contain,
+                          showShimmer: false,
+                        ),
+                      )
+                    : null,
+          ),
           Container(
             width: 170,
             decoration: const BoxDecoration(
@@ -991,8 +968,11 @@ class _RegistrationPreviewScreenState
                 const SizedBox(width: 10),
                 Expanded(
                   child: _underlineField(
+                    // Mobile Number 2 is optional — when it's left blank,
+                    // the field stays blank (no 'not_provided' placeholder
+                    // text), unlike every other field on this screen.
                     'mobile_number_2'.tr,
-                    _orNotProvided(controller.mobile2Controller.text),
+                    controller.mobile2Controller.text.trim(),
                   ),
                 ),
               ],
@@ -1153,6 +1133,15 @@ class _RegistrationPreviewScreenState
     // 8, always bordered) so every image box on the printed preview reads
     // as one consistent shape.
     Widget photoCell(File? file, String? url) {
+      // No file and no url means this nominee slot was never filled in
+      // (the member added fewer than 3 nominees) — a real saved nominee
+      // always has one or the other, since a photo is required to save
+      // a slot. Show a plain '-', same as every other empty cell in this
+      // table, instead of a bordered "no images available" box.
+      if (file == null && url == null) {
+        return valueCell('-');
+      }
+
       final Widget content;
 
       // Every one of these previously set only `height: 46`, with no
@@ -1171,27 +1160,15 @@ class _RegistrationPreviewScreenState
           width: double.infinity,
           fit: BoxFit.cover,
         );
-      } else if (url != null) {
+      } else {
         content = CommonImageView(
-          image: url,
+          image: url!,
           type: CommonImageType.network,
           height: 46,
           width: double.infinity,
           fit: BoxFit.cover,
           showPlaceholder: false,
           showShimmer: false,
-        );
-      } else {
-        content = Container(
-          height: 46,
-          width: double.infinity,
-          alignment: Alignment.center,
-          color: AppColors.background,
-          child: Text(
-            'no_images_available'.tr,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 7.5, color: AppColors.textSecondary),
-          ),
         );
       }
 

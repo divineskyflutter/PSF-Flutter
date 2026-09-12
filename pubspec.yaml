@@ -65,8 +65,17 @@ dependencies:
 
   signature: ^6.4.0
 
+  # Already pulled in transitively (by image_cropper) at 4.9.2 — declared
+  # directly here too so app_signature_bottom_sheet.dart can crop the
+  # captured signature down to just the drawn strokes' own bounding box.
+  image: ^4.9.2
+
   connectivity_plus: ^7.3.1
   internet_connection_checker_plus: ^3.1.1
+
+  # Submission screen's Support section — tap-to-call / tap-to-WhatsApp
+  # icons next to each contact (see registration_pending_screen.dart).
+  url_launcher: ^6.3.1
 
   # Application preview: client-generated PDF (matches the printed
   # member/nominee form) + the book-style page-turn effect used to
@@ -79,6 +88,10 @@ dependencies:
   # 3.11.1, which only 3.12.0 and below support.
   pdf: ^3.12.0
   page_flip: ^0.2.5+1
+
+  # Loops the rocket/cracker sound effect alongside the celebration
+  # firework animation on the registration-pending screen.
+  audioplayers: ^6.1.2
 
 dev_dependencies:
   flutter_test:
@@ -101,6 +114,7 @@ flutter:
     - assets/animations/lottie/
     - assets/animations/gif/
     - assets/translations/
+    - assets/audio/
     - assets/images/onboarding/
     - assets/images/logo/
     - assets/images/rules_doc_images/

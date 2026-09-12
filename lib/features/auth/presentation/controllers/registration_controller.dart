@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 
 import 'package:psf_application/app/config/env/env.dart';
 import 'package:psf_application/core/network/exceptions/api_exceptions.dart';
+import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
@@ -596,7 +597,13 @@ class RegistrationController extends GetxController {
           : null;
 
       hasCurrentIllness.value = declaration.isSeriousIllness;
-      seriousIllnessDetailController.text = declaration.seriousIllness;
+      // Same resume-in-selected-language fix as getMemberStatus/
+      // loadExistingNominees — see _resumeLocalizedValue's doc comment.
+      seriousIllnessDetailController.text = _resumeLocalizedValue(
+        original: declaration.seriousIllness,
+        hindi: declaration.hSeriousIllness,
+        gujarati: declaration.gSeriousIllness,
+      );
       seriousIllnessLanguages.value = LocalizedTextModel(
         original: declaration.seriousIllness,
         english: declaration.seriousIllness,
@@ -625,7 +632,11 @@ class RegistrationController extends GetxController {
           if (declaration.anyHerediatry) 'disease_hereditary',
         ]);
 
-      otherHereditaryDetailController.text = declaration.other;
+      otherHereditaryDetailController.text = _resumeLocalizedValue(
+        original: declaration.other,
+        hindi: declaration.hOther,
+        gujarati: declaration.gOther,
+      );
       otherHereditaryLanguages.value = LocalizedTextModel(
         original: declaration.other,
         english: declaration.other,
@@ -636,7 +647,11 @@ class RegistrationController extends GetxController {
           (declaration.hOther.isEmpty || declaration.gOther.isEmpty);
 
       hadSurgery.value = declaration.isSurgery;
-      surgeryDetailController.text = declaration.surgery;
+      surgeryDetailController.text = _resumeLocalizedValue(
+        original: declaration.surgery,
+        hindi: declaration.hSurgery,
+        gujarati: declaration.gSurgery,
+      );
       surgeryLanguages.value = LocalizedTextModel(
         original: declaration.surgery,
         english: declaration.surgery,
@@ -654,7 +669,11 @@ class RegistrationController extends GetxController {
       medicationDetailController.text = declaration.medicationRegularly;
 
       hasAllergies.value = declaration.anyAllergies;
-      allergyDetailController.text = declaration.allergies;
+      allergyDetailController.text = _resumeLocalizedValue(
+        original: declaration.allergies,
+        hindi: declaration.hAllergies,
+        gujarati: declaration.gAllergies,
+      );
       allergyLanguages.value = LocalizedTextModel(
         original: declaration.allergies,
         english: declaration.allergies,
@@ -668,7 +687,11 @@ class RegistrationController extends GetxController {
       consumesAlcohol.value = declaration.addictionToAlcohol;
       usesDrugs.value = declaration.drugs;
 
-      otherHealthDetailController.text = declaration.otherDetails;
+      otherHealthDetailController.text = _resumeLocalizedValue(
+        original: declaration.otherDetails,
+        hindi: declaration.hotherDetails,
+        gujarati: declaration.gotherDetails,
+      );
       otherHealthDetailLanguages.value = LocalizedTextModel(
         original: declaration.otherDetails,
         english: declaration.otherDetails,
@@ -1056,6 +1079,35 @@ class RegistrationController extends GetxController {
       gujarati:
           (gujarati != null && gujarati.trim().isNotEmpty) ? gujarati : original,
     );
+  }
+
+  /// Same 3-tier fallback RegistrationPreviewScreen's _localizedValue and
+  /// RegistrationPdfBuilder use for the downloaded PDF — prefer the
+  /// currently-selected APP language's own translation, then fall back to
+  /// the plain/original text. Used by [getMemberStatus]'s prefill so a
+  /// resumed member who picked Hindi/Gujarati sees their own already-saved
+  /// translation in this step's EDITABLE fields, not just in the read-only
+  /// Preview screen — before this, every *Controller.text below was always
+  /// set from the plain/English server field regardless of the selected
+  /// app language.
+  String _resumeLocalizedValue({
+    required String? original,
+    required String? hindi,
+    required String? gujarati,
+  }) {
+    final language = Get.find<LanguageController>().currentAppLanguage;
+
+    final fromLanguage = switch (language) {
+      AppLanguage.hindi => hindi,
+      AppLanguage.gujarati => gujarati,
+      AppLanguage.english => original,
+    };
+
+    if (fromLanguage != null && fromLanguage.trim().isNotEmpty) {
+      return fromLanguage;
+    }
+
+    return original ?? '';
   }
 
   /// Runs translateNameFieldOnUnfocus for every step-2 field that's dirty
@@ -1506,8 +1558,16 @@ class RegistrationController extends GetxController {
         hState: pick(state, (m) => m.hindi),
         gState: pick(state, (m) => m.gujarati),
 
-        mobile1: mobileController.text.trim(),
-        mobile2: mobile2Controller.text.trim(),
+        // The fields display these grouped into the Indian 5+5 format
+        // with a space (see AppValidators.formatMobile /
+        // _MobileInputFormatter) — strip that back out to the plain
+        // 10-digit string the API expects, same as aadharNo below.
+        mobile1: AppValidators.stripMobileFormatting(
+          mobileController.text.trim(),
+        ),
+        mobile2: AppValidators.stripMobileFormatting(
+          mobile2Controller.text.trim(),
+        ),
 
         occupation: pick(occupation, (m) => m.english),
         hOccupation: pick(occupation, (m) => m.hindi),
@@ -1902,7 +1962,17 @@ class RegistrationController extends GetxController {
 
         slot.nomineeId.value = nominee.nomineeId > 0 ? nominee.nomineeId : null;
 
-        slot.nameController.text = nominee.name;
+        // Localized the same way getMemberStatus's own resumed fields are
+        // (see _resumeLocalizedValue) — before this, a resumed nominee's
+        // name always showed the plain/English value in this editable
+        // field regardless of the selected app language, even though
+        // nameLanguages (seeded right below) already had the hi/gu
+        // translation the whole time.
+        slot.nameController.text = _resumeLocalizedValue(
+          original: nominee.name,
+          hindi: nominee.hName,
+          gujarati: nominee.gName,
+        );
 
         // hName/gName are now part of GetNomineeByMemberId's own schema
         // (see NomineeModel), so a nominee that already has them prefills
@@ -2334,8 +2404,11 @@ class RegistrationController extends GetxController {
       // PREFILL MEMBER DATA
       // ========================================================
 
-      fatherNameController.text =
-          result.fatherName ?? '';
+      fatherNameController.text = _resumeLocalizedValue(
+        original: result.fatherName,
+        hindi: result.hFatherName,
+        gujarati: result.gFatherName,
+      );
 
       // The server returns DOB as an ISO date-time string
       // (e.g. "2026-08-29T10:54:58.5"); parse it so both the picker's
@@ -2347,23 +2420,41 @@ class RegistrationController extends GetxController {
           ? AppDatePicker.format(parsedDateOfBirth)
           : '';
 
-      addressController.text =
-          result.address ?? '';
+      addressController.text = _resumeLocalizedValue(
+        original: result.address,
+        hindi: result.hAddress,
+        gujarati: result.gAddress,
+      );
 
-      villageController.text =
-          result.village ?? '';
+      villageController.text = _resumeLocalizedValue(
+        original: result.village,
+        hindi: result.hVillage,
+        gujarati: result.gVillage,
+      );
 
-      talukaController.text =
-          result.taluka ?? '';
+      talukaController.text = _resumeLocalizedValue(
+        original: result.taluka,
+        hindi: result.hTaluka,
+        gujarati: result.gTaluka,
+      );
 
-      districtController.text =
-          result.district ?? '';
+      districtController.text = _resumeLocalizedValue(
+        original: result.district,
+        hindi: result.hDistrict,
+        gujarati: result.gDistrict,
+      );
 
-      stateController.text =
-          result.state ?? '';
+      stateController.text = _resumeLocalizedValue(
+        original: result.state,
+        hindi: result.hState,
+        gujarati: result.gState,
+      );
 
-      occupationController.text =
-          result.occupation ?? '';
+      occupationController.text = _resumeLocalizedValue(
+        original: result.occupation,
+        hindi: result.hOccupation,
+        gujarati: result.gOccupation,
+      );
 
       // Grouped into 4-4-4 blocks the same way the field formats it while
       // typing — see the matching comment on NomineeSlot's aadharNo

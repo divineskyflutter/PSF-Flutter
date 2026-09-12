@@ -9,7 +9,7 @@ class AppAssets {
       'assets/images/logo/logo.svg';
 
   static const String paperTexture =
-      'assets/images/logo/paper_texture.png';
+      'assets/images/logo/paper_texture_2.png';
 
   // ------------------------------------------------------------
   // Onboarding

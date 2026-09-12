@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/features/auth/data/models/member_model.dart';
 import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
 import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
@@ -14,6 +15,7 @@ import 'package:psf_application/shared/extensions/new_responsive_extensions.dart
 import 'package:psf_application/shared/signature/app_signature_bottom_sheet.dart';
 import 'package:psf_application/shared/utils/app_date_picker.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
+import 'package:psf_application/shared/utils/enum_option_translator.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 import 'package:psf_application/shared/widgets/images/common_image_view.dart';
 import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
@@ -107,6 +109,137 @@ class _AadharInputFormatter extends TextInputFormatter {
   }
 }
 
+/// Which soft keyboard PAN's field should show for a given CURSOR
+/// POSITION (not text length — the member can move the cursor to any
+/// position and edit there, so the keyboard has to match whatever slot the
+/// cursor currently sits in, not just wherever typing last stopped) —
+/// visiblePassword (plain Latin letters, no Hindi/Gujarati IME — see
+/// TextInputType.visiblePassword's own doc comment for why this is the
+/// standard trick for that) for the first 5 characters and the last one,
+/// number pad for the 4 digits in between. See _PanInputFormatter below
+/// for the matching character-type enforcement, and _PanInputFormatter's
+/// own cursor tracking for why the ValueListenableBuilder's
+/// value.selection is always accurate here even after typing, deleting,
+/// or tapping to a new position mid-string.
+TextInputType _panKeyboardTypeFor(int cursorPosition) {
+  final slot = cursorPosition.clamp(0, 9);
+  return _PanInputFormatter._letterSlots.contains(slot)
+      ? TextInputType.visiblePassword
+      : TextInputType.number;
+}
+
+/// Enforces the PAN format's fixed letter/digit layout as the member
+/// types — 5 letters, 4 digits, 1 letter (e.g. "ABCDE1234F") — instead of
+/// only catching a wrong character after the fact via AppValidators.pan.
+/// A character that doesn't match its position's expected type is simply
+/// not inserted, same idea as an OTP field. Also uppercases every letter,
+/// since textCapitalization only affects the on-screen keyboard's shift
+/// state, not what's actually inserted.
+///
+/// Cursor handling mirrors [_MobileInputFormatter]/[_AadharInputFormatter]
+/// above rather than always collapsing to the end: the number of ACCEPTED
+/// characters before the original cursor position is preserved as the new
+/// cursor position (this format has no separator characters, so — unlike
+/// Aadhaar/mobile — 1 accepted character always maps to exactly 1
+/// formatted character). That's what makes typing, deleting, or tapping
+/// to any position in the middle of the number all land the cursor back
+/// where the member actually put it, instead of always jumping to the
+/// end — which is also what makes _panKeyboardTypeFor's cursor-based
+/// keyboard switch actually track the right slot. See _panKeyboardTypeFor
+/// above for the matching keyboard auto-switch (point 8's other half).
+class _PanInputFormatter extends TextInputFormatter {
+  static const _letterSlots = {0, 1, 2, 3, 4, 9};
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final raw = newValue.text.toUpperCase();
+
+    final cursorOffset = newValue.selection.end < 0
+        ? raw.length
+        : newValue.selection.end.clamp(0, raw.length);
+
+    final buffer = StringBuffer();
+    var cursorIndex = 0;
+    var located = cursorOffset == 0;
+
+    for (var i = 0; i < raw.length && buffer.length < 10; i++) {
+      final char = raw[i];
+      final isLetterSlot = _letterSlots.contains(buffer.length);
+      final matches = isLetterSlot
+          ? RegExp(r'[A-Z]').hasMatch(char)
+          : RegExp(r'[0-9]').hasMatch(char);
+
+      if (matches) buffer.write(char);
+
+      if (!located && i == cursorOffset - 1) {
+        cursorIndex = buffer.length;
+        located = true;
+      }
+    }
+
+    // Cursor was past whatever got capped/consumed (e.g. pasting more
+    // than 10 characters) — land it at the end of what's actually there.
+    if (!located) cursorIndex = buffer.length;
+
+    final formatted = buffer.toString();
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(
+        offset: cursorIndex.clamp(0, formatted.length),
+      ),
+    );
+  }
+}
+
+/// Groups a mobile number into the Indian 5+5 blocks as the member
+/// types — e.g. "9876543210" reads as "98765 43210" — capped at 10
+/// digits, purely as a display aid (see AppValidators.formatMobile/
+/// stripMobileFormatting for the shared grouping logic). Same
+/// cursor-preserving approach as [_AadharInputFormatter] above.
+class _MobileInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final rawDigits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final cappedDigits =
+        rawDigits.length > 10 ? rawDigits.substring(0, 10) : rawDigits;
+
+    final cursorOffset = newValue.selection.end < 0
+        ? newValue.text.length
+        : newValue.selection.end.clamp(0, newValue.text.length);
+
+    final digitsBeforeCursor = newValue.text
+        .substring(0, cursorOffset)
+        .replaceAll(RegExp(r'\D'), '')
+        .length
+        .clamp(0, cappedDigits.length);
+
+    final formatted = AppValidators.formatMobile(cappedDigits);
+
+    var digitsSeen = 0;
+    var cursorIndex = formatted.length;
+
+    for (var i = 0; i < formatted.length; i++) {
+      if (digitsSeen >= digitsBeforeCursor) {
+        cursorIndex = i;
+        break;
+      }
+      if (formatted[i] != ' ') digitsSeen++;
+    }
+
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: cursorIndex),
+    );
+  }
+}
+
 class MemberRegistrationScreen
     extends StatefulWidget {
   const MemberRegistrationScreen({
@@ -137,6 +270,343 @@ class _MemberRegistrationScreenState
     RegistrationController.maxNominees,
     (_) => GlobalKey<FormState>(),
   );
+
+  // ============================================================
+  // SCROLL-TO-FIRST-ERROR
+  //
+  // One GlobalKey per checkpoint, kept in the same top-to-bottom order the
+  // fields actually appear on screen. _scrollToFirstError walks a
+  // checkpoint list (built by _step0Checkpoints/_nomineeCheckpoints below)
+  // after a failed Next and jumps to the first one still in error — every
+  // one of these already gets its own inline/Form error text the moment
+  // _showStep1Errors (step 0) or a slot's showErrors (step 1) flips true,
+  // this only adds the scroll so that text is actually seen instead of
+  // sitting off-screen while just a toast (or nothing) appears.
+  // ============================================================
+
+  final GlobalKey _profileImageKey = GlobalKey();
+  final GlobalKey _fullNameKey = GlobalKey();
+  final GlobalKey _fatherNameKey = GlobalKey();
+  final GlobalKey _dobKey = GlobalKey();
+  final GlobalKey _genderKey = GlobalKey();
+  final GlobalKey _maritalStatusKey = GlobalKey();
+  final GlobalKey _addressKey = GlobalKey();
+  final GlobalKey _villageKey = GlobalKey();
+  final GlobalKey _talukaKey = GlobalKey();
+  final GlobalKey _districtKey = GlobalKey();
+  final GlobalKey _stateKey = GlobalKey();
+  final GlobalKey _aadharNumberKey = GlobalKey();
+  final GlobalKey _aadharFrontKey = GlobalKey();
+  final GlobalKey _aadharBackKey = GlobalKey();
+  final GlobalKey _panNumberKey = GlobalKey();
+  final GlobalKey _panImageKey = GlobalKey();
+  final GlobalKey _occupationKey = GlobalKey();
+  final GlobalKey _signatureKey = GlobalKey();
+
+  /// Kept alive across every letters<->digits keyboard-zone switch on the
+  /// PAN field (see the ValueKey remount trick at that field's callsite)
+  /// so focus survives the remount instead of the field silently losing
+  /// it. A plain change to TextField.keyboardType while already focused
+  /// doesn't reliably make Android's on-screen keyboard actually redraw
+  /// with the new layout — remounting the field with a fresh element is
+  /// what forces that, but only works if the SAME FocusNode carries over
+  /// (a brand new FocusNode on remount would read as "nothing focused",
+  /// closing the keyboard instead of reopening it with the right type).
+  final FocusNode _panFocusNode = FocusNode();
+
+  /// Nominee checkpoints are per-slot (each slot is its own Form, same
+  /// reasoning as [nomineeSlotFormKeys]) — only the last visible slot is
+  /// ever validated on Next, but every slot gets its own key set so an
+  /// earlier slot re-opened for editing still scrolls correctly too.
+  final List<GlobalKey> _nomineePhotoKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+  final List<GlobalKey> _nomineeRelationKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+  final List<GlobalKey> _nomineeAadharFrontKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+  final List<GlobalKey> _nomineeAadharBackKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+  final List<GlobalKey> _nomineePassbookKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+  final List<GlobalKey> _nomineeShareKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+
+  /// Health Declaration step (step 2) checkpoint keys — see
+  /// _healthCheckpoints below.
+  final GlobalKey _healthCurrentIllnessKey = GlobalKey();
+  final GlobalKey _healthCurrentIllnessDetailKey = GlobalKey();
+  final GlobalKey _healthHereditaryDetailKey = GlobalKey();
+  final GlobalKey _healthSurgeryKey = GlobalKey();
+  final GlobalKey _healthSurgeryDetailKey = GlobalKey();
+  final GlobalKey _healthSurgeryDateKey = GlobalKey();
+  final GlobalKey _healthMedicationKey = GlobalKey();
+  final GlobalKey _healthMedicationDetailKey = GlobalKey();
+  final GlobalKey _healthAllergyKey = GlobalKey();
+  final GlobalKey _healthAllergyDetailKey = GlobalKey();
+  final GlobalKey _healthTobaccoKey = GlobalKey();
+  final GlobalKey _healthAlcoholKey = GlobalKey();
+  final GlobalKey _healthDrugsKey = GlobalKey();
+
+  /// Ordered top-to-bottom checkpoint list for Step 0 (Member) — each
+  /// entry pairs a field's GlobalKey with a fresh re-check of the exact
+  /// same condition its own validator/_inlineError already uses.
+  List<MapEntry<GlobalKey, bool Function()>> _step0Checkpoints() => [
+        MapEntry(
+          _profileImageKey,
+          () =>
+              controller.profileImage.value == null &&
+              controller.profileImageId.value == null,
+        ),
+        MapEntry(
+          _fullNameKey,
+          () => AppValidators.fullName(fullNameController.text) != null,
+        ),
+        MapEntry(
+          _fatherNameKey,
+          () => AppValidators.fatherName(
+                controller.fatherNameController.text,
+              ) !=
+              null,
+        ),
+        MapEntry(
+          _dobKey,
+          () => AppValidators.date(controller.dateOfBirthController.text) !=
+              null,
+        ),
+        MapEntry(
+          _genderKey,
+          () => controller.selectedGenderId.value == null,
+        ),
+        MapEntry(
+          _maritalStatusKey,
+          () => controller.selectedMaritalStatusId.value == null,
+        ),
+        MapEntry(
+          _addressKey,
+          () =>
+              AppValidators.requiredField(controller.addressController.text) !=
+              null,
+        ),
+        MapEntry(
+          _villageKey,
+          () =>
+              AppValidators.placeName(controller.villageController.text) !=
+              null,
+        ),
+        MapEntry(
+          _talukaKey,
+          () =>
+              AppValidators.placeName(controller.talukaController.text) !=
+              null,
+        ),
+        MapEntry(
+          _districtKey,
+          () =>
+              AppValidators.placeName(controller.districtController.text) !=
+              null,
+        ),
+        MapEntry(
+          _stateKey,
+          () =>
+              AppValidators.placeName(controller.stateController.text) !=
+              null,
+        ),
+        MapEntry(
+          _aadharNumberKey,
+          () =>
+              AppValidators.aadhar(controller.aadharNumberController.text) !=
+              null,
+        ),
+        MapEntry(
+          _aadharFrontKey,
+          () =>
+              controller.aadharImage.value == null &&
+              controller.aadharImageId.value == null,
+        ),
+        MapEntry(
+          _aadharBackKey,
+          () =>
+              controller.aadharBackImage.value == null &&
+              controller.aadharBackImageId.value == null,
+        ),
+        MapEntry(
+          _panNumberKey,
+          () => AppValidators.pan(controller.panNumberController.text) !=
+              null,
+        ),
+        MapEntry(
+          _panImageKey,
+          () =>
+              controller.panImage.value == null &&
+              controller.panImageId.value == null,
+        ),
+        MapEntry(
+          _occupationKey,
+          () =>
+              AppValidators.name(controller.occupationController.text) !=
+              null,
+        ),
+        MapEntry(
+          _signatureKey,
+          () =>
+              controller.signatureFile.value == null &&
+              controller.signatureFileId.value == null,
+        ),
+      ];
+
+  /// Same idea for Step 1 (Nominee), for a single slot — [_next] only ever
+  /// re-validates the last visible slot, so it always passes index
+  /// `visibleNomineeSlots.value - 1` here.
+  List<MapEntry<GlobalKey, bool Function()>> _nomineeCheckpoints(int index) {
+    final slot = controller.nomineeSlots[index];
+
+    return [
+      MapEntry(
+        _nomineePhotoKeys[index],
+        () =>
+            slot.photo.value == null && slot.photoDocumentId.value == null,
+      ),
+      MapEntry(
+        _nomineeRelationKeys[index],
+        () => slot.relationId.value == null,
+      ),
+      MapEntry(
+        _nomineeAadharFrontKeys[index],
+        () =>
+            slot.aadharFrontImage.value == null &&
+            slot.aadharFrontImageDocumentId.value == null,
+      ),
+      MapEntry(
+        _nomineeAadharBackKeys[index],
+        () =>
+            slot.aadharBackImage.value == null &&
+            slot.aadharBackImageDocumentId.value == null,
+      ),
+      MapEntry(
+        _nomineePassbookKeys[index],
+        () =>
+            slot.passbookChequeImage.value == null &&
+            slot.passbookChequeImageDocumentId.value == null,
+      ),
+      MapEntry(
+        _nomineeShareKeys[index],
+        () => (controller.totalShareEntered.value - 100).abs() > 0.01,
+      ),
+    ];
+  }
+
+  /// Ordered top-to-bottom checkpoint list for the Health Declaration step
+  /// — same top-to-bottom order (and the exact same conditions) as
+  /// RegistrationController.firstMissingHealthDetail, which is what
+  /// saveHealthDeclaration itself uses to decide whether to block Next.
+  List<MapEntry<GlobalKey, bool Function()>> _healthCheckpoints() => [
+        MapEntry(
+          _healthCurrentIllnessKey,
+          () => controller.hasCurrentIllness.value == null,
+        ),
+        MapEntry(
+          _healthCurrentIllnessDetailKey,
+          () =>
+              controller.hasCurrentIllness.value == true &&
+              controller.seriousIllnessDetailController.text.trim().isEmpty,
+        ),
+        MapEntry(
+          _healthHereditaryDetailKey,
+          () =>
+              controller.selectedDiseaseKeys.contains('disease_hereditary') &&
+              controller.otherHereditaryDetailController.text.trim().isEmpty,
+        ),
+        MapEntry(
+          _healthSurgeryKey,
+          () => controller.hadSurgery.value == null,
+        ),
+        MapEntry(
+          _healthSurgeryDetailKey,
+          () =>
+              controller.hadSurgery.value == true &&
+              controller.surgeryDetailController.text.trim().isEmpty,
+        ),
+        MapEntry(
+          _healthSurgeryDateKey,
+          () =>
+              controller.hadSurgery.value == true &&
+              controller.surgeryDate.value == null,
+        ),
+        MapEntry(
+          _healthMedicationKey,
+          () => controller.onRegularMedication.value == null,
+        ),
+        MapEntry(
+          _healthMedicationDetailKey,
+          () =>
+              controller.onRegularMedication.value == true &&
+              controller.medicationDetailController.text.trim().isEmpty,
+        ),
+        MapEntry(
+          _healthAllergyKey,
+          () => controller.hasAllergies.value == null,
+        ),
+        MapEntry(
+          _healthAllergyDetailKey,
+          () =>
+              controller.hasAllergies.value == true &&
+              controller.allergyDetailController.text.trim().isEmpty,
+        ),
+        MapEntry(
+          _healthTobaccoKey,
+          () => controller.usesTobacco.value == null,
+        ),
+        MapEntry(
+          _healthAlcoholKey,
+          () => controller.consumesAlcohol.value == null,
+        ),
+        MapEntry(
+          _healthDrugsKey,
+          () => controller.usesDrugs.value == null,
+        ),
+      ];
+
+  /// Scrolls to the first checkpoint (in the list's own order) whose
+  /// condition is still true. No-op if every checkpoint currently passes,
+  /// or if the failing one's key has no attached context yet (shouldn't
+  /// normally happen — every checkpoint's widget is already on screen by
+  /// the time Next can be tapped).
+  void _scrollToFirstError(
+    List<MapEntry<GlobalKey, bool Function()>> checkpoints,
+  ) {
+    for (final checkpoint in checkpoints) {
+      if (!checkpoint.value()) continue;
+
+      // Runs after this frame so the inline/Form error text that just
+      // turned on above (via _showStep1Errors / showErrors / validate())
+      // has already changed that field's height before we scroll to it —
+      // scrolling first would undershoot by that text's height.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final targetContext = checkpoint.key.currentContext;
+        if (targetContext == null) return;
+
+        Scrollable.ensureVisible(
+          targetContext,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: 0.1,
+        );
+      });
+      return;
+    }
+  }
 
   // ============================================================
   // BACKGROUND-TRANSLATION FOCUS NODES
@@ -184,6 +654,23 @@ class _MemberRegistrationScreenState
   late final FocusNode fullNameFocusNode;
 
   Worker? _fullNameWorker;
+
+  // Re-groups controller.mobileController's text into the Indian 5+5
+  // display format ("98765 43210") whenever it changes — needed because
+  // that field is read-only (see below), so _MobileInputFormatter's
+  // inputFormatters never actually run on it (those only fire on live
+  // user typing, and the raw 10-digit value is instead set directly from
+  // RegistrationController — see saveMemberStep1/getMemberStatus). The
+  // equality guard stops this from looping: setting .text inside this
+  // same listener re-notifies it once, but the second call is a no-op
+  // since the text already matches its formatted form by then.
+  void _formatMobileDisplay() {
+    final formatted =
+        AppValidators.formatMobile(controller.mobileController.text);
+    if (controller.mobileController.text != formatted) {
+      controller.mobileController.text = formatted;
+    }
+  }
 
   // Devanagari (Hindi) and Gujarati Unicode letter/matra blocks, alongside
   // plain a-zA-Z — matches AppValidators._scriptLetters so a name field's
@@ -245,17 +732,31 @@ class _MemberRegistrationScreenState
   void initState() {
     super.initState();
 
+    // localizedFullName (not the plain fullName getter) so a resumed
+    // member who picked Hindi/Gujarati sees their own already-saved
+    // translation here too, not just the plain/English text — same fix as
+    // RegistrationController.getMemberStatus's other resumed fields (see
+    // MemberModel.localizedFullName's doc comment).
     fullNameController = TextEditingController(
-      text: controller.member.value?.fullName ?? '',
+      text: controller.member.value?.localizedFullName(
+            Get.find<LanguageController>().currentAppLanguage,
+          ) ??
+          '',
     );
 
     // `ever` fires only on SUBSEQUENT changes to controller.member, so the
     // constructor above still needs to seed the initial value itself.
     _fullNameWorker = ever<MemberModel?>(controller.member, (member) {
-      fullNameController.text = member?.fullName ?? '';
+      fullNameController.text = member?.localizedFullName(
+            Get.find<LanguageController>().currentAppLanguage,
+          ) ??
+          '';
     });
 
     fullNameFocusNode = FocusNode()..addListener(_onFullNameFocusChange);
+
+    controller.mobileController.addListener(_formatMobileDisplay);
+    _formatMobileDisplay();
 
     fatherNameFocusNode = FocusNode()..addListener(_onFatherNameFocusChange);
     addressFocusNode = FocusNode()..addListener(_onAddressFocusChange);
@@ -478,45 +979,25 @@ class _MemberRegistrationScreenState
       // _inlineError's doc comment.
       _showStep1Errors.value = true;
 
-      if (!memberFormKey.currentState!
-          .validate()) {
-        return;
-      }
+      final formValid =
+          memberFormKey.currentState!.validate();
 
-      // Also passes when a document id already exists (from an earlier
-      // session's upload, prefilled by getMemberStatus) — a returning
-      // member isn't forced to re-pick a photo that already uploaded
-      // successfully. See uploadStep1Documents' matching check.
-      if (controller.profileImage.value == null &&
-          controller.profileImageId.value == null) {
-        return;
-      }
+      // Covers every custom (non-TextFormField) check — profile image,
+      // gender, marital status, aadhaar front/back photo, pan photo,
+      // signature — plus a fresh re-check of every text field's own
+      // validator (so this list alone always knows the true first error
+      // in top-to-bottom order, whether Form.validate() or a custom check
+      // is what actually caught it). Also passes a document check when
+      // its id already exists (from an earlier session's upload, prefilled
+      // by getMemberStatus) — a returning member isn't forced to re-pick a
+      // photo that already uploaded successfully. See
+      // uploadStep1Documents' matching check.
+      final step0Checkpoints = _step0Checkpoints();
+      final hasCheckpointError =
+          step0Checkpoints.any((checkpoint) => checkpoint.value());
 
-      if (controller.selectedGenderId.value == null) {
-        return;
-      }
-
-      if (controller.selectedMaritalStatusId.value == null) {
-        return;
-      }
-
-      if (controller.aadharImage.value == null &&
-          controller.aadharImageId.value == null) {
-        return;
-      }
-
-      if (controller.aadharBackImage.value == null &&
-          controller.aadharBackImageId.value == null) {
-        return;
-      }
-
-      if (controller.panImage.value == null &&
-          controller.panImageId.value == null) {
-        return;
-      }
-
-      if (controller.signatureFile.value == null &&
-          controller.signatureFileId.value == null) {
+      if (!formValid || hasCheckpointError) {
+        _scrollToFirstError(step0Checkpoints);
         return;
       }
 
@@ -583,6 +1064,14 @@ class _MemberRegistrationScreenState
       // error state before validating.
       lastSlot.showErrors.value = true;
 
+      // Recomputed up-front (not just right before the share check below)
+      // so the share checkpoint's condition is already accurate by the
+      // time _scrollToFirstError reads it, same reasoning as
+      // _step0Checkpoints being a fresh re-check of every field.
+      controller.recomputeTotalShare();
+
+      _scrollToFirstError(_nomineeCheckpoints(lastNomineeIndex));
+
       if (!nomineeSlotFormKeys[lastNomineeIndex]
           .currentState!
           .validate()) {
@@ -619,6 +1108,22 @@ class _MemberRegistrationScreenState
       if (lastSlot.passbookChequeImage.value == null &&
           lastSlot.passbookChequeImageDocumentId.value == null) {
         _showError('please_upload_nominee_passbook_cheque_photo'.tr);
+        return;
+      }
+
+      controller.recomputeTotalShare();
+
+      // The combined nominee share must hit exactly 100% before the
+      // member can leave this step — unlike saveNomineeSlot's own check
+      // (used on "Add another nominee" too), which only ever blocks
+      // going OVER 100%, since under 100% is expected while the member
+      // is still in the middle of adding more nominees.
+      if ((controller.totalShareEntered.value - 100).abs() > 0.01) {
+        _showError(
+          'nominee_share_must_be_100'.trParams({
+            'total': _formatShareForDisplay(controller.totalShareEntered.value),
+          }),
+        );
         return;
       }
 
@@ -673,6 +1178,14 @@ class _MemberRegistrationScreenState
           await controller.saveHealthDeclaration();
 
       if (!healthDeclarationSaved) {
+        // Only scroll when the failure was a missing/invalid field —
+        // firstMissingHealthDetail() is exactly what saveHealthDeclaration
+        // itself checked first. A null here means the false came from a
+        // real save/API error instead (see saveHealthDeclaration), which
+        // has nothing on screen to scroll to.
+        if (controller.firstMissingHealthDetail() != null) {
+          _scrollToFirstError(_healthCheckpoints());
+        }
         return;
       }
 
@@ -766,6 +1279,8 @@ class _MemberRegistrationScreenState
 
   @override
   void dispose() {
+    controller.mobileController.removeListener(_formatMobileDisplay);
+    _panFocusNode.dispose();
     fatherNameFocusNode
       ..removeListener(_onFatherNameFocusChange)
       ..dispose();
@@ -1033,6 +1548,7 @@ class _MemberRegistrationScreenState
             ),
 
             Center(
+              key: _profileImageKey,
               child: Obx(
                     () => _uploadOrNetworkImage(
                   context: context,
@@ -1083,12 +1599,14 @@ class _MemberRegistrationScreenState
             ),
 
             // Editable combined first + middle + surname field. Format is
-            // validated (at least "First Surname", each part letters-only,
-            // no leftover double/leading/trailing space from deleting a
-            // word) by AppValidators.fullName; on unfocus (and again right
-            // before Save) the value is split back into parts and each one
+            // validated (EXACTLY "First Middle Surname" — 3 words, none
+            // optional, each part letters-only, no leftover double/
+            // leading/trailing space from deleting a word) by
+            // AppValidators.fullName; on unfocus (and again right before
+            // Save) the value is split back into parts and each one
             // re-translated — see splitAndTranslateFullName.
             AppTextField.form(
+              key: _fullNameKey,
               label: 'full_name'.tr,
               hintText: 'full_name_hint'.tr,
               controller: fullNameController,
@@ -1103,14 +1621,15 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _fatherNameKey,
               label: 'father_name'.tr,
               hintText: 'father_name_hint'.tr,
               controller:
               controller.fatherNameController,
               focusNode: fatherNameFocusNode,
-              validator: (value) => AppValidators.fullName(
+              validator: (value) => AppValidators.fatherName(
                 value,
-                message: 'full_name_format_error'.tr,
+                message: 'father_name_format_error'.tr,
               ),
               inputFormatters: [
                 _nameInputFormatter,
@@ -1138,12 +1657,11 @@ class _MemberRegistrationScreenState
               enabled: false,
               keyboardType:
               TextInputType.phone,
-              maxLength: 10,
+              maxLength: 11,
               validator:
               AppValidators.mobile,
               inputFormatters: [
-                FilteringTextInputFormatter
-                    .digitsOnly,
+                _MobileInputFormatter(),
               ],
             ),
 
@@ -1151,23 +1669,21 @@ class _MemberRegistrationScreenState
               height: 16.px(context),
             ),
 
-            // Second/alternate number — now required the same way Mobile
-            // Number above is: AppValidators.mobile shows an inline error
-            // when left empty, matching Mobile Number's own behavior,
-            // instead of AppValidators.mobileOptional which silently
-            // allowed a blank value.
+            // Second/alternate number — optional, per the client's
+            // requirements doc: AppValidators.mobileOptional never shows
+            // an error just for being left blank, only if a non-empty
+            // value doesn't match the expected 10-digit format.
             AppTextField.form(
               label: 'mobile_number_2'.tr,
               controller:
               controller.mobile2Controller,
               keyboardType:
               TextInputType.phone,
-              maxLength: 10,
+              maxLength: 11,
               validator:
-              AppValidators.mobile,
+              AppValidators.mobileOptional,
               inputFormatters: [
-                FilteringTextInputFormatter
-                    .digitsOnly,
+                _MobileInputFormatter(),
               ],
             ),
 
@@ -1182,6 +1698,7 @@ class _MemberRegistrationScreenState
                 Expanded(
                   flex: 2,
                   child: AppTextField.form(
+                    key: _dobKey,
                     label: 'date_of_birth'.tr,
                     controller:
                     controller.dateOfBirthController,
@@ -1209,10 +1726,15 @@ class _MemberRegistrationScreenState
                         controller.dateOfBirth.value;
 
                     final ageText = selectedDateOfBirth != null
-                        ? 'age_years'.trParams({
-                            'age':
-                                '${AppDatePicker.calculateAge(selectedDateOfBirth)}',
-                          })
+                        ? (() {
+                            final age = AppDatePicker.calculateAgeYearsMonths(
+                              selectedDateOfBirth,
+                            );
+                            return 'age_years_months'.trParams({
+                              'years': '${age.years}',
+                              'months': '${age.months}',
+                            });
+                          })()
                         : '';
 
                     return Container(
@@ -1251,7 +1773,10 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 10.px(context)),
 
-            Obx(() => _genderRadioGroup(context)),
+            Container(
+              key: _genderKey,
+              child: Obx(() => _genderRadioGroup(context)),
+            ),
 
             _inlineError(
               () => controller.selectedGenderId.value == null,
@@ -1262,8 +1787,10 @@ class _MemberRegistrationScreenState
               height: 20.px(context),
             ),
 
-            Obx(
-                  () => _enumDropdown(
+            Container(
+              key: _maritalStatusKey,
+              child: Obx(
+                    () => _enumDropdown(
                 context: context,
                 label: 'marital_status'.tr,
                 value: controller
@@ -1279,6 +1806,7 @@ class _MemberRegistrationScreenState
                 },
                 hasError: _showStep1Errors.value &&
                     controller.selectedMaritalStatusId.value == null,
+              ),
               ),
             ),
 
@@ -1301,6 +1829,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _addressKey,
               label: 'address'.tr,
               controller:
               controller.addressController,
@@ -1315,6 +1844,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _villageKey,
               label: 'village'.tr,
               controller:
               controller.villageController,
@@ -1329,6 +1859,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _talukaKey,
               label: 'taluka'.tr,
               controller:
               controller.talukaController,
@@ -1343,6 +1874,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _districtKey,
               label: 'district'.tr,
               controller:
               controller.districtController,
@@ -1357,6 +1889,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _stateKey,
               label: 'state'.tr,
               controller:
               controller.stateController,
@@ -1380,6 +1913,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _aadharNumberKey,
               label: 'aadhaar_number'.tr,
               controller:
               controller
@@ -1400,8 +1934,10 @@ class _MemberRegistrationScreenState
               height: 12.px(context),
             ),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _aadharFrontKey,
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title:
                 'aadhaar_photo'.tr,
@@ -1432,6 +1968,7 @@ class _MemberRegistrationScreenState
                 }
                     : null,
               ),
+              ),
             ),
 
             _inlineError(
@@ -1444,8 +1981,10 @@ class _MemberRegistrationScreenState
               height: 12.px(context),
             ),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _aadharBackKey,
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title:
                 'aadhaar_back_photo'.tr,
@@ -1476,6 +2015,7 @@ class _MemberRegistrationScreenState
                 }
                     : null,
               ),
+              ),
             ),
 
             _inlineError(
@@ -1488,27 +2028,87 @@ class _MemberRegistrationScreenState
               height: 20.px(context),
             ),
 
-            AppTextField.form(
-              label: 'pan_number'.tr,
-              controller:
-              controller.panNumberController,
-              textCapitalization:
-              TextCapitalization.characters,
-              validator:
-              AppValidators.pan,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                  RegExp(r'[a-zA-Z0-9]'),
-                ),
-              ],
+            // Keyboard type follows the CURSOR through PAN's fixed
+            // 5-letters / 4-digits / 1-letter layout — plain Latin
+            // (visiblePassword — no Hindi/Gujarati IME) for the first 5
+            // characters and the last one, number pad for the 4 digits in
+            // between — instead of making the member manually flip the
+            // keyboard themselves. ValueListenableBuilder (a
+            // TextEditingController is a ValueListenable<TextEditingValue>)
+            // rebuilds this field whenever its text OR its selection
+            // changes — the selection change is what makes tapping to a
+            // new position (with nothing actually typed) update the
+            // keyboard too, not just typing/deleting. See
+            // _panKeyboardTypeFor/_PanInputFormatter above for why
+            // value.selection is always the member's real cursor position,
+            // not just wherever typing last stopped.
+            //
+            // Just handing TextField a new `keyboardType` on rebuild isn't
+            // enough by itself — Android often keeps showing whatever
+            // keyboard is already on screen instead of redrawing it, even
+            // though Flutter's own state says the field wants a different
+            // one now. Forcing a fresh element via a ValueKey tied to the
+            // zone (letters vs digits) makes the field actually close and
+            // reopen its platform connection with the new keyboard type —
+            // the same trick segmented OTP-style fields use. The outer
+            // Container keeps the original _panNumberKey stable (still the
+            // scroll-to-error target — see _step0Checkpoints), while
+            // _panFocusNode is the one thing that has to survive the
+            // remount unchanged so the field doesn't just lose focus and
+            // close the keyboard instead of reopening it correctly — that
+            // also covers re-tapping into the field after dismissing the
+            // keyboard, or after backspacing back across a zone boundary:
+            // either way lands on a new cursor position, which recomputes
+            // the zone and remounts with the right keyboard again.
+            Container(
+              key: _panNumberKey,
+              child: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller.panNumberController,
+                builder: (context, value, _) {
+                  final cursorOffset = value.selection.end < 0
+                      ? value.text.length
+                      : value.selection.end.clamp(0, value.text.length);
+
+                  final isLetterZone = _PanInputFormatter._letterSlots
+                      .contains(cursorOffset.clamp(0, 9));
+
+                  return AppTextField.form(
+                    key: ValueKey(
+                      isLetterZone ? 'pan-letters' : 'pan-digits',
+                    ),
+                    focusNode: _panFocusNode,
+                    label: 'pan_number'.tr,
+                    controller:
+                    controller.panNumberController,
+                    keyboardType: _panKeyboardTypeFor(cursorOffset),
+                    textCapitalization:
+                    TextCapitalization.characters,
+                    validator:
+                    AppValidators.pan,
+                    inputFormatters: [
+                      _PanInputFormatter(),
+                    ],
+                    onChanged: (text) {
+                      // "Close the keyboard after completion" — PAN is
+                      // always exactly 10 characters, so once the last one
+                      // is entered there's nothing left to type.
+                      if (text.length == 10) {
+                        FocusScope.of(context).unfocus();
+                      }
+                    },
+                  );
+                },
+              ),
             ),
 
             SizedBox(
               height: 12.px(context),
             ),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _panImageKey,
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title: 'upload_pan_card'.tr,
                 subtitle:
@@ -1538,6 +2138,7 @@ class _MemberRegistrationScreenState
                 }
                     : null,
               ),
+              ),
             ),
 
             _inlineError(
@@ -1560,6 +2161,7 @@ class _MemberRegistrationScreenState
             ),
 
             AppTextField.form(
+              key: _occupationKey,
               label: 'occupation'.tr,
               controller:
               controller.occupationController,
@@ -1581,8 +2183,10 @@ class _MemberRegistrationScreenState
               height: 12.px(context),
             ),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _signatureKey,
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title: 'your_signature'.tr,
                 subtitle:
@@ -1599,6 +2203,7 @@ class _MemberRegistrationScreenState
                     null
                     ? controller.clearSignature
                     : null,
+              ),
               ),
             ),
 
@@ -1784,6 +2389,7 @@ class _MemberRegistrationScreenState
             SizedBox(height: 16.px(context)),
 
             Center(
+              key: _nomineePhotoKeys[index],
               child: Obx(() {
                 final pickPhoto = () => controller.showImageSourceSheet(
                       onSelected: (source) =>
@@ -1876,8 +2482,12 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 20.px(context)),
 
+            // Same EXACTLY-3-words format as the member's own Full Name
+            // field (First Middle Surname) — see AppValidators.fullName —
+            // instead of the old letters-only-with-no-word-count check.
             AppTextField.form(
               label: 'nominee_name'.tr,
+              hintText: 'full_name_hint'.tr,
               controller: slot.nameController,
               // Leaving this field is what fires the same background
               // Hindi/Gujarati transliteration every other name field on
@@ -1885,7 +2495,10 @@ class _MemberRegistrationScreenState
               // where this focus node's listener is wired) — sent to
               // SaveNominee as hName/gName.
               focusNode: slot.nameFocusNode,
-              validator: AppValidators.name,
+              validator: (value) => AppValidators.fullName(
+                value,
+                message: 'full_name_format_error'.tr,
+              ),
               inputFormatters: [
                 _nameInputFormatter,
               ],
@@ -1893,8 +2506,10 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 16.px(context)),
 
-            Obx(
-                  () => _enumDropdown(
+            Container(
+              key: _nomineeRelationKeys[index],
+              child: Obx(
+                    () => _enumDropdown(
                 context: context,
                 label: 'relationship'.tr,
                 value: slot.relationId.value,
@@ -1904,6 +2519,7 @@ class _MemberRegistrationScreenState
                 },
                 hasError:
                     slot.showErrors.value && slot.relationId.value == null,
+              ),
               ),
             ),
 
@@ -1946,22 +2562,67 @@ class _MemberRegistrationScreenState
                 // check for the one rule enforced today: the running total
                 // across all visible nominees can't exceed 100%.
                 Expanded(
-                  child: AppTextField.form(
-                    label: 'nominee_share'.tr,
-                    controller: slot.shareController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: (value) => AppValidators.requiredField(
-                      value,
-                      message: 'please_enter_nominee_share'.tr,
-                    ),
-                    inputFormatters: [
-                      _ShareInputFormatter(),
-                    ],
-                  ),
+                  key: _nomineeShareKeys[index],
+                  child: Obx(() {
+                    // Once the running total across all visible nominees
+                    // goes over 100%, every share field's border turns
+                    // red — not just the one the member is currently
+                    // typing in — so it's clear at a glance that the
+                    // split needs adjusting.
+                    final exceeds = controller.shareExceedsLimit;
+
+                    return AppTextField.form(
+                      label: 'nominee_share'.tr,
+                      controller: slot.shareController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (value) => AppValidators.requiredField(
+                        value,
+                        message: 'please_enter_nominee_share'.tr,
+                      ),
+                      inputFormatters: [
+                        _ShareInputFormatter(),
+                      ],
+                      enabledBorderColor:
+                          exceeds ? AppColors.danger : null,
+                      focusedBorderColor:
+                          exceeds ? AppColors.danger : null,
+                    );
+                  }),
                 ),
               ],
+            ),
+
+            // Same instant (not gated behind showErrors/Next) reactive
+            // warning as the share field's own red border above — shows
+            // the running total right under the field the moment it goes
+            // over 100%, not just via the summary banner further down
+            // (_nomineeShareTotal), since that banner sits below every
+            // visible nominee card and can be scrolled far out of view.
+            Align(
+              alignment: Alignment.centerRight,
+              child: Obx(() {
+                if (!controller.shareExceedsLimit) {
+                  return const SizedBox.shrink();
+                }
+
+                return Padding(
+                  padding: EdgeInsets.only(top: 6.px(context)),
+                  child: Text(
+                    'nominee_share_exceeds_limit'.trParams({
+                      'total': _formatShareForDisplay(
+                        controller.totalShareEntered.value,
+                      ),
+                    }),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: AppColors.danger,
+                      fontSize: 12.px(context),
+                    ),
+                  ),
+                );
+              }),
             ),
 
             SizedBox(height: 16.px(context)),
@@ -1988,8 +2649,10 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 12.px(context)),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _nomineeAadharFrontKeys[index],
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title: 'nominee_aadhaar_front_photo'.tr,
                 subtitle: 'tap_to_upload_image'.tr,
@@ -2006,6 +2669,7 @@ class _MemberRegistrationScreenState
                     ? () => slot.aadharFrontImage.value = null
                     : null,
               ),
+              ),
             ),
 
             _inlineError(
@@ -2017,8 +2681,10 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 12.px(context)),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _nomineeAadharBackKeys[index],
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title: 'nominee_aadhaar_back_photo'.tr,
                 subtitle: 'tap_to_upload_image'.tr,
@@ -2035,6 +2701,7 @@ class _MemberRegistrationScreenState
                     ? () => slot.aadharBackImage.value = null
                     : null,
               ),
+              ),
             ),
 
             _inlineError(
@@ -2046,8 +2713,10 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 12.px(context)),
 
-            Obx(
-                  () => _uploadOrNetworkImage(
+            Container(
+              key: _nomineePassbookKeys[index],
+              child: Obx(
+                    () => _uploadOrNetworkImage(
                 context: context,
                 title: 'nominee_passbook_cheque_photo'.tr,
                 subtitle: 'tap_to_upload_image'.tr,
@@ -2063,6 +2732,7 @@ class _MemberRegistrationScreenState
                 onRemove: slot.passbookChequeImage.value != null
                     ? () => slot.passbookChequeImage.value = null
                     : null,
+              ),
               ),
             ),
 
@@ -2274,17 +2944,6 @@ class _MemberRegistrationScreenState
             ),
           ),
 
-          SizedBox(height: 8.px(context)),
-
-          Text(
-            'health_step_optional_note'.tr,
-            style: TextStyle(
-              fontSize: 11.5.px(context),
-              color: AppColors.primaryDark.withOpacity(0.5),
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-
           SizedBox(height: 22.px(context)),
 
           // isSeriousIllness -> seriousIllness (translated)
@@ -2294,16 +2953,20 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _yesNoField(
-                  context,
-                  question: 'health_q_current_illness'.tr,
-                  value: hasIllness,
-                  onChanged: (value) =>
-                  controller.setHasCurrentIllness(value),
+                Container(
+                  key: _healthCurrentIllnessKey,
+                  child: _yesNoField(
+                    context,
+                    question: 'health_q_current_illness'.tr,
+                    value: hasIllness,
+                    onChanged: (value) =>
+                    controller.setHasCurrentIllness(value),
+                  ),
                 ),
                 if (hasIllness == true) ...[
                   SizedBox(height: 12.px(context)),
                   AppTextField.form(
+                    key: _healthCurrentIllnessDetailKey,
                     label: 'health_q_current_illness_detail'.tr,
                     controller: controller.seriousIllnessDetailController,
                     focusNode: seriousIllnessDetailFocusNode,
@@ -2349,6 +3012,7 @@ class _MemberRegistrationScreenState
             return Padding(
               padding: EdgeInsets.only(top: 12.px(context)),
               child: AppTextField.form(
+                key: _healthHereditaryDetailKey,
                 label: 'health_hereditary_detail'.tr,
                 controller: controller.otherHereditaryDetailController,
                 focusNode: otherHereditaryDetailFocusNode,
@@ -2366,15 +3030,19 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _yesNoField(
-                  context,
-                  question: 'health_q_surgery'.tr,
-                  value: hadSurgery,
-                  onChanged: (value) => controller.setHadSurgery(value),
+                Container(
+                  key: _healthSurgeryKey,
+                  child: _yesNoField(
+                    context,
+                    question: 'health_q_surgery'.tr,
+                    value: hadSurgery,
+                    onChanged: (value) => controller.setHadSurgery(value),
+                  ),
                 ),
                 if (hadSurgery == true) ...[
                   SizedBox(height: 12.px(context)),
                   AppTextField.form(
+                    key: _healthSurgeryDetailKey,
                     label: 'health_q_surgery_detail'.tr,
                     controller: controller.surgeryDetailController,
                     focusNode: surgeryDetailFocusNode,
@@ -2382,6 +3050,7 @@ class _MemberRegistrationScreenState
                   ),
                   SizedBox(height: 12.px(context)),
                   AppTextField.form(
+                    key: _healthSurgeryDateKey,
                     label: 'health_q_surgery_date'.tr,
                     controller: controller.surgeryDateController,
                     readOnly: true,
@@ -2403,16 +3072,20 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _yesNoField(
-                  context,
-                  question: 'health_q_medication'.tr,
-                  value: onMedication,
-                  onChanged: (value) =>
-                  controller.setOnRegularMedication(value),
+                Container(
+                  key: _healthMedicationKey,
+                  child: _yesNoField(
+                    context,
+                    question: 'health_q_medication'.tr,
+                    value: onMedication,
+                    onChanged: (value) =>
+                    controller.setOnRegularMedication(value),
+                  ),
                 ),
                 if (onMedication == true) ...[
                   SizedBox(height: 12.px(context)),
                   AppTextField.form(
+                    key: _healthMedicationDetailKey,
                     label: 'health_q_medication_detail'.tr,
                     controller: controller.medicationDetailController,
                     maxLines: 2,
@@ -2431,16 +3104,20 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _yesNoField(
-                  context,
-                  question: 'health_q_allergy'.tr,
-                  value: hasAllergies,
-                  onChanged: (value) =>
-                  controller.setHasAllergies(value),
+                Container(
+                  key: _healthAllergyKey,
+                  child: _yesNoField(
+                    context,
+                    question: 'health_q_allergy'.tr,
+                    value: hasAllergies,
+                    onChanged: (value) =>
+                    controller.setHasAllergies(value),
+                  ),
                 ),
                 if (hasAllergies == true) ...[
                   SizedBox(height: 12.px(context)),
                   AppTextField.form(
+                    key: _healthAllergyDetailKey,
                     label: 'health_q_allergy_detail'.tr,
                     controller: controller.allergyDetailController,
                     focusNode: allergyDetailFocusNode,
@@ -2453,34 +3130,43 @@ class _MemberRegistrationScreenState
 
           SizedBox(height: 22.px(context)),
 
-          Obx(
-                () => _yesNoField(
-              context,
-              question: 'health_q_tobacco'.tr,
-              value: controller.usesTobacco.value,
-              onChanged: (value) => controller.usesTobacco.value = value,
+          Container(
+            key: _healthTobaccoKey,
+            child: Obx(
+                  () => _yesNoField(
+                context,
+                question: 'health_q_tobacco'.tr,
+                value: controller.usesTobacco.value,
+                onChanged: (value) => controller.usesTobacco.value = value,
+              ),
             ),
           ),
 
           SizedBox(height: 16.px(context)),
 
-          Obx(
-                () => _yesNoField(
-              context,
-              question: 'health_q_alcohol'.tr,
-              value: controller.consumesAlcohol.value,
-              onChanged: (value) => controller.consumesAlcohol.value = value,
+          Container(
+            key: _healthAlcoholKey,
+            child: Obx(
+                  () => _yesNoField(
+                context,
+                question: 'health_q_alcohol'.tr,
+                value: controller.consumesAlcohol.value,
+                onChanged: (value) => controller.consumesAlcohol.value = value,
+              ),
             ),
           ),
 
           SizedBox(height: 16.px(context)),
 
-          Obx(
-                () => _yesNoField(
-              context,
-              question: 'health_q_drugs'.tr,
-              value: controller.usesDrugs.value,
-              onChanged: (value) => controller.usesDrugs.value = value,
+          Container(
+            key: _healthDrugsKey,
+            child: Obx(
+                  () => _yesNoField(
+                context,
+                question: 'health_q_drugs'.tr,
+                value: controller.usesDrugs.value,
+                onChanged: (value) => controller.usesDrugs.value = value,
+              ),
             ),
           ),
 
@@ -2900,7 +3586,7 @@ class _MemberRegistrationScreenState
               controller.selectedGenderId.value = value;
             },
             title: Text(
-              option.name,
+              EnumOptionTranslator.translate(option.name),
               style: TextStyle(fontSize: 14.px(context)),
             ),
             contentPadding: EdgeInsets.symmetric(
@@ -3286,7 +3972,7 @@ class _OverlaySelectFieldState extends State<_OverlaySelectField> {
                                       ? AppColors.primary.withOpacity(0.08)
                                       : Colors.transparent,
                                   child: Text(
-                                    item.name,
+                                    EnumOptionTranslator.translate(item.name),
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 14,
@@ -3319,12 +4005,14 @@ class _OverlaySelectFieldState extends State<_OverlaySelectField> {
   Widget build(BuildContext context) {
     final hasValue = widget.value != null;
     final selectedName = hasValue
-        ? widget.items
-            .firstWhere(
-              (item) => item.id == widget.value,
-              orElse: () => widget.items.first,
-            )
-            .name
+        ? EnumOptionTranslator.translate(
+            widget.items
+                .firstWhere(
+                  (item) => item.id == widget.value,
+                  orElse: () => widget.items.first,
+                )
+                .name,
+          )
         : null;
 
     final borderColor = widget.hasError

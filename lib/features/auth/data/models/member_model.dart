@@ -1,3 +1,5 @@
+import 'package:psf_application/shared/enums/app_language.dart';
+
 class MemberModel {
   final int memberId;
 
@@ -129,6 +131,36 @@ class MemberModel {
       .where((part) => (part ?? '').trim().isNotEmpty)
       .map((part) => part!.trim())
       .join(' ');
+
+  /// Same idea as [fullName], but each part prefers ITS OWN Hindi/Gujarati
+  /// translation when [language] calls for one (falling back to that
+  /// part's plain value when no translation was returned) — used to
+  /// prefill the Member step's editable full-name field in whichever app
+  /// language the member has selected, instead of always the plain/
+  /// English value regardless of language. Same 3-tier fallback every
+  /// other resumed field on this wizard already uses (see
+  /// RegistrationController.getMemberStatus).
+  String localizedFullName(AppLanguage language) {
+    String partFor(String? plain, String? hindi, String? gujarati) {
+      final translated = switch (language) {
+        AppLanguage.hindi => hindi,
+        AppLanguage.gujarati => gujarati,
+        AppLanguage.english => plain,
+      };
+
+      if (translated != null && translated.trim().isNotEmpty) {
+        return translated.trim();
+      }
+
+      return (plain ?? '').trim();
+    }
+
+    return [
+      partFor(firstName, hFirstName, gFirstName),
+      partFor(lastName, hLastName, gLastName),
+      partFor(surname, hSurname, gSurname),
+    ].where((part) => part.isNotEmpty).join(' ');
+  }
 
   const MemberModel({
     required this.memberId,

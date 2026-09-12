@@ -82,14 +82,15 @@ class AppValidators {
   // ============================================================
 
   /// Validates the combined full-name field on the registration wizard's
-  /// Member step: at least two space-separated word parts (first +
-  /// surname, middle optional), each made only of letters, with no
-  /// leading/trailing space and no run of 2+ spaces. That last check is
-  /// the important one for an EDITED value specifically — deleting one
-  /// word out of an existing "First Middle Surname" but leaving its
-  /// separating space behind produces exactly a double space or a
-  /// trailing space, which this flags instead of silently accepting an
-  /// incomplete name.
+  /// Member step: EXACTLY three space-separated word parts (First, Middle,
+  /// Surname — none of them optional), each made only of letters, with no
+  /// leading/trailing space and no run of 2+ spaces. Leading/trailing
+  /// whitespace around the whole value is trimmed silently (not an error
+  /// on its own), but a run of 2+ spaces *inside* the name still is —
+  /// that's the useful case: e.g. deleting one word out of an existing
+  /// "First Middle Surname" but leaving its separating space behind
+  /// produces exactly a double space, which this flags instead of
+  /// silently accepting an incomplete name.
   static String? fullName(
       String? value, {
         String? message,
@@ -98,15 +99,56 @@ class AppValidators {
       return 'field_required'.tr;
     }
 
+    final trimmed = value.trim();
     final effectiveMessage = message ?? 'full_name_format_error'.tr;
 
-    if (value != value.trim() || value.contains(RegExp(r'\s{2,}'))) {
+    if (trimmed.contains(RegExp(r'\s{2,}'))) {
       return effectiveMessage;
     }
 
-    final words = value.trim().split(RegExp(r'\s+'));
+    final words = trimmed.split(RegExp(r'\s+'));
 
-    if (words.length < 2) {
+    if (words.length != 3) {
+      return effectiveMessage;
+    }
+
+    final wordRegex = RegExp('^[$_scriptLetters]+\$');
+
+    if (!words.every((word) => wordRegex.hasMatch(word))) {
+      return effectiveMessage;
+    }
+
+    return null;
+  }
+
+  // ============================================================
+  // FATHER'S / HUSBAND'S NAME
+  // ============================================================
+
+  /// Same letters-only rule as [fullName], but EXACTLY two words required
+  /// (first name + surname) instead of three — a father's/husband's name
+  /// here has no middle-name slot, unlike the member's own full name.
+  /// Leading/trailing whitespace around the whole value is trimmed
+  /// silently, same as [fullName]; a run of 2+ spaces inside it is still
+  /// flagged.
+  static String? fatherName(
+      String? value, {
+        String? message,
+      }) {
+    if (value == null || value.trim().isEmpty) {
+      return 'field_required'.tr;
+    }
+
+    final trimmed = value.trim();
+    final effectiveMessage = message ?? 'full_name_format_error'.tr;
+
+    if (trimmed.contains(RegExp(r'\s{2,}'))) {
+      return effectiveMessage;
+    }
+
+    final words = trimmed.split(RegExp(r'\s+'));
+
+    if (words.length != 2) {
       return effectiveMessage;
     }
 
@@ -127,6 +169,11 @@ class AppValidators {
   // require the number start with 6-9 (India's mobile-prefix convention),
   // but that rejected otherwise-valid numbers the backend itself doesn't
   // constrain, so it's just a 10-digit count now.
+  //
+  // The field displays this grouped into the Indian 5+5 format with a
+  // space (see formatMobile / _MobileInputFormatter on the registration
+  // wizard) — strip that back out before checking the actual 10-digit
+  // value.
   static String? mobile(
       String? value,
       ) {
@@ -136,7 +183,7 @@ class AppValidators {
 
     if (!RegExp(
       r'^\d{10}$',
-    ).hasMatch(value.trim())) {
+    ).hasMatch(stripMobileFormatting(value))) {
       return 'invalid_mobile_number'.tr;
     }
 
@@ -158,11 +205,30 @@ class AppValidators {
 
     if (!RegExp(
       r'^\d{10}$',
-    ).hasMatch(value.trim())) {
+    ).hasMatch(stripMobileFormatting(value))) {
       return 'invalid_mobile_number'.tr;
     }
 
     return null;
+  }
+
+  /// Groups a (possibly partial) mobile number into the Indian 5+5
+  /// display format — "9876543210" reads as "98765 43210" — capped at 10
+  /// digits. Purely a display aid, same pattern as [formatAadhar]; the
+  /// raw digits (no space) are what's actually validated and sent to the
+  /// API — see [stripMobileFormatting].
+  static String formatMobile(String value) {
+    final digits = stripMobileFormatting(value);
+    final capped = digits.length > 10 ? digits.substring(0, 10) : digits;
+
+    if (capped.length <= 5) return capped;
+
+    return '${capped.substring(0, 5)} ${capped.substring(5)}';
+  }
+
+  /// The reverse of [formatMobile] — strips everything but digits.
+  static String stripMobileFormatting(String value) {
+    return value.replaceAll(RegExp(r'\D'), '');
   }
 
   // ============================================================
