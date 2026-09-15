@@ -3,17 +3,21 @@ import 'package:psf_application/core/network/auth/auth_token_provider.dart';
 import 'package:psf_application/core/network/dio_client.dart';
 import 'package:psf_application/core/network/network_caller.dart';
 import 'package:psf_application/features/auth/data/datasources/health_declaration_remote_datasource.dart';
+import 'package:psf_application/features/auth/data/datasources/login_remote_datasource.dart';
 import 'package:psf_application/features/auth/data/datasources/member_remote_datasource.dart';
 import 'package:psf_application/features/auth/data/datasources/nominee_remote_datasource.dart';
 import 'package:psf_application/features/auth/data/repositories/banner_repository_impl.dart';
 import 'package:psf_application/features/auth/data/repositories/health_declaration_repository_impl.dart';
+import 'package:psf_application/features/auth/data/repositories/login_repository_impl.dart';
 import 'package:psf_application/features/auth/data/repositories/member_repository_impl.dart';
 import 'package:psf_application/features/auth/data/repositories/nominee_repository_impl.dart';
 import 'package:psf_application/features/auth/domain/repositories/banner_repository.dart';
 import 'package:psf_application/features/auth/domain/repositories/health_declaration_repository.dart';
+import 'package:psf_application/features/auth/domain/repositories/login_repository.dart';
 import 'package:psf_application/features/auth/domain/repositories/member_repository.dart';
 import 'package:psf_application/features/auth/domain/repositories/nominee_repository.dart';
 import 'package:psf_application/features/auth/presentation/controllers/auth_banner_controller.dart';
+import 'package:psf_application/features/auth/presentation/controllers/login_controller.dart';
 import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
 import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle_repository.dart';
 import 'package:psf_application/shared/data_source/document_remote_data_source.dart';
@@ -99,6 +103,27 @@ class AuthBinding extends Bindings {
       () => MemberRepositoryImpl(
         Get.find<MemberRemoteDataSource>(),
       ),
+      fenix: true,
+    );
+
+    // ==========================================================
+    // Login — not called by the Login screen yet (no real API to call;
+    // see LoginController's doc comment), but registered here now so the
+    // screen/controller/repo/datasource chain is ready end-to-end.
+    // ==========================================================
+
+    Get.lazyPut<LoginRemoteDataSource>(
+      () => LoginRemoteDataSource(Get.find<NetworkCaller>()),
+      fenix: true,
+    );
+
+    Get.lazyPut<LoginRepository>(
+      () => LoginRepositoryImpl(Get.find<LoginRemoteDataSource>()),
+      fenix: true,
+    );
+
+    Get.lazyPut<LoginController>(
+      () => LoginController(Get.find<LoginRepository>()),
       fenix: true,
     );
 

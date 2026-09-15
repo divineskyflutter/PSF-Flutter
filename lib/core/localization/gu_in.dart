@@ -177,6 +177,9 @@ const Map<String, String> guIN = {
   'support':
   'સહાય',
 
+  'recent_updates':
+  'તાજેતરના અપડેટ્સ',
+
   'no_images_available': 'કોઈ છબીઓ ઉપલબ્ધ નથી',
 
   // About Us

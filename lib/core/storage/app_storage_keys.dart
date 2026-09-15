@@ -45,6 +45,11 @@ class AppSecureKeys {
   // Registration
   static const String memberId = 'member_id';
 
+  // Login — the signed-in member's full profile data, as returned by the
+  // (future) login API and parsed into LoginModel. Stored as a JSON
+  // string; see AppSecureStorage.saveLoggedInUser/getLoggedInUser.
+  static const String loggedInUser = 'logged_in_user';
+
 // Add more secure keys here when required.
 // static const String userId = 'user_id';
 }

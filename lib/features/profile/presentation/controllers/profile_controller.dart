@@ -4,6 +4,7 @@ import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 
+import '../../data/models/member_profile_model.dart';
 import '../../domain/entities/contact_entity.dart';
 import '../../domain/entities/member_profile_entity.dart';
 import '../../domain/entities/passbook_entry_entity.dart';
@@ -68,11 +69,29 @@ class ProfileController extends GetxController {
     // MainNavigationBinding), which always failed and — via the global
     // ErrorInterceptor, not this class — surfaced as an error toast the
     // moment the app reached Home/Profile. Left commented, not deleted,
-    // so re-enabling this once the API exists is a one-line change. Until
-    // then the Profile screen just shows its default/fallback labels
-    // (see ProfileScreen._ProfileHeader, which already falls back to
-    // AppStrings.myProfile / '-' when profile.value is null).
+    // so re-enabling this once the API exists is a one-line change.
     // fetchProfile();
+
+    // Local, network-free fallback: if a login was completed (see
+    // LoginController.login), the signed-in member's data is already
+    // sitting in secure storage — show it immediately on app open
+    // instead of waiting on a real profile API that doesn't exist yet.
+    // Until a real login has actually happened, this finds nothing and
+    // the Profile screen falls back to its existing default labels
+    // exactly as before (see ProfileScreen._ProfileHeader).
+    loadProfileFromLocalLogin();
+  }
+
+  // ============================================================
+  // LOCAL FALLBACK — show whatever Login already stored, no network
+  // ============================================================
+
+  Future<void> loadProfileFromLocalLogin() async {
+    final storedUser = await AppSecureStorage.getLoggedInUser();
+
+    if (storedUser == null) return;
+
+    profile.value = MemberProfileModel.fromJson(storedUser);
   }
 
   // ============================================================

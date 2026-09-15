@@ -7,17 +7,24 @@ import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
-import 'package:psf_application/shared/widgets/common/app_header_curve_clipper.dart';
 import 'package:psf_application/shared/widgets/common/app_menu_tile.dart';
 import 'package:psf_application/shared/widgets/dialogs/app_dialog.dart';
 
 import '../controllers/profile_controller.dart';
+import '../widgets/profile_avatar_block.dart';
 
-/// Profile tab root — the branded header (avatar + name + member id) and
-/// the settings-style menu (Profile / Membership Card / Passbook /
-/// Language / About Us / Terms & Conditions / Privacy Policy / Contact Us
-/// / Logout / Delete Account), all built from [AppMenuTile] so every row
-/// looks and behaves the same.
+/// Profile tab root — a plain profile summary card (photo + name +
+/// mobile, see [ProfileAvatarBlock]) and the settings-style menu
+/// (Profile / Membership Card / Passbook / Language / About Us / Terms &
+/// Conditions / Privacy Policy / Contact Us / Logout / Delete Account),
+/// all built from [AppMenuTile] so every row looks and behaves the same.
+///
+/// The summary card used to be a wavy gradient header (`_ProfileHeader`,
+/// matching Home's old header style) — Nikhil asked for a plain card
+/// instead, not another "app bar" style header, so it's now just a
+/// [AppColors.primaryDark] rounded card like any other card on this
+/// screen. Tapping it (or the "My Profile" menu row below) still opens
+/// [MyProfilePage] for the full, editable details.
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
@@ -32,7 +39,15 @@ class ProfileScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _ProfileHeader(controller: controller),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16.px(context),
+                  20.px(context),
+                  16.px(context),
+                  0,
+                ),
+                child: _ProfileSummaryCard(controller: controller),
+              ),
               Padding(
                 padding: EdgeInsets.fromLTRB(
                   16.px(context),
@@ -138,95 +153,47 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({required this.controller});
+/// Plain card version of the old wavy gradient header — no clipped wave,
+/// no gradient, just [ProfileAvatarBlock] (photo + name + mobile) on a
+/// solid [AppColors.primaryDark] card with a shadow, same rounded-corner
+/// language as the menu card below it. No edit affordance here — editing
+/// only happens on [MyProfilePage], reached via the "My Profile" menu row
+/// (or by tapping this card itself).
+class _ProfileSummaryCard extends StatelessWidget {
+  const _ProfileSummaryCard({required this.controller});
 
   final ProfileController controller;
 
   @override
   Widget build(BuildContext context) {
-    return ClipPath(
-      clipper: const AppHeaderCurveClipper(),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.fromLTRB(
-          22.px(context),
-          16.px(context),
-          22.px(context),
-          46.px(context),
-        ),
-        decoration: const BoxDecoration(gradient: AppColors.headerGradient),
-        child: Obx(() {
-          final profile = controller.profile.value;
+    return Obx(() {
+      final profile = controller.profile.value;
 
-          return Row(
-            children: [
-              Container(
-                width: 68.px(context),
-                height: 68.px(context),
-                decoration: BoxDecoration(
-                  color: AppColors.background,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withOpacity(.3), width: 2),
-                ),
-                child: Icon(
-                  Icons.person_rounded,
-                  color: AppColors.primary,
-                  size: 36.px(context),
-                ),
-              ),
-              SizedBox(width: 16.px(context)),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppStrings.welcomeToProfile.tr,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(.85),
-                        fontSize: 11.5.px(context),
-                      ),
-                    ),
-                    SizedBox(height: 3.px(context)),
-                    Text(
-                      profile?.fullName.isNotEmpty == true
-                          ? profile!.fullName
-                          : AppStrings.myProfile.tr,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18.px(context),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 3.px(context)),
-                    Text(
-                      '${AppStrings.memberId.tr}: ${profile?.memberIdLabel ?? '-'}',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(.75),
-                        fontSize: 12.px(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              InkWell(
-                onTap: () => Get.toNamed(AppRoutes.myProfile),
-                child: Container(
-                  padding: EdgeInsets.all(9.px(context)),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(.16),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.edit_outlined, color: Colors.white, size: 17.px(context)),
-                ),
-              ),
+      return InkWell(
+        borderRadius: BorderRadius.circular(20.px(context)),
+        onTap: () => Get.toNamed(AppRoutes.myProfile),
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(18.px(context)),
+          decoration: BoxDecoration(
+            color: AppColors.primaryDark,
+            borderRadius: BorderRadius.circular(20.px(context)),
+            boxShadow: const [
+              BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
             ],
-          );
-        }),
-      ),
-    );
+          ),
+          child: ProfileAvatarBlock(
+            name: profile?.fullName.isNotEmpty == true
+                ? profile!.fullName
+                : AppStrings.myProfile.tr,
+            mobile: profile?.mobile?.isNotEmpty == true
+                ? profile!.mobile!
+                : '-',
+            photoUrl: profile?.photoUrl,
+          ),
+        ),
+      );
+    });
   }
 }
 

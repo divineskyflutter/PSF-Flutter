@@ -152,6 +152,9 @@ const Map<String, String> enUS = {
   'support':
   'Support',
 
+  'recent_updates':
+  'Recent Updates',
+
   'no_images_available':
   'No images available',
 

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'app_storage_keys.dart';
@@ -99,6 +101,47 @@ class AppSecureStorage {
   static Future<void> deleteMemberId() async {
     await _storage.delete(
       key: AppSecureKeys.memberId,
+    );
+  }
+
+  // ============================================================
+  // Logged-in user (Login screen's future full-profile response)
+  // ============================================================
+
+  /// Stores the signed-in member's full profile data — the (future)
+  /// login API's response, already parsed into `LoginModel` and turned
+  /// back into JSON via `LoginModel.toJson()` — as a single JSON string,
+  /// so Profile can read it back on app open without needing a network
+  /// call. See LoginController.login and ProfileController's local
+  /// fallback loading.
+  static Future<void> saveLoggedInUser(Map<String, dynamic> userJson) async {
+    await _storage.write(
+      key: AppSecureKeys.loggedInUser,
+      value: jsonEncode(userJson),
+    );
+  }
+
+  static Future<Map<String, dynamic>?> getLoggedInUser() async {
+    final value = await _storage.read(
+      key: AppSecureKeys.loggedInUser,
+    );
+
+    if (value == null || value.isEmpty) return null;
+
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return null;
+    } catch (_) {
+      // Corrupt/old-format value — treat as "no stored user" instead of
+      // crashing Profile on app open.
+      return null;
+    }
+  }
+
+  static Future<void> clearLoggedInUser() async {
+    await _storage.delete(
+      key: AppSecureKeys.loggedInUser,
     );
   }
 

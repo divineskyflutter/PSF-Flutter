@@ -5,9 +5,9 @@ import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/features/home/presentation/pages/home_screen.dart';
 import 'package:psf_application/features/loans/presentation/pages/loans_screen.dart';
 import 'package:psf_application/features/profile/presentation/pages/profile_screen.dart';
-import 'package:psf_application/shared/widgets/common/app_bottom_nav_bar.dart';
 
 import '../controllers/main_navigation_controller.dart';
+import '../widgets/app_bottom_nav_bar.dart';
 
 /// The single bottom-navigation shell for the signed-in app: Home / Loans
 /// / Profile, each kept alive in an [IndexedStack] so switching tabs never

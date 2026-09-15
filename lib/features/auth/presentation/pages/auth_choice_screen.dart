@@ -232,7 +232,7 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                               child: AppButton(
                                 label: AppStrings.signIn.tr,
                                 onPressed: () {
-                                  // Get.toNamed(AppRoutes.login);
+                                  Get.toNamed(AppRoutes.login);
                                 },
                                 height: 56.px(context),
                                 borderRadius: 14.px(context),

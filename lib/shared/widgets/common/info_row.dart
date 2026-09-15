@@ -62,6 +62,8 @@ class InfoListTile extends StatelessWidget {
     required this.label,
     required this.value,
     this.valueColor,
+    this.labelColor,
+    this.dividerColor,
     this.showDivider = true,
   });
 
@@ -70,6 +72,14 @@ class InfoListTile extends StatelessWidget {
   final String value;
 
   final Color? valueColor;
+
+  /// Defaults to [AppColors.textSecondary] — pass an explicit light color
+  /// (e.g. `Colors.white70`) when this tile sits on a dark card, like My
+  /// Profile's profile card.
+  final Color? labelColor;
+
+  /// Defaults to [AppColors.border] — same reasoning as [labelColor].
+  final Color? dividerColor;
 
   final bool showDivider;
 
@@ -87,7 +97,7 @@ class InfoListTile extends StatelessWidget {
                   label,
                   style: TextStyle(
                     fontSize: 13.px(context),
-                    color: AppColors.textSecondary,
+                    color: labelColor ?? AppColors.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -107,7 +117,7 @@ class InfoListTile extends StatelessWidget {
             ],
           ),
         ),
-        if (showDivider) const Divider(height: 1, color: AppColors.border),
+        if (showDivider) Divider(height: 1, color: dividerColor ?? AppColors.border),
       ],
     );
   }

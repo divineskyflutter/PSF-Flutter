@@ -90,6 +90,12 @@ class AppStrings {
   static const String support =
       'support';
 
+  /// Heading for Home's placeholder "recent updates" list — see
+  /// HomeScreen's _RecentUpdatesSection doc comment for why it's dummy
+  /// content for now.
+  static const String recentUpdates =
+      'recent_updates';
+
   // ------------------------------------------------------------
   // Other
   // ------------------------------------------------------------

@@ -179,6 +179,18 @@ const registrationEn = <String, String>{
   'please_upload_nominee_aadhaar_front_photo': 'Please upload nominee Aadhaar front photo',
   'please_upload_nominee_aadhaar_back_photo': 'Please upload nominee Aadhaar back photo',
   'please_upload_nominee_passbook_cheque_photo': 'Please upload nominee passbook/cheque photo',
+
+  // ------------------------------------------------------------
+  // Login screen
+  // ------------------------------------------------------------
+  'login_screen_subtitle': 'Sign in to continue to your account',
+  'password': 'Password',
+  'enter_password': 'Enter your password',
+  'password_field_required': 'Please enter your password',
+  'invalid_login_password': '4 capital letters + 4 digits',
+  'login_successful': 'Login successful',
+  'login_failed': 'Login failed. Please try again.',
+  'dont_have_account': "Don't have an account?",
 };
 
 const registrationHi = <String, String>{
@@ -356,6 +368,18 @@ const registrationHi = <String, String>{
   'please_upload_nominee_aadhaar_front_photo': 'कृपया वारिस की आधार आगे की फ़ोटो अपलोड करें',
   'please_upload_nominee_aadhaar_back_photo': 'कृपया वारिस की आधार पीछे की फ़ोटो अपलोड करें',
   'please_upload_nominee_passbook_cheque_photo': 'कृपया वारिस की पासबुक/चेक फ़ोटो अपलोड करें',
+
+  // ------------------------------------------------------------
+  // Login screen
+  // ------------------------------------------------------------
+  'login_screen_subtitle': 'अपने खाते में जारी रखने के लिए साइन इन करें',
+  'password': 'पासवर्ड',
+  'enter_password': 'अपना पासवर्ड दर्ज करें',
+  'password_field_required': 'कृपया अपना पासवर्ड दर्ज करें',
+  'invalid_login_password': '4 बड़े अक्षर + 4 अंक',
+  'login_successful': 'लॉगिन सफल',
+  'login_failed': 'लॉगिन असफल रहा। कृपया पुनः प्रयास करें।',
+  'dont_have_account': 'खाता नहीं है?',
 };
 
 const registrationGu = <String, String>{
@@ -529,4 +553,16 @@ const registrationGu = <String, String>{
   'please_upload_nominee_aadhaar_front_photo': 'કૃપા કરીને વારસદારનો આધાર આગળનો ફોટો અપલોડ કરો',
   'please_upload_nominee_aadhaar_back_photo': 'કૃપા કરીને વારસદારનો આધાર પાછળનો ફોટો અપલોડ કરો',
   'please_upload_nominee_passbook_cheque_photo': 'કૃપા કરીને વારસદારનું પાસબુક/ચેક ફોટો અપલોડ કરો',
+
+  // ------------------------------------------------------------
+  // Login screen
+  // ------------------------------------------------------------
+  'login_screen_subtitle': 'તમારા ખાતામાં ચાલુ રાખવા માટે સાઇન ઇન કરો',
+  'password': 'પાસવર્ડ',
+  'enter_password': 'તમારો પાસવર્ડ દાખલ કરો',
+  'password_field_required': 'કૃપા કરીને તમારો પાસવર્ડ દાખલ કરો',
+  'invalid_login_password': '4 મોટા અક્ષર + 4 આંકડા',
+  'login_successful': 'લૉગિન સફળ',
+  'login_failed': 'લૉગિન નિષ્ફળ. કૃપા કરી ફરી પ્રયાસ કરો.',
+  'dont_have_account': 'ખાતું નથી?',
 };

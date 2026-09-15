@@ -13,6 +13,20 @@ class ApiEndPoints {
   // Banner
   static String get getBannerListByType => '$baseUrl/api/Banner/GetBannerListByType';
 
+  // ============================================================
+  // Login
+  //
+  // Provisional path — the backend team hasn't handed off the real login
+  // endpoint yet (see LoginRepositoryImpl's doc comment). The Login
+  // screen itself doesn't call this yet either (its button just
+  // navigates to Home for now), but the datasource/repository/controller
+  // are already wired against it so only this string needs to change
+  // once the real endpoint is confirmed.
+  // ============================================================
+
+  static String get login =>
+      '$baseUrl/api/Member/Login';
+
   static String get saveMemberStep1 =>
       '$baseUrl/api/Member/SaveMemberStep1';
 

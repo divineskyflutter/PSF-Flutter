@@ -26,7 +26,17 @@ class HomeController extends GetxController {
   void onInit() {
     super.onInit();
 
-    fetchDashboard();
+    // GetMemberDashboard is still a provisional/not-yet-real endpoint on
+    // the backend (see ApiEndPoints's "Home / Profile / Passbook / Loans"
+    // comment) — calling it here on every Home-tab construction hit a
+    // real 4xx response, and the global ErrorInterceptor auto-toasts that
+    // as "Invalid request." the moment the app lands on Home (e.g. right
+    // after login/registration). Same reason
+    // ProfileController.fetchProfile() is built but not auto-called; see
+    // that class's onInit doc comment. Pull-to-refresh (AppRefreshIndicator
+    // in HomeScreen) still calls [refresh]/[fetchDashboard] directly, and
+    // re-enabling this is a one-line change once the endpoint is real.
+    // fetchDashboard();
 
     // Same pattern as AuthBannerController: passive data reloads itself
     // once connectivity returns, only if the earlier attempt failed.

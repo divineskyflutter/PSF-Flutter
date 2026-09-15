@@ -38,7 +38,20 @@ class LoansController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchLoanDetails();
+
+    // GetLoanDetails is still a provisional/not-yet-real endpoint on the
+    // backend, same as GetMemberDashboard and the Profile endpoint — this
+    // controller is Get.put (eager) in MainNavigationBinding, so it used to
+    // fire this call the instant the app landed on the bottom-nav shell
+    // (Home/Loans/Profile), hitting a real 4xx and letting the global
+    // ErrorInterceptor auto-toast "Invalid request." right after
+    // login/registration, even though the Loans tab was never opened. Same
+    // reason ProfileController.fetchProfile() / HomeController's dashboard
+    // fetch are built but not auto-called; see those classes' onInit doc
+    // comments. LoansScreen's own pull-to-refresh still calls
+    // [refresh]/[fetchLoanDetails] directly, and re-enabling this is a
+    // one-line change once the endpoint is real.
+    // fetchLoanDetails();
   }
 
   Future<void> fetchLoanDetails() async {

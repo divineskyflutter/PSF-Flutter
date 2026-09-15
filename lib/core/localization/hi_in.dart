@@ -177,6 +177,9 @@ const Map<String, String> hiIN = {
   'support':
   'सहायता',
 
+  'recent_updates':
+  'हाल की जानकारी',
+
   'no_images_available': 'कोई छवि उपलब्ध नहीं है',
 
   // About Us

@@ -12,6 +12,7 @@ import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
 
 import '../../domain/entities/member_profile_entity.dart';
 import '../controllers/profile_controller.dart';
+import '../widgets/profile_avatar_block.dart';
 
 /// Full member profile — the "Profile" row inside the Profile tab's menu.
 /// Read-only by default; the header's edit icon switches a small set of
@@ -107,28 +108,72 @@ class _MyProfilePageState extends State<MyProfilePage> {
   }
 
   Widget _buildReadOnly(BuildContext context, MemberProfileEntity profile) {
+    // Same dark card + ProfileAvatarBlock as ProfileScreen's summary card
+    // (Nikhil asked for "the same card", just full-size here so every
+    // field fits) — labelColor/dividerColor are passed explicitly on each
+    // InfoListTile since its defaults assume a light card.
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(18.px(context)),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppColors.primaryDark,
         borderRadius: BorderRadius.circular(20.px(context)),
         boxShadow: const [
           BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          InfoListTile(label: AppStrings.fullName.tr, value: profile.fullName),
-          InfoListTile(label: AppStrings.mobileNumber.tr, value: profile.mobile ?? '-'),
-          InfoListTile(label: AppStrings.fatherName.tr, value: profile.fatherName ?? '-'),
-          InfoListTile(label: AppStrings.dateOfBirth.tr, value: profile.dateOfBirth ?? '-'),
-          InfoListTile(label: AppStrings.gender.tr, value: profile.gender ?? '-'),
-          InfoListTile(label: AppStrings.maritalStatus.tr, value: profile.maritalStatus ?? '-'),
-          InfoListTile(label: AppStrings.occupation.tr, value: profile.occupation ?? '-'),
+          ProfileAvatarBlock(
+            name: profile.fullName,
+            mobile: profile.mobile ?? '-',
+            photoUrl: profile.photoUrl,
+          ),
+          Padding(
+            padding: EdgeInsets.symmetric(vertical: 16.px(context)),
+            child: const Divider(height: 1, color: Colors.white24),
+          ),
+          InfoListTile(
+            label: AppStrings.fatherName.tr,
+            value: profile.fatherName ?? '-',
+            labelColor: Colors.white70,
+            valueColor: Colors.white,
+            dividerColor: Colors.white24,
+          ),
+          InfoListTile(
+            label: AppStrings.dateOfBirth.tr,
+            value: profile.dateOfBirth ?? '-',
+            labelColor: Colors.white70,
+            valueColor: Colors.white,
+            dividerColor: Colors.white24,
+          ),
+          InfoListTile(
+            label: AppStrings.gender.tr,
+            value: profile.gender ?? '-',
+            labelColor: Colors.white70,
+            valueColor: Colors.white,
+            dividerColor: Colors.white24,
+          ),
+          InfoListTile(
+            label: AppStrings.maritalStatus.tr,
+            value: profile.maritalStatus ?? '-',
+            labelColor: Colors.white70,
+            valueColor: Colors.white,
+            dividerColor: Colors.white24,
+          ),
+          InfoListTile(
+            label: AppStrings.occupation.tr,
+            value: profile.occupation ?? '-',
+            labelColor: Colors.white70,
+            valueColor: Colors.white,
+            dividerColor: Colors.white24,
+          ),
           InfoListTile(
             label: AppStrings.address.tr,
             value: profile.address ?? '-',
+            labelColor: Colors.white70,
+            valueColor: Colors.white,
             showDivider: false,
           ),
         ],
@@ -137,11 +182,14 @@ class _MyProfilePageState extends State<MyProfilePage> {
   }
 
   Widget _buildEditForm(BuildContext context) {
+    // Same dark card as _buildReadOnly — only fullName / mobile / address
+    // are editable (see class doc comment), everything else stays out of
+    // this form entirely rather than being shown disabled.
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(18.px(context)),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: AppColors.primaryDark,
         borderRadius: BorderRadius.circular(20.px(context)),
         boxShadow: const [
           BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
@@ -170,9 +218,17 @@ class _MyProfilePageState extends State<MyProfilePage> {
           Obx(
             () => Row(
               children: [
+                // Same size (both Expanded), both a plain white
+                // background with dark text so they stay readable
+                // against the dark card — Save uses the app's primary
+                // color instead of white to still read as the primary
+                // action.
                 Expanded(
-                  child: AppButton.outlined(
+                  child: AppButton.rectangular(
                     label: AppStrings.cancel.tr,
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primaryDark,
+                    height: 50,
                     onPressed: _controller.isSavingProfile.value
                         ? null
                         : () => setState(() => _isEditing = false),
@@ -180,8 +236,11 @@ class _MyProfilePageState extends State<MyProfilePage> {
                 ),
                 SizedBox(width: 14.px(context)),
                 Expanded(
-                  child: AppButton(
+                  child: AppButton.rectangular(
                     label: AppStrings.save.tr,
+                    backgroundColor: AppColors.primaryLight,
+                    foregroundColor: AppColors.primaryDark,
+                    height: 50,
                     onPressed: _controller.isSavingProfile.value ? null : _save,
                   ),
                 ),
