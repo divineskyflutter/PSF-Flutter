@@ -174,8 +174,13 @@ class HealthDeclarationModel {
       memberId: _parseInt(json['memberId']),
       isSeriousIllness: _parseBool(json['isSeriousIllness']),
       seriousIllness: json['seriousIllness']?.toString() ?? '',
-      hSeriousIllness: json['hSeriousIllness']?.toString() ?? '',
-      gSeriousIllness: json['gSeriousIllness']?.toString() ?? '',
+      // Case-insensitive — the confirmed real response sends these h/g
+      // pairs all-lowercase (`hseriousIllness`/`gseriousIllness`, etc.),
+      // not the capitalized `hSeriousIllness` the save/request schema
+      // documents, so a plain `json['hSeriousIllness']` lookup silently
+      // returns null against a real login response.
+      hSeriousIllness: _ciGet(json, 'hSeriousIllness')?.toString() ?? '',
+      gSeriousIllness: _ciGet(json, 'gSeriousIllness')?.toString() ?? '',
       heartDisease: _parseBool(json['heartDisease']),
       heartAttack: _parseBool(json['heartAttack']),
       highBloodPressure: _parseBool(json['highBloodPressure']),
@@ -190,19 +195,19 @@ class HealthDeclarationModel {
       anxiety: _parseBool(json['anxiety']),
       anyHerediatry: _parseBool(json['anyHerediatry']),
       other: json['other']?.toString() ?? '',
-      hOther: json['hOther']?.toString() ?? '',
-      gOther: json['gOther']?.toString() ?? '',
+      hOther: _ciGet(json, 'hOther')?.toString() ?? '',
+      gOther: _ciGet(json, 'gOther')?.toString() ?? '',
       isSurgery: _parseBool(json['isSurgery']),
       surgery: json['surgery']?.toString() ?? '',
-      hSurgery: json['hSurgery']?.toString() ?? '',
-      gSurgery: json['gSurgery']?.toString() ?? '',
+      hSurgery: _ciGet(json, 'hSurgery')?.toString() ?? '',
+      gSurgery: _ciGet(json, 'gSurgery')?.toString() ?? '',
       surgeryDate: DateTime.tryParse(json['surgeryDate']?.toString() ?? ''),
       ismedicationRegularly: _parseBool(json['ismedicationRegularly']),
       medicationRegularly: json['medicationRegularly']?.toString() ?? '',
       anyAllergies: _parseBool(json['anyAllergies']),
       allergies: json['allergies']?.toString() ?? '',
-      hAllergies: json['hAllergies']?.toString() ?? '',
-      gAllergies: json['gAllergies']?.toString() ?? '',
+      hAllergies: _ciGet(json, 'hAllergies')?.toString() ?? '',
+      gAllergies: _ciGet(json, 'gAllergies')?.toString() ?? '',
       tabaccoBidiCigarates: _parseBool(json['tabaccoBidiCigarates']),
       addictionToAlcohol: _parseBool(json['addictionToAlcohol']),
       drugs: _parseBool(json['drugs']),
@@ -210,6 +215,14 @@ class HealthDeclarationModel {
       hotherDetails: json['hotherDetails']?.toString() ?? '',
       gotherDetails: json['gotherDetails']?.toString() ?? '',
     );
+  }
+
+  static dynamic _ciGet(Map<String, dynamic> json, String key) {
+    final target = key.toLowerCase();
+    for (final entry in json.entries) {
+      if (entry.key.toLowerCase() == target) return entry.value;
+    }
+    return null;
   }
 
   static bool _parseBool(dynamic value) {

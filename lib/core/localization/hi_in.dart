@@ -247,6 +247,17 @@ const Map<String, String> hiIN = {
 
   'edit_profile': 'प्रोफ़ाइल संपादित करें',
 
+  // My Profile — tabs
+  'personal_tab': 'व्यक्तिगत',
+  'nominee_tab': 'नॉमिनी',
+  'health_declaration_tab': 'स्वास्थ्य घोषणा',
+  'member_status': 'सदस्य स्थिति',
+  'profile_photo_label': 'प्रोफ़ाइल फोटो',
+  'aadhar_front_photo_label': 'आधार फ्रंट फोटो',
+  'aadhar_back_photo_label': 'आधार बैक फोटो',
+  'pan_card_photo_label': 'पैन कार्ड फोटो',
+  'no_nominee_found': 'अभी तक कोई नॉमिनी जोड़ा नहीं गया',
+
   // ------------------------------------------------------------
   // Membership Card
   // ------------------------------------------------------------
@@ -351,4 +362,5 @@ const Map<String, String> hiIN = {
   // ------------------------------------------------------------
 
   'logout_confirm_message': 'क्या आप वाकई लॉग आउट करना चाहते हैं?',
+  'session_expired_message': 'आपका सत्र समाप्त हो गया है। कृपया पुनः लॉगिन करें।',
 };

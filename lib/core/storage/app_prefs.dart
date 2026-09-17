@@ -109,4 +109,14 @@ class AppPrefs {
   static Future<bool> setRegistrationCompleted(bool value) {
     return _instance.setBool(AppPrefsKeys.registrationCompleted, value);
   }
+
+  // ============================================================
+  // Enum Bundle (see AppPrefsKeys.enumBundle)
+  // ============================================================
+
+  static String? get enumBundleJson =>
+      _instance.getString(AppPrefsKeys.enumBundle);
+
+  static Future<bool> setEnumBundleJson(String json) =>
+      _instance.setString(AppPrefsKeys.enumBundle, json);
 }

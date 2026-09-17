@@ -22,7 +22,15 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     Future.delayed(const Duration(seconds: 7), _routeNext);
-    AppPrefs.setOnboardingCompleted(false);
+
+    // There used to be an `AppPrefs.setOnboardingCompleted(false)` call
+    // here — it force-reset the "has the member finished onboarding" flag
+    // back to false on every single app launch, right before
+    // LanguageSelectionController checks that same flag to decide whether
+    // to show onboarding again. That's why onboarding kept showing every
+    // time instead of only on first install. OnboardingScreen already
+    // sets this to true once, when the member finishes onboarding (see
+    // its _goToAuthSelection) — nothing here should ever undo that.
   }
 
   // ============================================================

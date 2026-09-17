@@ -1,7 +1,15 @@
+import 'dart:convert';
+
 import 'package:get/get.dart';
 
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/core/network/auth/token_manager.dart';
+import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
+import 'package:psf_application/features/auth/data/models/health_declaration_model.dart';
+import 'package:psf_application/features/auth/data/models/member_model.dart';
+import 'package:psf_application/features/auth/data/models/nominee_model.dart';
+import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 
 import '../../data/models/member_profile_model.dart';
@@ -28,6 +36,26 @@ class ProfileController extends GetxController {
   final RxString profileErrorMessage = ''.obs;
 
   final RxBool isSavingProfile = false.obs;
+
+  // ============================================================
+  // MY PROFILE TABS — the richer data behind [profile]'s narrow summary
+  // fields, all parsed from the same cached login blob (see
+  // `loadProfileFromLocalLogin`): full personal detail (Aadhaar/PAN,
+  // document images, ...), nominees and the health declaration.
+  // ============================================================
+
+  final Rx<MemberModel?> memberDetails = Rx<MemberModel?>(null);
+
+  final RxList<NomineeModel> nominees = <NomineeModel>[].obs;
+
+  final Rx<HealthDeclarationModel?> healthDeclaration =
+      Rx<HealthDeclarationModel?>(null);
+
+  /// Cached `GetEnumBundle` result (see `LoginController._cacheEnumBundle`)
+  /// — used to resolve the numeric ids Login returns for gender/marital
+  /// status/nominee relation/member status into display text. `null`
+  /// until a login has fetched it at least once.
+  final Rx<EnumBundleModel?> enumBundle = Rx<EnumBundleModel?>(null);
 
   // ============================================================
   // PASSBOOK
@@ -80,6 +108,7 @@ class ProfileController extends GetxController {
     // the Profile screen falls back to its existing default labels
     // exactly as before (see ProfileScreen._ProfileHeader).
     loadProfileFromLocalLogin();
+    loadCachedEnumBundle();
   }
 
   // ============================================================
@@ -92,6 +121,82 @@ class ProfileController extends GetxController {
     if (storedUser == null) return;
 
     profile.value = MemberProfileModel.fromJson(storedUser);
+    memberDetails.value = MemberModel.fromJson(storedUser);
+
+    final nomineesJson = _ciGet(storedUser, 'nominees') ??
+        _ciGet(storedUser, 'nomineeList') ??
+        _ciGet(storedUser, 'nomineeProfile');
+
+    if (nomineesJson is List) {
+      nominees.assignAll(
+        nomineesJson
+            .whereType<Map>()
+            .map((e) => NomineeModel.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+      );
+    } else {
+      nominees.clear();
+    }
+
+    final healthJson = _ciGet(storedUser, 'healthDeclaration') ??
+        _ciGet(storedUser, 'memberHealthDeclaration');
+
+    healthDeclaration.value = healthJson is Map
+        ? HealthDeclarationModel.fromJson(Map<String, dynamic>.from(healthJson))
+        : null;
+  }
+
+  /// Reads whatever `GetEnumBundle` result Login last cached (see
+  /// `LoginController._cacheEnumBundle`) — network-free, same "show
+  /// whatever is already stored, no waiting" approach as
+  /// [loadProfileFromLocalLogin].
+  void loadCachedEnumBundle() {
+    final cached = AppPrefs.enumBundleJson;
+    if (cached == null || cached.isEmpty) return;
+
+    try {
+      enumBundle.value = EnumBundleModel.fromJson(
+        jsonDecode(cached) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      // Corrupt/old-format cache — ignore, id-based fields just fall back
+      // to showing the raw id until the next successful login re-caches it.
+    }
+  }
+
+  // ============================================================
+  // ENUM ID -> DISPLAY NAME (Gender / Marital Status / Relation /
+  // Member Status) — resolved against [enumBundle], see its doc comment.
+  // ============================================================
+
+  String genderName(String? id) => EnumBundleModel.nameFor(
+        enumBundle.value?.gender ?? const [],
+        int.tryParse(id ?? ''),
+        fallback: id,
+      );
+
+  String maritalStatusName(String? id) => EnumBundleModel.nameFor(
+        enumBundle.value?.maritalStatus ?? const [],
+        int.tryParse(id ?? ''),
+        fallback: id,
+      );
+
+  String relationName(int? id) => EnumBundleModel.nameFor(
+        enumBundle.value?.relation ?? const [],
+        id,
+      );
+
+  String memberStatusName(int? id) => EnumBundleModel.nameFor(
+        enumBundle.value?.memberStatus ?? const [],
+        id,
+      );
+
+  static dynamic _ciGet(Map<String, dynamic> json, String key) {
+    final target = key.toLowerCase();
+    for (final entry in json.entries) {
+      if (entry.key.toLowerCase() == target) return entry.value;
+    }
+    return null;
   }
 
   // ============================================================
@@ -206,8 +311,9 @@ class ProfileController extends GetxController {
 
   Future<void> _clearSession() async {
     await Future.wait([
-      AppSecureStorage.clearTokens(),
+      TokenManager.instance.clear(),
       AppSecureStorage.deleteMemberId(),
+      AppSecureStorage.clearLoggedInUser(),
     ]);
   }
 }

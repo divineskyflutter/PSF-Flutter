@@ -13,6 +13,7 @@ import 'package:psf_application/shared/widgets/network/ConnectivityService.dart'
 
 import 'core/localization/app_translation.dart';
 import 'core/localization/language_controller.dart';
+import 'core/network/auth/token_manager.dart';
 import 'core/storage/app_prefs.dart';
 
 void startApp(/*FirebaseOptions firebaseOptions*/) async {
@@ -29,6 +30,12 @@ void startApp(/*FirebaseOptions firebaseOptions*/) async {
     // ============================================================
 
     await AppPrefs.init();
+
+    // Seeds TokenManager's in-memory access/refresh token from secure
+    // storage before any request goes out — AuthTokenProvider.getToken()
+    // is synchronous, so this can't happen lazily on first use. See
+    // TokenManager's doc comment.
+    await TokenManager.instance.loadFromStorage();
 
     // ============================================================
     // Lock Orientation

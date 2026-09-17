@@ -246,6 +246,17 @@ const Map<String, String> guIN = {
 
   'edit_profile': 'પ્રોફાઇલ સંપાદિત કરો',
 
+  // My Profile — tabs
+  'personal_tab': 'વ્યક્તિગત',
+  'nominee_tab': 'નોમિની',
+  'health_declaration_tab': 'આરોગ્ય જાહેરાત',
+  'member_status': 'સભ્ય સ્થિતિ',
+  'profile_photo_label': 'પ્રોફાઇલ ફોટો',
+  'aadhar_front_photo_label': 'આધાર આગળનો ફોટો',
+  'aadhar_back_photo_label': 'આધાર પાછળનો ફોટો',
+  'pan_card_photo_label': 'પાન કાર્ડ ફોટો',
+  'no_nominee_found': 'હજુ સુધી કોઈ નોમિની ઉમેર્યું નથી',
+
   // ------------------------------------------------------------
   // Membership Card
   // ------------------------------------------------------------
@@ -350,4 +361,5 @@ const Map<String, String> guIN = {
   // ------------------------------------------------------------
 
   'logout_confirm_message': 'શું તમે ખરેખર લૉગ આઉટ કરવા માંગો છો?',
+  'session_expired_message': 'તમારું સત્ર સમાપ્ત થયું છે. કૃપા કરી ફરીથી લૉગિન કરો.',
 };

@@ -21,6 +21,16 @@ class AppPrefsKeys {
   static const String registrationStatus = 'registration_status';
 
   // ------------------------------------------------------------
+  // Enum Bundle (Gender / Marital Status / Relation / Member Status, live
+  // from GetEnumBundle) — cached as JSON so ids in a locally-stored login
+  // response (e.g. gender: 1) can be resolved to display text without a
+  // network call. See EnumBundleModel.toJson/fromJson and
+  // LoginController's post-login fetch.
+  // ------------------------------------------------------------
+
+  static const String enumBundle = 'enum_bundle';
+
+  // ------------------------------------------------------------
   // Registration completion (splash-screen routing)
   // ------------------------------------------------------------
 

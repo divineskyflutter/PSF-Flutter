@@ -4,20 +4,23 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
-import 'package:psf_application/shared/widgets/buttons/app_button.dart';
 import 'package:psf_application/shared/widgets/common/app_sub_page_header.dart';
-import 'package:psf_application/shared/widgets/common/info_row.dart';
 import 'package:psf_application/shared/widgets/states/app_state_view.dart';
-import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
+import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
 
-import '../../domain/entities/member_profile_entity.dart';
 import '../controllers/profile_controller.dart';
-import '../widgets/profile_avatar_block.dart';
+import '../widgets/my_profile_health_tab.dart';
+import '../widgets/my_profile_nominee_tab.dart';
+import '../widgets/my_profile_personal_tab.dart';
 
-/// Full member profile — the "Profile" row inside the Profile tab's menu.
-/// Read-only by default; the header's edit icon switches a small set of
-/// contact fields (name / mobile / address) into an editable form that
-/// saves via [ProfileController.updateProfile].
+/// Full member profile — the "My Profile" row inside the Profile tab's
+/// menu. Member photo centered up top (tap to preview), then a shadowed
+/// segmented control switching between three read-only tabs — Personal /
+/// Nominee / Health Declaration — each showing the matching slice of
+/// whatever the member's last login response returned (see
+/// `ProfileController.loadProfileFromLocalLogin`). All data here is
+/// display-only: it's refreshed by logging in again, not edited on this
+/// screen.
 class MyProfilePage extends StatefulWidget {
   const MyProfilePage({super.key});
 
@@ -28,225 +31,177 @@ class MyProfilePage extends StatefulWidget {
 class _MyProfilePageState extends State<MyProfilePage> {
   final ProfileController _controller = Get.find<ProfileController>();
 
-  bool _isEditing = false;
-
-  final _fullNameController = TextEditingController();
-  final _mobileController = TextEditingController();
-  final _addressController = TextEditingController();
-
-  @override
-  void dispose() {
-    _fullNameController.dispose();
-    _mobileController.dispose();
-    _addressController.dispose();
-    super.dispose();
-  }
-
-  void _startEditing(MemberProfileEntity profile) {
-    _fullNameController.text = profile.fullName;
-    _mobileController.text = profile.mobile ?? '';
-    _addressController.text = profile.address ?? '';
-    setState(() => _isEditing = true);
-  }
-
-  Future<void> _save() async {
-    final success = await _controller.updateProfile({
-      'fullName': _fullNameController.text.trim(),
-      'mobile': _mobileController.text.trim(),
-      'address': _addressController.text.trim(),
-    });
-
-    if (success && mounted) {
-      setState(() => _isEditing = false);
-    }
-  }
+  int _selectedTab = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppSubPageHeader(
-        title: AppStrings.myProfile.tr,
-        actions: [
-          Obx(() {
-            final profile = _controller.profile.value;
-            if (profile == null || _isEditing) return const SizedBox.shrink();
-
-            return AppHeaderIconButton(
-              icon: Icons.edit_outlined,
-              onTap: () => _startEditing(profile),
-            );
-          }),
-        ],
-      ),
+      appBar: AppSubPageHeader(title: AppStrings.myProfile.tr),
       body: Obx(() {
+        final member = _controller.memberDetails.value;
         final profile = _controller.profile.value;
 
-        if (_controller.isProfileLoading.value && profile == null) {
-          return const AppStateView.loading();
+        if (member == null && profile == null) {
+          return AppStateView.empty(message: 'no_data_found'.tr);
         }
 
-        if (_controller.hasProfileError.value && profile == null) {
-          return AppStateView.error(
-            message: _controller.profileErrorMessage.value.isEmpty
-                ? AppStrings.somethingWentWrong.tr
-                : _controller.profileErrorMessage.value,
-            onRetry: _controller.fetchProfile,
-          );
-        }
-
-        if (profile == null) {
-          return AppStateView.empty(message: AppStrings.noDataFound.tr);
-        }
+        final photoUrl = member?.imageUrl ?? profile?.photoUrl;
+        final displayName =
+            (member?.fullName.isNotEmpty ?? false) ? member!.fullName : (profile?.fullName ?? '');
 
         return SingleChildScrollView(
           padding: EdgeInsets.all(18.px(context)),
-          child: _isEditing ? _buildEditForm(context) : _buildReadOnly(context, profile),
+          child: Column(
+            children: [
+              _ProfileAvatar(photoUrl: photoUrl, name: displayName),
+              SizedBox(height: 20.px(context)),
+              _TabSelector(
+                selectedIndex: _selectedTab,
+                onChanged: (index) => setState(() => _selectedTab = index),
+              ),
+              SizedBox(height: 18.px(context)),
+              if (_selectedTab == 0)
+                member != null
+                    ? MyProfilePersonalTab(member: member, controller: _controller)
+                    : AppStateView.empty(message: 'no_data_found'.tr)
+              else if (_selectedTab == 1)
+                MyProfileNomineeTab(
+                  nominees: _controller.nominees,
+                  controller: _controller,
+                )
+              else
+                _controller.healthDeclaration.value != null
+                    ? MyProfileHealthTab(health: _controller.healthDeclaration.value!)
+                    : AppStateView.empty(message: 'no_data_found'.tr),
+            ],
+          ),
         );
       }),
     );
   }
+}
 
-  Widget _buildReadOnly(BuildContext context, MemberProfileEntity profile) {
-    // Same dark card + ProfileAvatarBlock as ProfileScreen's summary card
-    // (Nikhil asked for "the same card", just full-size here so every
-    // field fits) — labelColor/dividerColor are passed explicitly on each
-    // InfoListTile since its defaults assume a light card.
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(18.px(context)),
-      decoration: BoxDecoration(
-        color: AppColors.primaryDark,
-        borderRadius: BorderRadius.circular(20.px(context)),
-        boxShadow: const [
-          BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ProfileAvatarBlock(
-            name: profile.fullName,
-            mobile: profile.mobile ?? '-',
-            photoUrl: profile.photoUrl,
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.photoUrl, required this.name});
+
+  final String? photoUrl;
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoUrl?.isNotEmpty ?? false;
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: hasPhoto
+              ? () => CommonImagePreview.show(
+                    context: context,
+                    images: [PreviewImageItem(imagePath: photoUrl!)],
+                    mode: ImagePreviewMode.fullScreen,
+                  )
+              : null,
+          child: Container(
+            width: 96.px(context),
+            height: 96.px(context),
+            decoration: BoxDecoration(
+              color: AppColors.card,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primary.withOpacity(.25), width: 2),
+              boxShadow: const [
+                BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: hasPhoto
+                ? Image.network(
+                    photoUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _fallbackIcon(context),
+                  )
+                : _fallbackIcon(context),
           ),
-          Padding(
-            padding: EdgeInsets.symmetric(vertical: 16.px(context)),
-            child: const Divider(height: 1, color: Colors.white24),
-          ),
-          InfoListTile(
-            label: AppStrings.fatherName.tr,
-            value: profile.fatherName ?? '-',
-            labelColor: Colors.white70,
-            valueColor: Colors.white,
-            dividerColor: Colors.white24,
-          ),
-          InfoListTile(
-            label: AppStrings.dateOfBirth.tr,
-            value: profile.dateOfBirth ?? '-',
-            labelColor: Colors.white70,
-            valueColor: Colors.white,
-            dividerColor: Colors.white24,
-          ),
-          InfoListTile(
-            label: AppStrings.gender.tr,
-            value: profile.gender ?? '-',
-            labelColor: Colors.white70,
-            valueColor: Colors.white,
-            dividerColor: Colors.white24,
-          ),
-          InfoListTile(
-            label: AppStrings.maritalStatus.tr,
-            value: profile.maritalStatus ?? '-',
-            labelColor: Colors.white70,
-            valueColor: Colors.white,
-            dividerColor: Colors.white24,
-          ),
-          InfoListTile(
-            label: AppStrings.occupation.tr,
-            value: profile.occupation ?? '-',
-            labelColor: Colors.white70,
-            valueColor: Colors.white,
-            dividerColor: Colors.white24,
-          ),
-          InfoListTile(
-            label: AppStrings.address.tr,
-            value: profile.address ?? '-',
-            labelColor: Colors.white70,
-            valueColor: Colors.white,
-            showDivider: false,
+        ),
+        if (name.isNotEmpty) ...[
+          SizedBox(height: 12.px(context)),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 17.px(context),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
           ),
         ],
-      ),
+      ],
     );
   }
 
-  Widget _buildEditForm(BuildContext context) {
-    // Same dark card as _buildReadOnly — only fullName / mobile / address
-    // are editable (see class doc comment), everything else stays out of
-    // this form entirely rather than being shown disabled.
+  Widget _fallbackIcon(BuildContext context) {
+    return Icon(
+      Icons.person_rounded,
+      color: AppColors.primary,
+      size: 44.px(context),
+    );
+  }
+}
+
+class _TabSelector extends StatelessWidget {
+  const _TabSelector({required this.selectedIndex, required this.onChanged});
+
+  final int selectedIndex;
+
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = [
+      AppStrings.personalTab.tr,
+      AppStrings.nomineeTab.tr,
+      AppStrings.healthDeclarationTab.tr,
+    ];
+
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(18.px(context)),
+      padding: EdgeInsets.all(5.px(context)),
       decoration: BoxDecoration(
-        color: AppColors.primaryDark,
-        borderRadius: BorderRadius.circular(20.px(context)),
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16.px(context)),
         boxShadow: const [
-          BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
+          BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, 4)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Row(
         children: [
-          AppTextField(
-            controller: _fullNameController,
-            label: AppStrings.fullName.tr,
-          ),
-          SizedBox(height: 16.px(context)),
-          AppTextField(
-            controller: _mobileController,
-            label: AppStrings.mobileNumber.tr,
-            keyboardType: TextInputType.phone,
-          ),
-          SizedBox(height: 16.px(context)),
-          AppTextField(
-            controller: _addressController,
-            label: AppStrings.address.tr,
-            maxLines: 3,
-          ),
-          SizedBox(height: 22.px(context)),
-          Obx(
-            () => Row(
-              children: [
-                // Same size (both Expanded), both a plain white
-                // background with dark text so they stay readable
-                // against the dark card — Save uses the app's primary
-                // color instead of white to still read as the primary
-                // action.
-                Expanded(
-                  child: AppButton.rectangular(
-                    label: AppStrings.cancel.tr,
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.primaryDark,
-                    height: 50,
-                    onPressed: _controller.isSavingProfile.value
-                        ? null
-                        : () => setState(() => _isEditing = false),
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: EdgeInsets.symmetric(vertical: 11.px(context)),
+                  decoration: BoxDecoration(
+                    color: selectedIndex == i ? AppColors.primary : AppColors.transparent,
+                    borderRadius: BorderRadius.circular(12.px(context)),
+                  ),
+                  child: Text(
+                    labels[i],
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5.px(context),
+                      fontWeight: FontWeight.w700,
+                      color: selectedIndex == i ? AppColors.background : AppColors.textSecondary,
+                    ),
                   ),
                 ),
-                SizedBox(width: 14.px(context)),
-                Expanded(
-                  child: AppButton.rectangular(
-                    label: AppStrings.save.tr,
-                    backgroundColor: AppColors.primaryLight,
-                    foregroundColor: AppColors.primaryDark,
-                    height: 50,
-                    onPressed: _controller.isSavingProfile.value ? null : _save,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/features/auth/presentation/controllers/login_controller.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
 import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
@@ -13,13 +14,6 @@ import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
 /// Login screen — mobile number + password only, same visual language as
 /// RegisterScreen (header with back button + logo, labeled AppTextField.
 /// form fields, full-width primary button).
-///
-/// The Login button does NOT call the login API yet — there is no real
-/// login endpoint on the backend yet, so tapping it just validates the
-/// form and navigates straight to Home (see _onLoginPressed's comment).
-/// The full API-calling chain (LoginModel / LoginRemoteDataSource /
-/// LoginRepository / LoginController) is already built and registered in
-/// AuthBinding, ready for once the real endpoint exists.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -29,6 +23,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+
+  final _loginController = Get.find<LoginController>();
 
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -58,19 +54,25 @@ class _LoginScreenState extends State<LoginScreen> {
   // LOGIN
   // ==========================================================
 
-  void _onLoginPressed() {
+  Future<void> _onLoginPressed() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
+    if (_loginController.isLoggingIn.value) return;
+
     FocusScope.of(context).unfocus();
 
-    // No real login API exists yet — same reason
-    // ProfileController.fetchProfile() is built but not auto-called (see
-    // that class's onInit doc comment). Once the real endpoint is ready,
-    // replace this with a call to Get.find<LoginController>().login(
-    // mobile: ..., password: ...) and navigate to Home only on success.
-    Get.offAllNamed(AppRoutes.home);
+    final success = await _loginController.login(
+      mobile: _mobileController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    // LoginController already shows a success/error toast either way —
+    // only navigate on success.
+    if (success) {
+      Get.offAllNamed(AppRoutes.home);
+    }
   }
 
   // ==========================================================
@@ -81,8 +83,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      // No scroll view here on purpose — this screen only ever has two
+      // fields, so it should just fit on the screen like a normal fixed
+      // layout instead of scrolling. Spacing below is deliberately
+      // compact (and the gap before the footer text is a Spacer, not a
+      // fixed height) so it also holds up once the keyboard opens.
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
           child: Form(
             key: _formKey,
             child: Column(
@@ -129,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Column(
                           children: [
                             SizedBox(
-                              height: 35.px(context),
+                              height: 12.px(context),
                             ),
                             Center(
                               child: Text(
@@ -171,7 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
 
                 SizedBox(
-                  height: 32.px(context),
+                  height: 18.px(context),
                 ),
 
                 // ==================================================
@@ -295,8 +303,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         maxLength: 8,
 
-                        // Exactly 4 uppercase letters followed by exactly
-                        // 4 digits — see AppValidators.loginPassword.
+                        // Letters + exactly 4 digits, capped at 8 total —
+                        // see AppValidators.loginPassword. Auto-uppercased
+                        // as the member types, so the field's own display
+                        // always matches the capital-letters format the
+                        // login API expects.
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
                             RegExp(r'[A-Za-z0-9]'),
@@ -314,7 +325,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
 
                       const SizedBox(
-                        height: 30,
+                        height: 20,
                       ),
 
                       // ==================================================
@@ -324,30 +335,58 @@ class _LoginScreenState extends State<LoginScreen> {
                       SizedBox(
                         width: double.infinity,
                         height: 54,
-                        child: ElevatedButton(
-                          onPressed: _onLoginPressed,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: AppColors.background,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                14,
+                        child: Obx(
+                          () {
+                            final isLoggingIn =
+                                _loginController.isLoggingIn.value;
+
+                            return ElevatedButton(
+                              onPressed:
+                                  isLoggingIn ? null : _onLoginPressed,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: AppColors.background,
+                                disabledBackgroundColor:
+                                    AppColors.primary.withOpacity(0.6),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    14,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ),
-                          child: Text(
-                            'login'.tr,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                              child: isLoggingIn
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.4,
+                                        color: AppColors.background,
+                                      ),
+                                    )
+                                  : Text(
+                                      'login'.tr,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                            );
+                          },
                         ),
                       ),
 
+                      // Fixed gap, not Flexible — this Column is just a
+                      // plain (non-flex) child of the outer Column (via the
+                      // Padding above), so it gets an UNBOUNDED height from
+                      // its parent, and a Flexible/Expanded child needs a
+                      // bounded parent height to be legal (that's what
+                      // crashed the screen: "RenderFlex children have
+                      // non-zero flex but incoming height constraints are
+                      // unbounded"). A small fixed gap is fine here since
+                      // there's no scroll view to worry about overflowing.
                       const SizedBox(
-                        height: 24,
+                        height: 16,
                       ),
 
                       // ==================================================
@@ -425,9 +464,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
 
-                      const SizedBox(
-                        height: 25,
-                      ),
                     ],
                   ),
                 ),

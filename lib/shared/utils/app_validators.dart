@@ -337,23 +337,26 @@ class AppValidators {
   // ============================================================
   // LOGIN PASSWORD
   //
-  // Fixed format required by the Login screen's password field: EXACTLY
-  // 4 uppercase alphabet characters followed by EXACTLY 4 digits (8
-  // characters total, e.g. "ABCD1234") — not more, not less. This is not
-  // a general "strong password" rule; it's the specific shape the login
-  // API expects.
+  // Format required by the Login screen's password field: the member's
+  // name in UPPERCASE letters (any length — "JOY", "PREM", "NIKHIL", ...,
+  // NOT a fixed 4 — see the field's own auto-uppercase input formatter)
+  // followed by EXACTLY 4 digits, capped at 8 characters total (the
+  // field's own maxLength). Not a general "strong password" rule; it's
+  // the specific shape the login API generates, e.g. "PREM9878" or the
+  // shorter "JOY9879".
   // ============================================================
 
   static String? loginPassword(
       String? value,
       ) {
-    if (value == null || value.trim().isEmpty) {
+    final trimmed = value?.trim() ?? '';
+
+    if (trimmed.isEmpty) {
       return 'password_field_required'.tr;
     }
 
-    if (!RegExp(
-      r'^[A-Z]{4}[0-9]{4}$',
-    ).hasMatch(value.trim())) {
+    if (trimmed.length > 8 ||
+        !RegExp(r'^[A-Z]+[0-9]{4}$').hasMatch(trimmed)) {
       return 'invalid_login_password'.tr;
     }
 

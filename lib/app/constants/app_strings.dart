@@ -189,6 +189,21 @@ class AppStrings {
   static const String editProfile = 'edit_profile';
 
   // ------------------------------------------------------------
+  // My Profile — tabs (Personal / Nominee / Health Declaration)
+  // ------------------------------------------------------------
+
+  static const String personalTab = 'personal_tab';
+  static const String nomineeTab = 'nominee_tab';
+  static const String healthDeclarationTab = 'health_declaration_tab';
+  static const String memberStatus = 'member_status';
+  static const String nomineeShare = 'nominee_share';
+  static const String profilePhotoLabel = 'profile_photo_label';
+  static const String aadharFrontPhotoLabel = 'aadhar_front_photo_label';
+  static const String aadharBackPhotoLabel = 'aadhar_back_photo_label';
+  static const String panCardPhotoLabel = 'pan_card_photo_label';
+  static const String noNomineeFound = 'no_nominee_found';
+
+  // ------------------------------------------------------------
   // Membership Card
   // ------------------------------------------------------------
 

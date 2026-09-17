@@ -10,6 +10,8 @@ class EnumItem {
             : int.tryParse(json['id']?.toString() ?? '') ?? 0,
         name: json['name']?.toString() ?? '',
       );
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
 }
 
 class EnumBundleModel {
@@ -72,4 +74,31 @@ class EnumBundleModel {
         maritalStatus: const [],
         relation: const [],
       );
+
+  /// Round-trips through the same PascalCase keys [fromJson] reads, so a
+  /// cached bundle (see `LoginController`'s post-login fetch and
+  /// `AppPrefs.enumBundleJson`) can be decoded straight back with
+  /// `EnumBundleModel.fromJson` — no separate cache-parsing path needed.
+  Map<String, dynamic> toJson() => {
+        'Moduletype': moduleType.map((e) => e.toJson()).toList(),
+        'Platform': platform.map((e) => e.toJson()).toList(),
+        'BannerType': bannerType.map((e) => e.toJson()).toList(),
+        'MemberStatus': memberStatus.map((e) => e.toJson()).toList(),
+        'Gender': gender.map((e) => e.toJson()).toList(),
+        'MaritalStatus': maritalStatus.map((e) => e.toJson()).toList(),
+        'Relation': relation.map((e) => e.toJson()).toList(),
+      };
+
+  /// Look up an option's display `name` by its enum `id` (e.g. resolving
+  /// a member's numeric `gender`/`maritalStatus`, or a nominee's
+  /// `relation`, into the text the backend defines for it) — falls back to
+  /// [fallback] (default: the id itself, stringified) when nothing in
+  /// [items] matches, e.g. before the bundle has ever been fetched/cached.
+  static String nameFor(List<EnumItem> items, int? id, {String? fallback}) {
+    if (id == null) return fallback ?? '';
+    for (final item in items) {
+      if (item.id == id) return item.name;
+    }
+    return fallback ?? id.toString();
+  }
 }

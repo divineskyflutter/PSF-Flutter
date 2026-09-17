@@ -1,5 +1,8 @@
-/// The signed-in member's full profile data, as returned by the (future)
-/// Login API's success response. Field set intentionally mirrors
+/// The signed-in member's basic profile data, parsed out of the real
+/// `POST /api/Api/MemberLogin` success response's `data.memberDetail`
+/// object (see `LoginRepositoryImpl`, which flattens `memberDetail` plus
+/// the sibling `nominees`/`healthDeclaration` blocks into one map before
+/// calling [LoginModel.fromJson]). Field set intentionally mirrors
 /// `MemberProfileEntity` (lib/features/profile/domain/entities/
 /// member_profile_entity.dart) — `toJson()` below emits the same key
 /// names `MemberProfileModel.fromJson` already reads, so once this model
@@ -7,15 +10,15 @@
 /// Profile can parse it back straight into a profile entity with no
 /// extra glue code. See ProfileController's local-fallback loading.
 ///
-/// The exact response shape isn't confirmed yet — there is no real login
-/// endpoint to test against — so, like MemberModel/MemberProfileModel,
-/// every field is read case-insensitively with a few plausible key
-/// spellings tried in order. Once the real API exists and its response
-/// is seen, this parsing can be tightened.
+/// [gender] and [maritalStatus] come back as numeric enum ids (e.g. `"1"`),
+/// not display text — resolve them against `GetEnumBundle`'s `Gender`/
+/// `MaritalStatus` lists (see ProfileController) before showing them.
 class LoginModel {
   final int memberId;
 
-  /// e.g. `"PSF12545"`.
+  /// e.g. `"PSF12545"` — the confirmed response calls this `memberNo`
+  /// (currently always null on this test data), so [memberId] is tried
+  /// last, purely as a fallback so this is never blank.
   final String? memberCode;
 
   final String? fullName;
@@ -30,12 +33,21 @@ class LoginModel {
   final String? schemeName;
   final String? joiningDate;
 
-  /// Auth tokens, if the login API issues them — kept separate from
-  /// [toJson] on purpose: tokens already have their own dedicated
-  /// storage (AppSecureStorage.saveTokens/getAccessToken/...), so they
-  /// are not duplicated into the "logged in user" JSON blob.
+  /// Auth tokens from `data.authorizeToken` — kept separate from [toJson]
+  /// on purpose: tokens already have their own dedicated storage (see
+  /// `TokenManager`/`AppSecureStorage.saveTokens`), so they are not
+  /// duplicated into the "logged in user" JSON blob.
   final String? accessToken;
   final String? refreshToken;
+
+  /// The exact (flattened) JSON object this model was parsed from — kept
+  /// around so fields this model doesn't itself model (Aadhaar/PAN
+  /// numbers, document image ids, nominee list, health declaration, ...)
+  /// aren't lost when caching "logged in user" locally. See [toJson] and
+  /// `AppSecureStorage.saveLoggedInUser` — ProfileController parses this
+  /// same blob into the richer `MemberModel`/`NomineeModel`/
+  /// `HealthDeclarationModel` for the My Profile tabs.
+  final Map<String, dynamic> raw;
 
   const LoginModel({
     required this.memberId,
@@ -53,9 +65,44 @@ class LoginModel {
     this.joiningDate,
     this.accessToken,
     this.refreshToken,
+    this.raw = const {},
   });
 
+  /// Returns a copy with the auth tokens attached — kept separate from
+  /// [fromJson] so the tokens (from `data.authorizeToken`, a sibling of
+  /// `memberDetail`, not part of it) never pass through [raw], and so
+  /// never get duplicated into the cached "logged in user" blob via
+  /// [toJson] — [TokenManager] is the one place they're persisted. See
+  /// `LoginRepositoryImpl.login`.
+  LoginModel withTokens({String? accessToken, String? refreshToken}) {
+    return LoginModel(
+      memberId: memberId,
+      memberCode: memberCode,
+      fullName: fullName,
+      mobile: mobile,
+      fatherName: fatherName,
+      dateOfBirth: dateOfBirth,
+      gender: gender,
+      maritalStatus: maritalStatus,
+      address: address,
+      occupation: occupation,
+      photoUrl: photoUrl,
+      schemeName: schemeName,
+      joiningDate: joiningDate,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      raw: raw,
+    );
+  }
+
   factory LoginModel.fromJson(Map<String, dynamic> json) {
+    final firstName = json['firstName']?.toString() ?? '';
+    final lastName = json['lastName']?.toString() ?? '';
+    final surname = json['surname']?.toString() ?? '';
+    final fullNameFromParts = [firstName, lastName, surname]
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ');
+
     return LoginModel(
       memberId: _parseInt(
         _ciGet(json, 'memberId') ??
@@ -63,38 +110,39 @@ class LoginModel {
             _ciGet(json, 'id'),
       ),
       memberCode: _firstNonEmptyKey(json, const [
-        'memberCode', 'memberIdLabel', 'memberId',
+        'memberCode', 'memberNo', 'memberIdLabel', 'memberId',
       ]),
-      fullName: _firstNonEmptyKey(json, const [
-        'fullName', 'name', 'memberName',
-      ]),
+      fullName: _firstNonEmptyKey(json, const ['fullName', 'name', 'memberName']) ??
+          (fullNameFromParts.isNotEmpty ? fullNameFromParts : null),
       mobile: _firstNonEmptyKey(json, const [
         'mobile', 'mobileNo', 'mobile1',
       ]),
       fatherName: _firstNonEmptyKey(json, const ['fatherName']),
       dateOfBirth: _firstNonEmptyKey(json, const ['dateOfBirth']),
+      // Numeric enum ids on the real response (e.g. "1") — resolved to
+      // display text via GetEnumBundle elsewhere, not here.
       gender: _firstNonEmptyKey(json, const ['gender']),
       maritalStatus: _firstNonEmptyKey(json, const ['maritalStatus']),
       address: _firstNonEmptyKey(json, const ['address']),
       occupation: _firstNonEmptyKey(json, const ['occupation']),
       photoUrl: _firstNonEmptyKey(json, const [
-        'photoUrl', 'profileImage', 'profileImageUrl', 'imageUrl',
+        'photoUrl', 'profilePhotourl', 'profileImage', 'profileImageUrl', 'imageUrl',
       ]),
       schemeName: _firstNonEmptyKey(json, const ['schemeName']),
       joiningDate: _firstNonEmptyKey(json, const ['joiningDate']),
-      accessToken: _firstNonEmptyKey(json, const [
-        'accessToken', 'token', 'access_token',
-      ]),
-      refreshToken: _firstNonEmptyKey(json, const [
-        'refreshToken', 'refresh_token',
-      ]),
+      raw: json,
     );
   }
 
-  /// Same key names `MemberProfileModel.fromJson` reads — see this
-  /// class's doc comment.
+  /// Everything from [raw] (Aadhaar/PAN, document image ids, nominee list,
+  /// health declaration, etc.), overlaid with this model's own resolved
+  /// canonical keys — same key names `MemberProfileModel.fromJson` reads,
+  /// see this class's doc comment — so both the narrow profile model and
+  /// the richer `MemberModel`/`NomineeModel`/`HealthDeclarationModel` can
+  /// parse the same cached blob.
   Map<String, dynamic> toJson() {
     return {
+      ...raw,
       'memberId': memberId,
       'memberCode': memberCode,
       'fullName': fullName,

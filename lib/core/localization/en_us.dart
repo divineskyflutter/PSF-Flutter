@@ -223,6 +223,17 @@ const Map<String, String> enUS = {
 
   'edit_profile': 'Edit Profile',
 
+  // My Profile — tabs
+  'personal_tab': 'Personal',
+  'nominee_tab': 'Nominee',
+  'health_declaration_tab': 'Health Declaration',
+  'member_status': 'Member Status',
+  'profile_photo_label': 'Profile Photo',
+  'aadhar_front_photo_label': 'Aadhaar Front Photo',
+  'aadhar_back_photo_label': 'Aadhaar Back Photo',
+  'pan_card_photo_label': 'PAN Card Photo',
+  'no_nominee_found': 'No nominee added yet',
+
   // ------------------------------------------------------------
   // Membership Card
   // ------------------------------------------------------------
@@ -327,4 +338,5 @@ const Map<String, String> enUS = {
   // ------------------------------------------------------------
 
   'logout_confirm_message': 'Are you sure you want to logout?',
+  'session_expired_message': 'Your session has expired. Please login again.',
 };
