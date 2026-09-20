@@ -70,6 +70,15 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- Render with Skia instead of Impeller. Measured on a Snapdragon
+             480-class phone (moto g51 5G): with Impeller the wallet/card
+             animations rendered at ~120 ms per frame (raster-bound); with
+             Skia the median frame is ~5 ms. Remove this entry to go back to
+             Impeller once it performs well on the target devices. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileProvider"

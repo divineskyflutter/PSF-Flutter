@@ -2,7 +2,7 @@ name: psf_application
 description: "A new Flutter finance project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.1.0+3
 
 environment:
   sdk: ">=3.6.1 <4.0.0"
@@ -132,6 +132,7 @@ flutter:
     - assets/audio/
     - assets/images/onboarding/
     - assets/images/logo/
+    - assets/images/card/
     - assets/images/rules_doc_images/
 
   fonts:

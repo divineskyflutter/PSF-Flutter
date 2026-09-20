@@ -69,6 +69,10 @@ class AppColors {
 
   static const Color info = Color(0xFF3985C6);
 
+  /// Warm gold accent used sparingly next to the teal theme (card trim,
+  /// highlights) — not a second brand color.
+  static const Color accentGold = Color(0xFFE3C16F);
+
   // ===========================
   // Header Gradient
   // ===========================

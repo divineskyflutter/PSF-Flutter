@@ -129,6 +129,13 @@ class ApiEndPoints {
   static String get getMemberDashboard =>
       '$baseUrl/api/Member/GetMemberDashboard';
 
+  // Member QR code image for the wallet-style Card screen — a POST with the
+  // member id as the `Id` QUERY parameter (no body). The response format
+  // isn't documented, so MemberQrParser accepts raw image bytes or a JSON
+  // envelope carrying a URL / base64 string.
+  static String get getMemberQrCode =>
+      '$baseUrl/api/Api/GetMemberQrCode';
+
   // Full member profile (for the My Profile / Membership Card screens).
   static String get getMemberProfile =>
       '$baseUrl/api/Member/GetMemberProfile';

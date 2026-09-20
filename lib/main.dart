@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:psf_application/app/config/app_flavor.dart';
 import 'package:psf_application/app/config/env/env.dart';
 import 'package:psf_application/core/theme/app_theme.dart';
@@ -30,6 +31,10 @@ void startApp(/*FirebaseOptions firebaseOptions*/) async {
     // ============================================================
 
     await AppPrefs.init();
+
+    // Loads month/day names for every locale so dates can be shown in the
+    // selected app language (see AppDateFormat).
+    await initializeDateFormatting();
 
     // Seeds TokenManager's in-memory access/refresh token from secure
     // storage before any request goes out — AuthTokenProvider.getToken()

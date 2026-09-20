@@ -8,6 +8,11 @@ class AppAssets {
   static const String logo =
       'assets/images/logo/logo.svg';
 
+  /// Cream paper grain cropped from the foundation's printed member card
+  /// (used by the horizontal card design).
+  static const String cardPaper = 'assets/images/card/card_paper.jpg';
+  static const String chairmanSignature = 'assets/images/card/chairman_signature.png';
+
   static const String paperTexture =
       'assets/images/logo/paper_texture_2.png';
 

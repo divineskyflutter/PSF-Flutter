@@ -40,12 +40,15 @@ class ErrorInterceptor extends Interceptor {
         err.type == DioExceptionType.receiveTimeout ||
         err.type == DioExceptionType.connectionError;
 
+    final suppressErrorToast =
+        err.requestOptions.extra['suppressErrorToast'] == true;
+
     if (isNetworkIssue) {
       // A connectivity error cancels every in-flight request, removes the
       // global loader, and displays the single app-wide dialog. Do not emit a
       // per-request timeout toast.
       Get.find<ConnectivityService>().handleNetworkFailure();
-    } else {
+    } else if (!suppressErrorToast) {
       ToastUtil.error(appException.message);
     }
     handler.reject(

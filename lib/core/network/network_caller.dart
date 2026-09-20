@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_instance/src/extension_instance.dart';
@@ -59,6 +61,34 @@ class NetworkCaller {
         ),
       ),
       (data) => ApiResponseModel.fromJson(data as Map<String, dynamic>),
+    );
+  }
+
+  /// POST for endpoints whose response is a file/image rather than the
+  /// common JSON envelope (e.g. `GetMemberQrCode`). Sends [queryParams] on
+  /// the URL, returns the raw response bytes, and — unless
+  /// [suppressErrorToast] is false — fails quietly (no global error toast),
+  /// since callers show their own inline "unavailable / retry" state.
+  Future<Uint8List> postRequestBytes(
+      String url, {
+        Map<String, dynamic>? queryParams,
+        bool requireToken = true,
+        bool suppressErrorToast = true,
+      }) {
+    return _execute<Uint8List>(
+          (cancelToken) => _dio.post<List<int>>(
+        url,
+        queryParameters: queryParams,
+        cancelToken: cancelToken,
+        options: Options(
+          responseType: ResponseType.bytes,
+          extra: {
+            'requireToken': requireToken,
+            'suppressErrorToast': suppressErrorToast,
+          },
+        ),
+      ),
+      (data) => Uint8List.fromList((data as List).cast<int>()),
     );
   }
 
