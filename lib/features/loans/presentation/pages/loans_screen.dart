@@ -28,10 +28,7 @@ class LoansScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppSubPageHeader(
-        title: AppStrings.loanDetails.tr,
-        showBackButton: false,
-      ),
+      appBar: AppSubPageHeader(title: AppStrings.loanDetails.tr),
       body: Obx(() {
         final loan = controller.loan.value;
 

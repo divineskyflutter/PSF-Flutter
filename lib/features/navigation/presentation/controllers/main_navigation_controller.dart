@@ -1,25 +1,31 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-/// Owns which bottom-nav tab (Home / Loans / Profile) is showing inside
-/// [MainNavigationScreen]. Deliberately just an index — each tab's own
-/// screen keeps its own state alive via the `IndexedStack` in
-/// `main_navigation_screen.dart`, so switching tabs never re-fetches data.
+/// Owns which bottom-nav tab (Profile / Home / Card) is showing inside
+/// [MainNavigationScreen], plus the shell's [Scaffold] key so any tab (e.g.
+/// the Home header's menu button) can open the side drawer.
 ///
-/// This is the "navigation" feature's own controller — it now also has
-/// its own page (`main_navigation_screen.dart`), bindings
-/// (`main_navigation_binding.dart`) and widgets
-/// (`presentation/widgets/app_bottom_nav_bar.dart`), matching every other
-/// feature's folder shape. There is deliberately NO data/domain layer
-/// (no repository/datasource/model) here: which tab is selected is pure
-/// UI state, never fetched from or sent to any API, so a repository would
-/// have nothing real to call. If that ever changes — e.g. persisting the
-/// last-opened tab, or per-tab badge counts coming from the backend —
-/// that's the point to add one.
+/// Deliberately just an index + a key — each tab's own screen keeps its own
+/// state alive via the `IndexedStack` in `main_navigation_screen.dart`, so
+/// switching tabs never re-fetches data. There is deliberately NO
+/// data/domain layer here: which tab is selected is pure UI state, never
+/// fetched from or sent to any API.
 class MainNavigationController extends GetxController {
-  final RxInt currentIndex = 0.obs;
+  /// Tab order: 0 Profile, 1 Home (center, opens first), 2 Card.
+  static const int profileTab = 0;
+  static const int homeTab = 1;
+  static const int cardTab = 2;
+
+  final RxInt currentIndex = homeTab.obs;
+
+  final GlobalKey<ScaffoldState> scaffoldKey = GlobalKey<ScaffoldState>();
 
   void changeTab(int index) {
     if (currentIndex.value == index) return;
     currentIndex.value = index;
   }
+
+  void openDrawer() => scaffoldKey.currentState?.openDrawer();
+
+  void closeDrawer() => scaffoldKey.currentState?.closeDrawer();
 }

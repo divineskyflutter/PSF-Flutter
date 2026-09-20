@@ -7,6 +7,9 @@ import 'package:psf_application/shared/extensions/new_responsive_extensions.dart
 import 'package:psf_application/shared/widgets/refresh/app_refresh_indicator.dart';
 import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 
+import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
+import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
+
 import '../controllers/home_controller.dart';
 import '../widgets/home_header.dart';
 import '../widgets/member_summary_card.dart';
@@ -47,13 +50,15 @@ class HomeScreen extends StatelessWidget {
                     ? '${AppStrings.memberId.tr}: ${dashboard.memberIdLabel}'
                     : '',
                 notificationCount: dashboard?.unreadNotificationCount ?? 0,
+                onMenuTap: Get.find<MainNavigationController>().openDrawer,
               ),
               SliverPadding(
                 padding: EdgeInsets.fromLTRB(
                   18.px(context),
                   18.px(context),
                   18.px(context),
-                  32.px(context),
+                  // Clear the bottom bar, which floats over the page.
+                  32.px(context) + AppBottomNavBar.occupiedHeight(context),
                 ),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([

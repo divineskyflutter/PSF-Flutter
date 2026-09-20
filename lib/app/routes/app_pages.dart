@@ -11,6 +11,7 @@ import 'package:psf_application/features/auth/presentation/pages/registration/re
 import 'package:psf_application/features/language/bindings/language_binding.dart';
 import 'package:psf_application/features/language/presentation/pages/language_selection_screen.dart';
 import 'package:psf_application/features/loans/presentation/pages/installment_details_screen.dart';
+import 'package:psf_application/features/loans/presentation/pages/loans_screen.dart';
 import 'package:psf_application/features/navigation/bindings/main_navigation_binding.dart';
 import 'package:psf_application/features/navigation/presentation/pages/main_navigation_screen.dart';
 import 'package:psf_application/features/onboarding/presentation/pages/onboarding_screen.dart';
@@ -113,6 +114,7 @@ class AppPages {
     // Loans — sub-page pushed from the Loans tab.
     // ------------------------------------------------------------
 
+    GetPage(name: AppRoutes.loans, page: () => const LoansScreen()),
     GetPage(name: AppRoutes.loanInstallments, page: () => const InstallmentDetailsScreen()),
   ];
 }

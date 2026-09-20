@@ -4,12 +4,15 @@ import 'package:psf_application/core/network/auth/no_auth_token_provider.dart';
 import 'package:psf_application/core/network/dio_client.dart';
 import 'package:psf_application/core/network/network_caller.dart';
 
+import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle_repository.dart';
 import 'package:psf_application/features/home/data/datasources/home_remote_datasource.dart';
 import 'package:psf_application/features/home/data/repositories/home_repository_impl.dart';
 import 'package:psf_application/features/home/domain/repositories/home_repository.dart';
 import 'package:psf_application/features/home/presentation/controllers/home_controller.dart';
 
 import 'package:psf_application/features/loans/data/datasources/loans_remote_datasource.dart';
+import 'package:psf_application/features/member_card/data/member_card_repository.dart';
+import 'package:psf_application/features/member_card/presentation/controllers/member_card_controller.dart';
 import 'package:psf_application/features/loans/data/repositories/loans_repository_impl.dart';
 import 'package:psf_application/features/loans/domain/repositories/loans_repository.dart';
 import 'package:psf_application/features/loans/presentation/controllers/loans_controller.dart';
@@ -76,6 +79,31 @@ class MainNavigationBinding extends Bindings {
     Get.lazyPut<ProfileRepository>(
       () => ProfileRepositoryImpl(Get.find<ProfileRemoteDataSource>()),
     );
-    Get.put<ProfileController>(ProfileController(Get.find<ProfileRepository>()));
+    // No-op if AuthBinding already registered it (same reasoning as
+    // NetworkCaller above).
+    Get.lazyPut<EnumBundleRepository>(
+      () => EnumBundleRepository(Get.find<NetworkCaller>()),
+      fenix: true,
+    );
+    Get.put<ProfileController>(
+      ProfileController(
+        Get.find<ProfileRepository>(),
+        Get.find<EnumBundleRepository>(),
+      ),
+    );
+
+    // ============================================================
+    // MEMBER CARD (wallet-style Card tab)
+    // ============================================================
+
+    Get.lazyPut<MemberCardRepository>(
+      () => MemberCardRepository(Get.find<NetworkCaller>()),
+    );
+    Get.put<MemberCardController>(
+      MemberCardController(
+        Get.find<MemberCardRepository>(),
+        Get.find<ProfileController>(),
+      ),
+    );
   }
 }

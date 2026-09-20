@@ -35,5 +35,6 @@ abstract class AppRoutes {
   // Loans
   // ------------------------------------------------------------
 
+  static const loans = '/loans';
   static const loanInstallments = '/loans/installments';
 }
