@@ -10,6 +10,7 @@ import 'package:psf_application/features/auth/data/models/health_declaration_mod
 import 'package:psf_application/features/auth/data/models/member_model.dart';
 import 'package:psf_application/features/auth/data/models/nominee_model.dart';
 import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
+import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle_repository.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 
 import '../../data/models/member_profile_model.dart';
@@ -19,9 +20,11 @@ import '../../domain/entities/passbook_entry_entity.dart';
 import '../../domain/repositories/profile_repository.dart';
 
 class ProfileController extends GetxController {
-  ProfileController(this._repository);
+  ProfileController(this._repository, this._enumBundleRepository);
 
   final ProfileRepository _repository;
+
+  final EnumBundleRepository _enumBundleRepository;
 
   // ============================================================
   // PROFILE
@@ -108,7 +111,7 @@ class ProfileController extends GetxController {
     // the Profile screen falls back to its existing default labels
     // exactly as before (see ProfileScreen._ProfileHeader).
     loadProfileFromLocalLogin();
-    loadCachedEnumBundle();
+    ensureEnumBundle();
   }
 
   // ============================================================
@@ -161,6 +164,26 @@ class ProfileController extends GetxController {
     } catch (_) {
       // Corrupt/old-format cache — ignore, id-based fields just fall back
       // to showing the raw id until the next successful login re-caches it.
+    }
+  }
+
+  /// Loads the cached bundle and, when there is none yet (login caches it
+  /// asynchronously, so it can still be in flight when this controller is
+  /// created), fetches it from `GetEnumBundle` and caches it. Updating
+  /// [enumBundle] is what makes `MyProfilePage`/the Card screen rebuild
+  /// with real names instead of raw numeric ids.
+  Future<void> ensureEnumBundle() async {
+    loadCachedEnumBundle();
+
+    if (enumBundle.value != null) return;
+
+    try {
+      final bundle = await _enumBundleRepository.getEnumBundle();
+      enumBundle.value = bundle;
+      await AppPrefs.setEnumBundleJson(jsonEncode(bundle.toJson()));
+    } catch (_) {
+      // Ignored — id-based fields fall back to the raw id until the next
+      // successful fetch.
     }
   }
 

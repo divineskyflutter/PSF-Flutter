@@ -22,7 +22,7 @@ class AppSubPageHeader extends StatelessWidget implements PreferredSizeWidget {
     this.onBack,
     this.actions,
     this.showBackButton = true,
-    this.height = 120,
+    this.height = 104,
   });
 
   final String title;
@@ -37,10 +37,24 @@ class AppSubPageHeader extends StatelessWidget implements PreferredSizeWidget {
 
   final bool showBackButton;
 
+  /// Height of the visible header area BELOW the status bar / camera
+  /// cutout — the status-bar inset is added on top of this (see
+  /// [preferredSize]), so the header keeps the same comfortable size on
+  /// every device instead of shrinking on phones with a tall notch.
   final double height;
 
+  /// Total header height with the default [height] — what a screen that
+  /// lets its content scroll UNDER the header (`extendBodyBehindAppBar`)
+  /// adds as top padding so the content starts just below it.
+  static double totalHeight({double height = 104}) => _statusBarHeight() + height;
+
+  static double _statusBarHeight() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.first;
+    return view.padding.top / view.devicePixelRatio;
+  }
+
   @override
-  Size get preferredSize => Size.fromHeight(height);
+  Size get preferredSize => Size.fromHeight(_statusBarHeight() + height);
 
   @override
   Widget build(BuildContext context) {
@@ -52,13 +66,16 @@ class AppSubPageHeader extends StatelessWidget implements PreferredSizeWidget {
         decoration: const BoxDecoration(gradient: AppColors.headerGradient),
         child: SafeArea(
           bottom: false,
-          child: SizedBox(
-            height: double.infinity,
+          child: Padding(
+            // Keeps the title/back button clear of the curved bottom edge
+            // (the clip dips ~45px at the left), so they sit visually
+            // centered in the solid part of the header.
+            padding: EdgeInsets.only(bottom: 22.px(context)),
             child: Stack(
               alignment: Alignment.center,
               children: [
                 Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 56.px(context)),
+                  padding: EdgeInsets.symmetric(horizontal: 64.px(context)),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -69,7 +86,7 @@ class AppSubPageHeader extends StatelessWidget implements PreferredSizeWidget {
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 19.px(context),
+                          fontSize: 20.px(context),
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -92,15 +109,24 @@ class AppSubPageHeader extends StatelessWidget implements PreferredSizeWidget {
                 ),
                 if (showBackButton)
                   Positioned(
-                    left: 8.px(context),
-                    child: AppHeaderIconButton(
-                      icon: Icons.arrow_back_rounded,
+                    left: 6.px(context),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
                       onTap: onBack ?? () => Get.back(),
+                      child: SizedBox(
+                        width: 48.px(context),
+                        height: 48.px(context),
+                        child: Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 22.px(context),
+                        ),
+                      ),
                     ),
                   ),
                 if (actions != null && actions!.isNotEmpty)
                   Positioned(
-                    right: 8.px(context),
+                    right: 12.px(context),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: actions!,

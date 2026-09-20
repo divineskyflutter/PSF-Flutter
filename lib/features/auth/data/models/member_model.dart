@@ -22,6 +22,10 @@ class MemberModel {
   /// confirmed to match its own POST schema.
   final String? mobile2;
 
+  /// The real member number (e.g. `PSF12545`) — null until one is assigned.
+  /// Deliberately separate from [memberId], which is just the database id.
+  final String? memberNo;
+
   // Hindi/Gujarati transliterations, same convention as NomineeModel's
   // hName/gName — SaveMemberPersonalDetail accepts these (see
   // SaveMemberPersonalDetailRequestModel: hfirstName/gfirstName etc.), so
@@ -170,6 +174,7 @@ class MemberModel {
     this.surname,
     this.mobile,
     this.mobile2,
+    this.memberNo,
     this.hFirstName,
     this.gFirstName,
     this.hLastName,
@@ -361,6 +366,8 @@ class MemberModel {
       json['mobile']?.toString() ??
           json['mobileNo']?.toString() ??
           json['mobile1']?.toString(),
+
+      memberNo: _firstNonEmptyKey(json, const ['memberNo']),
 
       mobile2: _firstNonEmptyKey(json, const [
         'mobile2', 'mobileNo2', 'mobileNumber2', 'alternateMobile',

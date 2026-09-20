@@ -12,6 +12,7 @@ import '../controllers/profile_controller.dart';
 import '../widgets/my_profile_health_tab.dart';
 import '../widgets/my_profile_nominee_tab.dart';
 import '../widgets/my_profile_personal_tab.dart';
+import '../widgets/profile_card_style.dart';
 
 /// Full member profile — the "My Profile" row inside the Profile tab's
 /// menu. Member photo centered up top (tap to preview), then a shadowed
@@ -37,47 +38,96 @@ class _MyProfilePageState extends State<MyProfilePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
+      // The header stays fixed and the page scrolls UNDER it, so the wavy
+      // edge overlays the content (same look as the Home screen) instead of
+      // the content being cut off by a straight line beneath the header.
+      extendBodyBehindAppBar: true,
       appBar: AppSubPageHeader(title: AppStrings.myProfile.tr),
-      body: Obx(() {
-        final member = _controller.memberDetails.value;
-        final profile = _controller.profile.value;
+      body: SafeArea(
+        top: false,
+        child: Obx(() {
+          final member = _controller.memberDetails.value;
+          final profile = _controller.profile.value;
+          final health = _controller.healthDeclaration.value;
+          final nominees = _controller.nominees.toList();
 
-        if (member == null && profile == null) {
-          return AppStateView.empty(message: 'no_data_found'.tr);
-        }
+          // Read here (not just inside the tab widgets) so the whole page
+          // rebuilds the moment the enum bundle arrives — gender / marital
+          // status / relation / member status then switch from raw numeric
+          // ids to their real names.
+          _controller.enumBundle.value;
 
-        final photoUrl = member?.imageUrl ?? profile?.photoUrl;
-        final displayName =
-            (member?.fullName.isNotEmpty ?? false) ? member!.fullName : (profile?.fullName ?? '');
+          if (member == null && profile == null) {
+            return Padding(
+              padding: EdgeInsets.only(top: AppSubPageHeader.totalHeight()),
+              child: AppStateView.empty(message: 'no_data_found'.tr),
+            );
+          }
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.all(18.px(context)),
-          child: Column(
-            children: [
-              _ProfileAvatar(photoUrl: photoUrl, name: displayName),
-              SizedBox(height: 20.px(context)),
-              _TabSelector(
-                selectedIndex: _selectedTab,
-                onChanged: (index) => setState(() => _selectedTab = index),
-              ),
-              SizedBox(height: 18.px(context)),
-              if (_selectedTab == 0)
-                member != null
-                    ? MyProfilePersonalTab(member: member, controller: _controller)
-                    : AppStateView.empty(message: 'no_data_found'.tr)
-              else if (_selectedTab == 1)
-                MyProfileNomineeTab(
-                  nominees: _controller.nominees,
-                  controller: _controller,
-                )
-              else
-                _controller.healthDeclaration.value != null
-                    ? MyProfileHealthTab(health: _controller.healthDeclaration.value!)
-                    : AppStateView.empty(message: 'no_data_found'.tr),
-            ],
-          ),
-        );
-      }),
+          final photoUrl = member?.imageUrl ?? profile?.photoUrl;
+          final displayName = (member?.fullName.isNotEmpty ?? false)
+              ? member!.fullName
+              : (profile?.fullName ?? '');
+
+          final Widget tabBody;
+          switch (_selectedTab) {
+            case 0:
+              tabBody = member != null
+                  ? MyProfilePersonalTab(member: member, controller: _controller)
+                  : AppStateView.empty(message: 'no_data_found'.tr);
+            case 1:
+              tabBody = MyProfileNomineeTab(
+                nominees: nominees,
+                controller: _controller,
+              );
+            default:
+              tabBody = health != null
+                  ? MyProfileHealthTab(health: health)
+                  : AppStateView.empty(message: 'no_data_found'.tr);
+          }
+
+          return SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              18.px(context),
+              AppSubPageHeader.totalHeight() + 12.px(context),
+              18.px(context),
+              28.px(context),
+            ),
+            child: Column(
+              children: [
+                _ProfileAvatar(photoUrl: photoUrl, name: displayName),
+                SizedBox(height: 22.px(context)),
+                _TabSelector(
+                  selectedIndex: _selectedTab,
+                  onChanged: (index) => setState(() => _selectedTab = index),
+                ),
+                SizedBox(height: 18.px(context)),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeIn,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, .04),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey(_selectedTab),
+                    child: tabBody,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
     );
   }
 }
@@ -96,6 +146,7 @@ class _ProfileAvatar extends StatelessWidget {
     return Column(
       children: [
         GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: hasPhoto
               ? () => CommonImagePreview.show(
                     context: context,
@@ -103,25 +154,11 @@ class _ProfileAvatar extends StatelessWidget {
                     mode: ImagePreviewMode.fullScreen,
                   )
               : null,
-          child: Container(
-            width: 96.px(context),
-            height: 96.px(context),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.primary.withOpacity(.25), width: 2),
-              boxShadow: const [
-                BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: hasPhoto
-                ? Image.network(
-                    photoUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => _fallbackIcon(context),
-                  )
-                : _fallbackIcon(context),
+          child: FramedImage(
+            url: photoUrl,
+            size: 104.px(context),
+            circle: true,
+            fallbackIcon: Icons.person_rounded,
           ),
         ),
         if (name.isNotEmpty) ...[
@@ -129,11 +166,11 @@ class _ProfileAvatar extends StatelessWidget {
           Text(
             name,
             textAlign: TextAlign.center,
-            maxLines: 1,
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 17.px(context),
-              fontWeight: FontWeight.w700,
+              fontSize: 18.px(context),
+              fontWeight: FontWeight.w800,
               color: AppColors.textPrimary,
             ),
           ),
@@ -141,22 +178,23 @@ class _ProfileAvatar extends StatelessWidget {
       ],
     );
   }
-
-  Widget _fallbackIcon(BuildContext context) {
-    return Icon(
-      Icons.person_rounded,
-      color: AppColors.primary,
-      size: 44.px(context),
-    );
-  }
 }
 
+/// Three-tab segmented control with a gradient "pill" that slides under the
+/// selected tab. Labels get the full width of their tab with no extra
+/// padding and wrap onto a second centered line instead of overflowing.
 class _TabSelector extends StatelessWidget {
   const _TabSelector({required this.selectedIndex, required this.onChanged});
 
   final int selectedIndex;
 
   final ValueChanged<int> onChanged;
+
+  static const _icons = [
+    Icons.badge_rounded,
+    Icons.family_restroom_rounded,
+    Icons.health_and_safety_rounded,
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -167,43 +205,109 @@ class _TabSelector extends StatelessWidget {
     ];
 
     return Container(
-      padding: EdgeInsets.all(5.px(context)),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(16.px(context)),
-        boxShadow: const [
-          BoxShadow(color: AppColors.shadow, blurRadius: 12, offset: Offset(0, 4)),
-        ],
+      padding: EdgeInsets.all(4.px(context)),
+      decoration: profileCardDecoration(context).copyWith(
+        borderRadius: BorderRadius.circular(20.px(context)),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          for (var i = 0; i < labels.length; i++)
-            Expanded(
-              child: GestureDetector(
-                onTap: () => onChanged(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: EdgeInsets.symmetric(vertical: 11.px(context)),
+          Positioned.fill(
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutBack,
+              alignment: Alignment(-1 + selectedIndex * 1.0, 0),
+              child: FractionallySizedBox(
+                widthFactor: 1 / labels.length,
+                heightFactor: 1,
+                child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: selectedIndex == i ? AppColors.primary : AppColors.transparent,
-                    borderRadius: BorderRadius.circular(12.px(context)),
-                  ),
-                  child: Text(
-                    labels[i],
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12.5.px(context),
-                      fontWeight: FontWeight.w700,
-                      color: selectedIndex == i ? AppColors.background : AppColors.textSecondary,
-                    ),
+                    gradient: AppColors.buttonGradient,
+                    borderRadius: BorderRadius.circular(16.px(context)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(.38),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
+          ),
+          Row(
+            children: [
+              for (var i = 0; i < labels.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(i),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 2.px(context),
+                        vertical: 10.px(context),
+                      ),
+                      child: _TabLabel(
+                        icon: _icons[i],
+                        label: labels[i],
+                        selected: selectedIndex == i,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _TabLabel extends StatelessWidget {
+  const _TabLabel({
+    required this.icon,
+    required this.label,
+    required this.selected,
+  });
+
+  final IconData icon;
+
+  final String label;
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedScale(
+          scale: selected ? 1.15 : 1,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutBack,
+          child: Icon(
+            icon,
+            size: 20.px(context),
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+        SizedBox(height: 4.px(context)),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 220),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11.5.px(context),
+            height: 1.2,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            softWrap: true,
+          ),
+        ),
+      ],
     );
   }
 }

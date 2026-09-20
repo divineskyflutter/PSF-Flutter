@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/features/auth/data/models/nominee_model.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/utils/app_date_format.dart';
 import 'package:psf_application/shared/utils/localized_field.dart';
 import 'package:psf_application/shared/widgets/common/info_row.dart';
 import 'package:psf_application/shared/widgets/states/app_state_view.dart';
@@ -14,6 +14,7 @@ import 'package:psf_application/shared/widgets/windows/common_image_preview.dart
 
 import '../controllers/profile_controller.dart';
 import 'document_thumbnail.dart';
+import 'profile_card_style.dart';
 
 /// "Nominee" tab of [MyProfilePage] — one card per nominee (photo, name,
 /// relation resolved via [ProfileController]'s enum-bundle lookup, share,
@@ -71,7 +72,7 @@ class _NomineeCard extends StatelessWidget {
     if (isoDate == null || isoDate.isEmpty) return 'not_provided'.tr;
     final parsed = DateTime.tryParse(isoDate);
     if (parsed == null) return 'not_provided'.tr;
-    return DateFormat('dd MMM yyyy').format(parsed);
+    return AppDateFormat.medium(parsed);
   }
 
   @override
@@ -87,7 +88,7 @@ class _NomineeCard extends StatelessWidget {
     final documents = <MapEntry<String, String?>>[
       MapEntry(AppStrings.aadharFrontPhotoLabel.tr, nominee.aadharFrontImageUrl),
       MapEntry(AppStrings.aadharBackPhotoLabel.tr, nominee.aadharBackImageUrl),
-      MapEntry('nominee_passbook_cheque_photo'.tr, nominee.passBookChequeUrl),
+      MapEntry('nominee_passbook_cheque_label'.tr, nominee.passBookChequeUrl),
     ];
 
     final availableImages = documents
@@ -110,17 +111,14 @@ class _NomineeCard extends StatelessWidget {
 
     return Container(
       padding: EdgeInsets.all(16.px(context)),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18.px(context)),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: profileCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: (photoUrl?.isNotEmpty ?? false)
                     ? () => CommonImagePreview.show(
                           context: context,
@@ -128,30 +126,11 @@ class _NomineeCard extends StatelessWidget {
                           mode: ImagePreviewMode.fullScreen,
                         )
                     : null,
-                child: Container(
-                  width: 52.px(context),
-                  height: 52.px(context),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: AppColors.border),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: (photoUrl?.isNotEmpty ?? false)
-                      ? Image.network(
-                          photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Icon(
-                            Icons.person_rounded,
-                            color: AppColors.textSecondary,
-                            size: 26.px(context),
-                          ),
-                        )
-                      : Icon(
-                          Icons.person_rounded,
-                          color: AppColors.textSecondary,
-                          size: 26.px(context),
-                        ),
+                child: FramedImage(
+                  url: photoUrl,
+                  size: 60.px(context),
+                  circle: true,
+                  fallbackIcon: Icons.person_rounded,
                 ),
               ),
               SizedBox(width: 14.px(context)),
@@ -195,15 +174,15 @@ class _NomineeCard extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.symmetric(vertical: 12.px(context)),
-            child: const Divider(height: 1),
+            child: const Divider(height: 1, color: AppColors.border),
           ),
           InfoListTile(
             label: AppStrings.dateOfBirth.tr,
             value: _formattedDate(nominee.dateOfBirth),
           ),
           InfoListTile(
-            label: AppStrings.nomineeShare.tr,
-            value: nominee.share != null ? '${_formattedShare(nominee.share!)}%' : 'not_provided'.tr,
+            label: 'nominee_share_percent'.tr,
+            value: nominee.share != null ? _formattedShare(nominee.share!) : 'not_provided'.tr,
           ),
           InfoListTile(
             label: 'aadhaar_number'.tr,
@@ -213,7 +192,7 @@ class _NomineeCard extends StatelessWidget {
           if (availableImages.isNotEmpty) ...[
             SizedBox(height: 12.px(context)),
             Wrap(
-              spacing: 12.px(context),
+              spacing: 8.px(context),
               runSpacing: 12.px(context),
               children: [
                 for (final entry in documents)

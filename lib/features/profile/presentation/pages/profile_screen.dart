@@ -10,6 +10,8 @@ import 'package:psf_application/shared/extensions/new_responsive_extensions.dart
 import 'package:psf_application/shared/widgets/common/app_menu_tile.dart';
 import 'package:psf_application/shared/widgets/dialogs/app_dialog.dart';
 
+import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
+
 import '../controllers/profile_controller.dart';
 import '../widgets/profile_avatar_block.dart';
 
@@ -35,6 +37,7 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
+        bottom: false,
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -53,7 +56,8 @@ class ProfileScreen extends StatelessWidget {
                   16.px(context),
                   20.px(context),
                   16.px(context),
-                  32.px(context),
+                  // Clear the bottom bar, which floats over the page.
+                  32.px(context) + AppBottomNavBar.occupiedHeight(context),
                 ),
                 child: Container(
                   decoration: BoxDecoration(

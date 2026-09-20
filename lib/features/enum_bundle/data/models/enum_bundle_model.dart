@@ -1,4 +1,6 @@
 // lib/features/enum_bundle/data/models/enum_bundle_model.dart
+import 'package:get/get.dart';
+
 class EnumItem {
   final int id;
   final String name;
@@ -94,11 +96,37 @@ class EnumBundleModel {
   /// `relation`, into the text the backend defines for it) — falls back to
   /// [fallback] (default: the id itself, stringified) when nothing in
   /// [items] matches, e.g. before the bundle has ever been fetched/cached.
-  static String nameFor(List<EnumItem> items, int? id, {String? fallback}) {
+  ///
+  /// With [localized] (default) the name is translated into the selected
+  /// app language via the `enum_<name>` translation keys (e.g. `Male` ->
+  /// `पुरुष`); a name with no translation falls back to its readable
+  /// English form. Pass `localized: false` for plain English (PDF export).
+  static String nameFor(
+    List<EnumItem> items,
+    int? id, {
+    String? fallback,
+    bool localized = true,
+  }) {
     if (id == null) return fallback ?? '';
     for (final item in items) {
-      if (item.id == id) return item.name;
+      if (item.id == id) return _display(item.name, localized);
     }
     return fallback ?? id.toString();
   }
+
+  static String _display(String name, bool localized) {
+    if (localized) {
+      final key = 'enum_${name.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '')}';
+      final translated = key.tr;
+      if (translated != key) return translated;
+    }
+    return humanize(name);
+  }
+
+  /// The API sends enum names as PascalCase identifiers
+  /// (`RegistrationPending`, `FatherInLaw`) - split them into readable
+  /// words (`Registration Pending`, `Father In Law`) for display.
+  static String humanize(String name) => name
+      .replaceAllMapped(RegExp(r'(?<=[a-z])(?=[A-Z])'), (_) => ' ')
+      .trim();
 }

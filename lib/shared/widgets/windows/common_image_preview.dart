@@ -278,12 +278,20 @@ class _ImagePreviewScreenState
     final borderRadius =
     isFullScreen ? 0.0 : 14.px(context);
 
+    // Full-screen mode draws edge to edge, so its top controls (back
+    // button, "1 / 3" counter) and bottom indicators must sit inside the
+    // safe area — otherwise they end up under the camera cutout / status
+    // bar. The dialog mode is already inset by the Dialog itself.
+    final insets = isFullScreen
+        ? MediaQuery.paddingOf(context)
+        : EdgeInsets.zero;
+
     return Material(
       color: Colors.transparent,
 
       child: Container(
-        width: 360.px(context),
-        height: 600.px(context),
+        width: isFullScreen ? double.infinity : 360.px(context),
+        height: isFullScreen ? double.infinity : 600.px(context),
 
         decoration: BoxDecoration(
           // Soft transparent background.
@@ -311,8 +319,8 @@ class _ImagePreviewScreenState
               Positioned.fill(
                 child: Padding(
                   padding: EdgeInsets.only(
-                    top: 55.px(context),
-                    bottom: 30.px(context),
+                    top: 55.px(context) + insets.top,
+                    bottom: 30.px(context) + insets.bottom,
                   ),
 
                   child: PhotoViewGallery.builder(
@@ -385,9 +393,13 @@ class _ImagePreviewScreenState
               // ==================================================
 
               Positioned(
-                top: 12.px(context),
-                left: isFullScreen ? 10.px(context) : null,
-                right: 10.px(context),
+                top: 12.px(context) + insets.top,
+                left: isFullScreen ? 10.px(context) + insets.left : null,
+                // Only ONE horizontal edge is pinned: with both left and
+                // right set the button was stretched across the whole width
+                // and its icon ended up centered, on top of the "1 / 4"
+                // counter.
+                right: isFullScreen ? null : 10.px(context) + insets.right,
 
                 child: _buildTopButton(
                   context: context,
@@ -408,7 +420,7 @@ class _ImagePreviewScreenState
 
               if (widget.images.length > 1)
                 Positioned(
-                  top: 15.px(context),
+                  top: 15.px(context) + insets.top,
                   left: 0,
                   right: 0,
 
@@ -510,7 +522,7 @@ class _ImagePreviewScreenState
 
               if (widget.images.length > 1)
                 Positioned(
-                  bottom: 14.px(context),
+                  bottom: 14.px(context) + insets.bottom,
                   left: 0,
                   right: 0,
 

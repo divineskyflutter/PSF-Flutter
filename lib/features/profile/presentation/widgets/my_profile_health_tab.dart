@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/features/auth/data/models/health_declaration_model.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/utils/app_date_format.dart';
 import 'package:psf_application/shared/utils/localized_field.dart';
 import 'package:psf_application/shared/widgets/common/info_row.dart';
+
+import 'profile_card_style.dart';
 
 /// "Health Declaration" tab of [MyProfilePage] — reuses the exact
 /// question/disease translation keys the registration wizard's Health
@@ -124,7 +126,7 @@ class MyProfileHealthTab extends StatelessWidget {
               if (health.surgeryDate != null)
                 _DetailRow(
                   label: 'health_q_surgery_date'.tr,
-                  value: DateFormat('dd MMM yyyy').format(health.surgeryDate!),
+                  value: AppDateFormat.medium(health.surgeryDate!),
                 ),
             ],
             _YesNoRow(
@@ -197,11 +199,7 @@ class _SectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.px(context), vertical: 6.px(context)),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(18.px(context)),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: profileCardDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

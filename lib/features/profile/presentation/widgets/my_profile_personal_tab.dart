@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:intl/intl.dart';
 
-import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/features/auth/data/models/member_model.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/utils/app_date_format.dart';
 import 'package:psf_application/shared/utils/localized_field.dart';
 import 'package:psf_application/shared/widgets/common/info_row.dart';
 import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
 
 import '../controllers/profile_controller.dart';
 import 'document_thumbnail.dart';
+import 'profile_card_style.dart';
 
 /// "Personal" tab of [MyProfilePage] — every field `MemberModel` carries
 /// (father name, DOB, gender/marital status resolved via
@@ -37,7 +37,7 @@ class MyProfilePersonalTab extends StatelessWidget {
     if (isoDate == null || isoDate.isEmpty) return 'not_provided'.tr;
     final parsed = DateTime.tryParse(isoDate);
     if (parsed == null) return 'not_provided'.tr;
-    return DateFormat('dd MMM yyyy').format(parsed);
+    return AppDateFormat.medium(parsed);
   }
 
   @override
@@ -82,13 +82,9 @@ class MyProfilePersonalTab extends StatelessWidget {
 
         Container(
           padding: EdgeInsets.all(16.px(context)),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(18.px(context)),
-            border: Border.all(color: AppColors.border),
-          ),
+          decoration: profileCardDecoration(context),
           child: Wrap(
-            spacing: 12.px(context),
+            spacing: 8.px(context),
             runSpacing: 14.px(context),
             children: [
               for (final entry in documents)
@@ -109,11 +105,7 @@ class MyProfilePersonalTab extends StatelessWidget {
 
         Container(
           padding: EdgeInsets.symmetric(horizontal: 16.px(context)),
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(18.px(context)),
-            border: Border.all(color: AppColors.border),
-          ),
+          decoration: profileCardDecoration(context),
           child: Column(
             children: [
               InfoListTile(
