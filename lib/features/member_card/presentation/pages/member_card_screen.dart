@@ -6,6 +6,7 @@ import 'package:psf_application/features/navigation/presentation/controllers/mai
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 
+import '../controllers/member_card_controller.dart';
 import '../widgets/card_ambient_backdrop.dart';
 import '../widgets/member_wallet_panel.dart';
 
@@ -34,13 +35,16 @@ class MemberCardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nav = Get.find<MainNavigationController>();
+    final cardController = Get.find<MemberCardController>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       // appBar: AppSubPageHeader(title: 'nav_card'.tr, showBackButton: false),
       body: Stack(
         children: [
-          const Positioned.fill(child: CardAmbientBackdrop()),
+          Positioned.fill(
+            child: Obx(() => CardAmbientBackdrop(paused: cardController.isWalletBusy.value)),
+          ),
           SafeArea(
             bottom: false,
             child: Padding(

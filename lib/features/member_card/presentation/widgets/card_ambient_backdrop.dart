@@ -19,7 +19,12 @@ import 'package:psf_application/app/constants/app_colors.dart';
 /// A placeholder look-and-feel, easy to swap for something more specific
 /// later.
 class CardAmbientBackdrop extends StatefulWidget {
-  const CardAmbientBackdrop({super.key});
+  const CardAmbientBackdrop({super.key, this.paused = false});
+
+  /// While `true`, all three loops sit still instead of ticking — used to
+  /// free up frame budget for the wallet cover's own open/close animation,
+  /// which matters more in the moment than this decorative background.
+  final bool paused;
 
   @override
   State<CardAmbientBackdrop> createState() => _CardAmbientBackdropState();
@@ -44,6 +49,21 @@ class _CardAmbientBackdropState extends State<CardAmbientBackdrop>
     vsync: this,
     duration: const Duration(seconds: 26),
   )..repeat();
+
+  @override
+  void didUpdateWidget(CardAmbientBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.paused == oldWidget.paused) return;
+    if (widget.paused) {
+      _drift.stop();
+      _spin.stop();
+      _rise.stop();
+    } else {
+      _drift.repeat();
+      _spin.repeat();
+      _rise.repeat();
+    }
+  }
 
   @override
   void dispose() {

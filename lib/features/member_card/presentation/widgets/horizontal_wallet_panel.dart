@@ -58,7 +58,7 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
 
   late final AnimationController _open = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1800),
+    duration: const Duration(milliseconds: 900),
   );
 
   late final AnimationController _flip = AnimationController(
@@ -82,10 +82,12 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     curve: const Interval(0, .4, curve: Curves.easeOut),
   );
 
-  // Open: the cover slides out to the left, the card is revealed.
+  // Open: the cover slides out to the left, the card is revealed. A gentle
+  // easeInOut (not the steeper *Cubic) so the motion reads as evenly paced
+  // the whole way, instead of sitting still then darting through the middle.
   late final Animation<double> _coverShift = CurvedAnimation(
     parent: _open,
-    curve: const Interval(0, 1, curve: Curves.easeInOutCubic),
+    curve: const Interval(0, 1, curve: Curves.easeInOut),
   );
   late final Animation<double> _coverFadeOut = Tween<double>(begin: 1, end: 0).animate(
     CurvedAnimation(parent: _open, curve: const Interval(.55, 1, curve: Curves.easeIn)),
@@ -144,7 +146,10 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     HapticFeedback.lightImpact();
     setState(() => _isOpen = true);
     _shine.stop();
-    _open.forward();
+    _controller.isWalletBusy.value = true;
+    _open.forward().whenComplete(() {
+      _controller.isWalletBusy.value = false;
+    });
   }
 
   void _closeWallet() {
@@ -152,7 +157,9 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     HapticFeedback.selectionClick();
     setState(() => _isOpen = false);
     _flip.animateBack(0, duration: const Duration(milliseconds: 280));
+    _controller.isWalletBusy.value = true;
     _open.reverse().whenComplete(() {
+      _controller.isWalletBusy.value = false;
       if (mounted && !_isOpen) _shine.repeat();
     });
   }

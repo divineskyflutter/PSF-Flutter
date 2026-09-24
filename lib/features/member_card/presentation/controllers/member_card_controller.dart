@@ -39,6 +39,11 @@ class MemberCardController extends GetxController {
 
   bool _resumeOpen = false;
 
+  /// True while the wallet cover is actively sliding open or closed — the
+  /// ambient backdrop behind it pauses its own animations for this window,
+  /// so the wallet's own transition isn't competing for frame time.
+  final RxBool isWalletBusy = false.obs;
+
   /// Switches the card shape from inside the open wallet; the new panel
   /// picks up where the old one was (see [takeResumeOpen]).
   void setLayout(MemberCardLayout value) {
