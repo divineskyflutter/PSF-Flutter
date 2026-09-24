@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
 
 import 'package:psf_application/app/routes/app_routes.dart';
@@ -338,5 +339,39 @@ class ProfileController extends GetxController {
       AppSecureStorage.deleteMemberId(),
       AppSecureStorage.clearLoggedInUser(),
     ]);
+  }
+
+  // ============================================================
+  // DOWNLOAD APPLICATION PDF — My Profile's header download button.
+  // ============================================================
+
+  final RxBool isDownloadingPdf = false.obs;
+
+  Future<void> downloadApplicationPdf() async {
+    if (isDownloadingPdf.value) return;
+
+    isDownloadingPdf.value = true;
+
+    try {
+      final bytes = await _repository.generateApplicationPdf();
+
+      final savedPath = await FilePicker.platform.saveFile(
+        fileName: 'PSF_Application.pdf',
+        bytes: bytes,
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        dialogTitle: 'download_pdf'.tr,
+      );
+
+      if (savedPath != null) {
+        ToastUtil.success('pdf_saved_successfully'.tr);
+      } else {
+        ToastUtil.error('pdf_save_cancelled'.tr);
+      }
+    } catch (_) {
+      ToastUtil.error('pdf_generation_failed'.tr);
+    } finally {
+      isDownloadingPdf.value = false;
+    }
   }
 }

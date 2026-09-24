@@ -1,195 +1,195 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
-import 'package:psf_application/features/member_card/presentation/widgets/member_wallet_panel.dart';
 import 'package:psf_application/features/profile/presentation/controllers/profile_controller.dart';
+import 'package:psf_application/features/profile/presentation/widgets/language_settings_sheet.dart';
+import 'package:psf_application/features/profile/presentation/widgets/profile_avatar_block.dart';
 import 'package:psf_application/features/profile/presentation/widgets/profile_card_style.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/widgets/common/app_menu_tile.dart';
+import 'package:psf_application/shared/widgets/dialogs/app_dialog.dart';
 
 import '../controllers/main_navigation_controller.dart';
 
-/// The full-screen side window opened by swiping in from the left edge (or
-/// the Home header's menu button).
+/// The side window opened by swiping in from the left edge (or the Home
+/// header's menu button) — a normal light drawer (the app's own background,
+/// not full screen width; see [MainNavigationScreen]'s `Drawer`).
 ///
-/// A frosted, blurred backdrop with one smooth gradient that starts dark
-/// teal in the top-left corner and gradually lightens toward the
-/// bottom-right (no hard band). On it: the member's photo, name and mobile
-/// number at the top — tapping the photo opens My Profile — and the
-/// wallet + member card centered below (see [MemberWalletPanel]). Tapping
-/// the empty background closes the window.
-class AppSideDrawer extends StatelessWidget {
+/// On it: a horizontal profile card (photo on the left, name + mobile on
+/// the right, same look as the old Profile summary card — display only,
+/// not tappable), then a menu: Membership Card, About Us, Contact Us,
+/// Language, Logout. Both fade/slide in one after another each time it
+/// opens.
+class AppSideDrawer extends StatefulWidget {
   const AppSideDrawer({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final nav = Get.find<MainNavigationController>();
-    final profile = Get.find<ProfileController>();
+  State<AppSideDrawer> createState() => _AppSideDrawerState();
+}
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: nav.closeDrawer,
-            child: RepaintBoundary(
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        stops: const [0, .3, .6, .85, 1],
-                        colors: [
-                          AppColors.primaryDark.withOpacity(.97),
-                          const Color(0xFF1F6F68).withOpacity(.90),
-                          AppColors.primary.withOpacity(.62),
-                          AppColors.primaryLight.withOpacity(.28),
-                          Colors.white.withOpacity(.05),
-                        ],
-                      ),
+class _AppSideDrawerState extends State<AppSideDrawer> with SingleTickerProviderStateMixin {
+  // The drawer's content is built each time it opens, so this plays every
+  // time: the profile card fades in, then the menu follows.
+  late final AnimationController _intro = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  )..forward();
+
+  @override
+  void dispose() {
+    _intro.dispose();
+    super.dispose();
+  }
+
+  /// Fade + slide-up for the [index]-th item of the staggered entrance.
+  Widget _reveal(int index, Widget child) {
+    final start = (index * .15).clamp(0.0, .6);
+    final curved = CurvedAnimation(
+      parent: _intro,
+      curve: Interval(start, (start + .5).clamp(0.0, 1.0), curve: Curves.easeOutCubic),
+    );
+
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, .12), end: Offset.zero).animate(curved),
+        child: child,
+      ),
+    );
+  }
+
+  void _confirmLogout(ProfileController profile) {
+    AppDialog.logout(
+      title: AppStrings.logout.tr,
+      message: AppStrings.logoutConfirmMessage.tr,
+      logoutText: AppStrings.logout.tr,
+      cancelText: AppStrings.cancel.tr,
+      onLogout: profile.logout,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final profile = Get.find<ProfileController>();
+    final nav = Get.find<MainNavigationController>();
+
+    return ColoredBox(
+      color: AppColors.background,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(height: 12.px(context)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 18.px(context)),
+              child: _reveal(0, _ProfileCard(profile: profile)),
+            ),
+            SizedBox(height: 22.px(context)),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(18.px(context), 0, 18.px(context), 20.px(context)),
+                child: _reveal(
+                  1,
+                  Container(
+                    padding: EdgeInsets.symmetric(vertical: 6.px(context)),
+                    decoration: profileCardDecoration(context),
+                    child: Column(
+                      children: [
+                        AppMenuTile(
+                          icon: Icons.badge_outlined,
+                          label: AppStrings.membershipCard.tr,
+                          // The Card tab IS the member card — just switch to
+                          // it and close the drawer, instead of also
+                          // opening MembershipCardPage as a second screen.
+                          onTap: () {
+                            nav.changeTab(MainNavigationController.cardTab);
+                            nav.closeDrawer();
+                          },
+                        ),
+                        AppMenuTile(
+                          icon: Icons.info_outline_rounded,
+                          label: AppStrings.aboutUs.tr,
+                          onTap: () => Get.toNamed(
+                            AppRoutes.aboutUs,
+                            arguments: const {'viaDrawer': true},
+                          ),
+                        ),
+                        AppMenuTile(
+                          icon: Icons.support_agent_outlined,
+                          label: AppStrings.contactUs.tr,
+                          onTap: () => Get.toNamed(
+                            AppRoutes.contactUs,
+                            arguments: const {'viaDrawer': true},
+                          ),
+                        ),
+                        AppMenuTile(
+                          icon: Icons.translate_rounded,
+                          label: AppStrings.language.tr,
+                          onTap: LanguageSettingsSheet.show,
+                        ),
+                        AppMenuTile(
+                          icon: Icons.logout_rounded,
+                          label: AppStrings.logout.tr,
+                          iconBackgroundColor: AppColors.warning.withOpacity(.10),
+                          iconColor: AppColors.warning,
+                          showDivider: false,
+                          onTap: () => _confirmLogout(profile),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
-        // Soft glow behind the wallet so it lifts off the gradient.
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: const Alignment(0, .05),
-                  radius: .75,
-                  colors: [
-                    Colors.white.withOpacity(.20),
-                    Colors.white.withOpacity(0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(24.px(context), 10.px(context), 24.px(context), 0),
-                child: Obx(() {
-                  final member = profile.memberDetails.value;
-                  final summary = profile.profile.value;
-
-                  final photoUrl = member?.imageUrl ?? summary?.photoUrl;
-                  final name = (member?.fullName.isNotEmpty ?? false)
-                      ? member!.fullName
-                      : (summary?.fullName ?? '');
-                  final mobile = (member?.mobile?.isNotEmpty ?? false)
-                      ? member!.mobile!
-                      : (summary?.mobile ?? '');
-
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Tapping the photo opens My Profile. The drawer is
-                      // deliberately NOT closed first: closing it while the
-                      // new page slides in left the drawer's close animation
-                      // frozen underneath, and it then resumed (with the
-                      // heavy wallet still on screen) right as you came
-                      // back — the stutter on Back. Now Back simply returns
-                      // to the drawer exactly as it was.
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: () => Get.toNamed(AppRoutes.myProfile),
-                        child: Container(
-                          padding: EdgeInsets.all(3.px(context)),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [AppColors.accentGold, Color(0xFFB8922F)],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.accentGold.withOpacity(.35),
-                                blurRadius: 16,
-                                spreadRadius: 1,
-                              ),
-                            ],
-                          ),
-                          child: FramedImage(
-                            url: photoUrl,
-                            size: 76.px(context),
-                            circle: true,
-                            fallbackIcon: Icons.person_rounded,
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 10.px(context)),
-                      Text(
-                        name.isEmpty ? AppStrings.myProfile.tr : name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20.px(context),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: .2,
-                        ),
-                      ),
-                      if (mobile.isNotEmpty) ...[
-                        SizedBox(height: 6.px(context)),
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 14.px(context),
-                            vertical: 5.px(context),
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(.16),
-                            borderRadius: BorderRadius.circular(20.px(context)),
-                            border: Border.all(color: Colors.white.withOpacity(.28)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.call_rounded,
-                                size: 13.px(context),
-                                color: AppColors.accentGold,
-                              ),
-                              SizedBox(width: 6.px(context)),
-                              Text(
-                                mobile,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 13.px(context),
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: .4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ],
-                  );
-                }),
-              ),
-              const Expanded(child: MemberWalletPanel()),
-              SizedBox(height: 6.px(context)),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
+  }
+}
+
+/// The horizontal profile card at the top of the drawer: photo on the left,
+/// name + mobile stacked on the right in the same row — the same layout and
+/// dark card look as the Profile tab's old summary card. Display only, not
+/// tappable (the Profile tab itself is one tap away in the bottom bar).
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.profile});
+
+  final ProfileController profile;
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final member = profile.memberDetails.value;
+      final summary = profile.profile.value;
+
+      final photoUrl = member?.imageUrl ?? summary?.photoUrl;
+      final name = (member?.fullName.isNotEmpty ?? false)
+          ? member!.fullName
+          : (summary?.fullName ?? '');
+      final mobile = (member?.mobile?.isNotEmpty ?? false)
+          ? member!.mobile!
+          : (summary?.mobile ?? '');
+
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(16.px(context)),
+        decoration: BoxDecoration(
+          color: AppColors.primaryDark,
+          borderRadius: BorderRadius.circular(20.px(context)),
+          boxShadow: const [
+            BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
+          ],
+        ),
+        child: ProfileAvatarBlock(
+          name: name.isEmpty ? AppStrings.myProfile.tr : name,
+          mobile: mobile.isEmpty ? '-' : mobile,
+          photoUrl: photoUrl,
+        ),
+      );
+    });
   }
 }

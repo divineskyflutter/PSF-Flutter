@@ -11,6 +11,35 @@ import 'package:psf_application/shared/utils/toast_util.dart';
 import '../../data/models/login_model.dart';
 import '../../domain/repositories/login_repository.dart';
 
+/// A login that failed not because the credentials were wrong, but because
+/// the member's registration itself isn't in a loggable-in state yet — the
+/// API says so via [LoginController.lastBlockedReason] instead of the
+/// usual error toast, so the login screen can send the member somewhere
+/// useful instead of just leaving them stuck on a red error message.
+///
+/// MemberLogin never says which of these it means beyond the message text
+/// itself (no separate status code, no member data at all comes back
+/// either way — confirmed against live responses for accounts in each
+/// state) — [LoginController.login] tells them apart by sniffing that text
+/// for "review" vs "pending". An account whose registration is resumable
+/// but not finished (e.g. still sitting on an earlier wizard step) also
+/// currently comes back with the same "pending" wording — it's routed the
+/// same as [pending] below, which is correct: the existing register/resume
+/// flow (RegisterScreen -> RegistrationController.getMemberStatus ->
+/// RegistrationNavigator) already reopens a member exactly where they left
+/// off, on whatever step, editable, from nothing more than their name and
+/// mobile number.
+enum LoginBlockedReason {
+  /// "...Pending Please Complete First..." — registration was started but
+  /// not finished. Routed to RegisterScreen, which resumes it.
+  pending,
+
+  /// "...In Review..." — registration is complete and awaiting an
+  /// administrator's decision; nothing left for the member to fill in.
+  /// Routed straight to RegistrationPendingScreen.
+  review,
+}
+
 /// Drives the Login screen's API call.
 class LoginController extends GetxController {
   LoginController(this._repository, this._enumBundleRepository);
@@ -23,10 +52,21 @@ class LoginController extends GetxController {
 
   final Rx<LoginModel?> loggedInUser = Rx<LoginModel?>(null);
 
+  /// Set by the last failed [login] call when the API blocked it for a
+  /// recognized reason (see [LoginBlockedReason]) rather than a plain
+  /// wrong-credentials/server error — `null` for a successful login, for a
+  /// login that hasn't been attempted yet, or for any other failure (which
+  /// shows the usual error toast instead). The login screen reads this
+  /// right after `login()` returns `false` to decide where to send the
+  /// member.
+  LoginBlockedReason? lastBlockedReason;
+
   Future<bool> login({
     required String mobile,
     required String password,
   }) async {
+    lastBlockedReason = null;
+
     try {
       isLoggingIn.value = true;
 
@@ -63,7 +103,19 @@ class LoginController extends GetxController {
 
       return true;
     } catch (e) {
-      ToastUtil.error(e.toString().replaceFirst('Exception: ', ''));
+      final message = e.toString().replaceFirst('Exception: ', '');
+      final normalized = message.toLowerCase();
+
+      if (normalized.contains('review')) {
+        lastBlockedReason = LoginBlockedReason.review;
+      } else if (normalized.contains('pending')) {
+        lastBlockedReason = LoginBlockedReason.pending;
+      } else {
+        // A genuine error (wrong password, server error, ...) — nothing to
+        // redirect to, so this is the one case that still gets the toast.
+        ToastUtil.error(message);
+      }
+
       return false;
     } finally {
       isLoggingIn.value = false;

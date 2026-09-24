@@ -326,7 +326,17 @@ class _RegistrationPreviewScreenState
     // back to RegistrationPendingScreen rather than Home. Set this flag
     // for real wherever an actual "approved" signal is wired up.
     ToastUtil.success('registration_completed_successfully'.tr);
-    Get.offAllNamed(AppRoutes.registrationPending);
+
+    // An existing member correcting their application (see
+    // RegistrationController.isEditingAfterLogin's doc comment) goes
+    // straight to Home instead of the "awaiting approval" pending screen —
+    // there's nothing left for them to wait on.
+    if (controller.isEditingAfterLogin) {
+      controller.isEditingAfterLogin = false;
+      Get.offAllNamed(AppRoutes.home);
+    } else {
+      Get.offAllNamed(AppRoutes.registrationPending);
+    }
   }
 
   // ============================================================

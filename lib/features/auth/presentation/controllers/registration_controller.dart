@@ -57,6 +57,15 @@ class RegistrationController extends GetxController {
   final AppLoaderController _loaderController =
       Get.find<AppLoaderController>();
 
+  /// `true` for the rest of this wizard session when it was opened because
+  /// a successful login came back with `isInEditMode: true` (see
+  /// LoginScreen) — an existing member correcting their application, not
+  /// someone applying for the first time. RegistrationPreviewScreen reads
+  /// this at the end to send them to Home instead of the normal
+  /// "just submitted, awaiting approval" pending screen. Reset once
+  /// consumed so a later, genuinely fresh registration isn't affected.
+  bool isEditingAfterLogin = false;
+
   StreamSubscription<void>? _reconnectSubscription;
 
   @override

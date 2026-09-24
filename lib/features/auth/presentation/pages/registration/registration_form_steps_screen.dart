@@ -1702,7 +1702,13 @@ class _MemberRegistrationScreenState
 
             AppTextField.form(
               key: _fatherNameKey,
-              label: 'father_name'.tr,
+              // "Father's / Husband's Name" — same field either way (a
+              // married woman may fill in her husband's name here), see
+              // the printed scheme-benefit form's "પિતા / પતિનું નામ" /
+              // "पिता / पति का नाम" label. RegistrationPreviewScreen
+              // already shows it this way; this is the one other place
+              // ('father_name' alone) that hadn't caught up.
+              label: 'father_husband_name'.tr,
               hintText: 'father_name_hint'.tr,
               controller:
               controller.fatherNameController,

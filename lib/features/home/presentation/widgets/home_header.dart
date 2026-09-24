@@ -166,11 +166,16 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                             ),
                           ),
                   ),
-                  AppHeaderIconButton(
-                    icon: Icons.notifications_outlined,
-                    badgeCount: notificationCount,
-                    onTap: onNotificationTap ?? () {},
-                  ),
+                  // Notification bell hidden for now — kept as a same-size
+                  // placeholder so the member name stays centered between
+                  // the menu button and this side. Swap back to the
+                  // AppHeaderIconButton below to bring it back.
+                  // AppHeaderIconButton(
+                  //   icon: Icons.notifications_outlined,
+                  //   badgeCount: notificationCount,
+                  //   onTap: onNotificationTap ?? () {},
+                  // ),
+                  SizedBox(width: 40 * unit),
                 ],
               ),
             ),

@@ -1,7 +1,9 @@
+import 'info_pages_strings.dart';
 import 'registration_strings.dart';
 
 const Map<String, String> guIN = {
   ...registrationGu,
+  ...infoPagesGu,
   // Common
   'app_name': 'પીએસએફ ફાઉન્ડેશન',
   'welcome': 'સ્વાગત છે',
@@ -364,6 +366,7 @@ const Map<String, String> guIN = {
   'session_expired_message': 'તમારું સત્ર સમાપ્ત થયું છે. કૃપા કરી ફરીથી લૉગિન કરો.',
   // Bottom nav / side menu / member card
   'nav_card': 'કાર્ડ',
+  'press_back_again_to_exit': 'બહાર નીકળવા ફરીથી બેક દબાવો',
   'member_card': 'સભ્ય કાર્ડ',
   'menu': 'મેનુ',
   'view_profile': 'પ્રોફાઇલ જુઓ',

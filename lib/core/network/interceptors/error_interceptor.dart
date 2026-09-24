@@ -71,9 +71,7 @@ class ErrorInterceptor extends Interceptor {
         return NetworkException('No internet connection.');
       case DioExceptionType.badResponse:
         final code = err.response?.statusCode ?? 0;
-        final serverMsg = (err.response?.data is Map)
-            ? err.response?.data['message']?.toString()
-            : null;
+        final serverMsg = _serverMessage(err.response?.data);
         if (code == 401 || code == 403) {
           return UnauthorizedException(serverMsg ?? 'Session expired. Please login again.');
         } else if (code >= 400 && code < 500) {
@@ -86,5 +84,30 @@ class ErrorInterceptor extends Interceptor {
       default:
         return UnknownException('Something went wrong.');
     }
+  }
+
+  /// Pulls the error text out of a non-200 response body, whatever shape it
+  /// arrives in — the API's own `message`, or the common ASP.NET-style
+  /// `Message`/`title`/`error`/`errors` fields — so the toast always shows
+  /// what the API actually said instead of a generic fallback whenever
+  /// there is any usable text to show. `null` only when the body really
+  /// carries none of these.
+  String? _serverMessage(dynamic data) {
+    if (data is! Map) return null;
+
+    for (final key in ['message', 'Message', 'error', 'Error', 'title']) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) return value;
+    }
+
+    final errors = data['errors'];
+    if (errors is Map && errors.isNotEmpty) {
+      final first = errors.values.first;
+      if (first is List && first.isNotEmpty) return first.first.toString();
+      if (first != null) return first.toString();
+    }
+    if (errors is List && errors.isNotEmpty) return errors.first.toString();
+
+    return null;
   }
 }

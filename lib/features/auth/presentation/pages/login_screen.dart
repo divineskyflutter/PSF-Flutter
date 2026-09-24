@@ -7,7 +7,9 @@ import 'package:psf_application/app/constants/app_assets.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/features/auth/presentation/controllers/login_controller.dart';
+import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/navigation/registration_navigator.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
 import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
 
@@ -68,10 +70,59 @@ class _LoginScreenState extends State<LoginScreen> {
       password: _passwordController.text.trim(),
     );
 
-    // LoginController already shows a success/error toast either way —
-    // only navigate on success.
     if (success) {
-      Get.offAllNamed(AppRoutes.home);
+      // LoginController already showed the success toast.
+      if (_loginController.loggedInUser.value?.isInEditMode == true) {
+        // Login succeeded, but this member's registration is still open
+        // for correction — go straight to the wizard's form screens
+        // instead of Home. Pushed (not offAll) so Back returns here to
+        // Login for now — TODO: once there's a proper place for Back to
+        // land instead, revisit this.
+        Get.find<RegistrationController>().isEditingAfterLogin = true;
+
+        final statusName =
+            _loginController.loggedInUser.value?.raw['memberDetailStatusName']?.toString();
+        final stepIndex = RegistrationNavigator.initialStepFor(statusName);
+
+        if (stepIndex != null) {
+          // memberDetailStatusName genuinely names one of the 4 wizard
+          // steps (e.g. this member never finished step 3) — resume
+          // exactly there.
+          RegistrationNavigator.navigateToScreen(statusName);
+        } else {
+          // memberDetailStatusName names something else — most commonly
+          // "/member-registration-pending" (a fully-filled application
+          // sent back for correction). That name normally routes to the
+          // "awaiting admin approval" screen, which is wrong here: edit
+          // mode means there IS something to edit, so open the form
+          // itself, from the top, instead.
+          Get.toNamed(AppRoutes.memberRegistrationStep1);
+        }
+      } else {
+        Get.offAllNamed(AppRoutes.home);
+      }
+      return;
+    }
+
+    // Not a plain wrong-credentials/server error (that case already showed
+    // its own toast and stays right here) — the API blocked this login
+    // because the member's registration itself isn't finished or is still
+    // being reviewed. Send them somewhere useful instead of leaving them
+    // stuck on this screen. See LoginBlockedReason's doc comment.
+    switch (_loginController.lastBlockedReason) {
+      case LoginBlockedReason.pending:
+        // Resumes wherever this member left off (any wizard step, editable)
+        // — the same flow RegisterScreen already drives via
+        // RegistrationController.getMemberStatus / RegistrationNavigator.
+        // AuthChoice goes underneath it (not offAllNamed straight to
+        // RegisterScreen) so Back on RegisterScreen returns to the normal
+        // Sign In / Register choice screen, same as reaching it that way.
+        Get.offAllNamed(AppRoutes.authChoice);
+        Get.toNamed(AppRoutes.registerScreen);
+      case LoginBlockedReason.review:
+        Get.offAllNamed(AppRoutes.registrationPending, arguments: const {'fromLogin': true});
+      case null:
+        break;
     }
   }
 

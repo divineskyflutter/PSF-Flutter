@@ -25,16 +25,17 @@ const _memberDetailKeysToStrip = [
 ];
 
 // ============================================================
-// TEMPORARY — MemberLogin currently sends back `status: false` even on a
-// genuine successful login (a fully-populated `data.memberDetail`) — a
-// backend bug, confirmed against a real response on 2026-09-17. Until
-// that's fixed server-side, [LoginRepositoryImpl.login] treats "status
-// false but data.memberDetail is present" as success instead of failure.
+// TEMPORARY — MemberLogin's `status` field can't be trusted right now: the
+// web admin panel it depends on isn't live yet, so `status` currently comes
+// back `false` even for a member whose data is genuinely in the database.
+// Until the panel ships, [LoginRepositoryImpl.login] doesn't check `status`
+// at all — it treats login as successful whenever the API actually
+// returned usable member data, and as a failure only when it didn't.
 //
-// TO REVERT once the backend fixes this (i.e. to go back to strictly
-// honoring `response.status`, which is the correct long-term behavior):
-// change this single flag to `false`. Nothing else in this file needs to
-// change — the `if` block below that reads it will simply stop applying.
+// TO REVERT once the web panel is live and `status` is trustworthy again
+// (the correct long-term behavior): change this single flag to `false`.
+// Nothing else in this file needs to change — the `if` block below that
+// reads it will simply stop applying, and `response.status` alone decides.
 // ============================================================
 const bool ignoreLoginStatusUntilBackendFixesIt = true;
 
@@ -54,10 +55,14 @@ class LoginRepositoryImpl implements LoginRepository {
 
     final data = response.data;
 
-    final hasMemberDetail = data is Map && data['memberDetail'] is Map;
+    // "Usable member data" is deliberately loose here — either the usual
+    // nested `data.memberDetail`, or (some responses put the member fields
+    // straight on `data` with no `memberDetail` wrapper) any non-empty
+    // `data` map at all. Either shape is handled below.
+    final hasMemberData = data is Map && data.isNotEmpty;
 
-    final treatAsSuccess = response.status ||
-        (ignoreLoginStatusUntilBackendFixesIt && hasMemberDetail);
+    final treatAsSuccess =
+        response.status || (ignoreLoginStatusUntilBackendFixesIt && hasMemberData);
 
     if (!treatAsSuccess) {
       throw Exception(
@@ -92,6 +97,12 @@ class LoginRepositoryImpl implements LoginRepository {
       // envelope's own top-level `id`, not inside `data` itself.
       if (memberDetail['memberId'] == null && memberDetail['id'] == null)
         'memberId': response.id,
+      // Sibling of `memberDetail`, not part of it (confirmed against a
+      // live response) — `true` even on an otherwise-successful login
+      // means this member's registration is still open for correction,
+      // so LoginScreen sends them to the wizard instead of Home. See
+      // LoginModel.isInEditMode.
+      'isInEditMode': data['isInEditMode'] == true,
     };
 
     var result = LoginModel.fromJson(merged);

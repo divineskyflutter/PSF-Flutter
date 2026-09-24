@@ -10,6 +10,7 @@ import 'package:psf_application/features/profile/presentation/controllers/profil
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 
 import '../controllers/member_card_controller.dart';
+import '../member_card_layout.dart';
 import 'horizontal_card_faces.dart';
 import 'member_qr_view.dart';
 import 'wallet_controls.dart';
@@ -22,12 +23,14 @@ import 'wallet_pouch.dart';
 ///  * On appear, the wallet cover slides in from the LEFT over the card,
 ///    covering ~90% of it (a thin strip of the card stays visible on the
 ///    right). The cover carries the member's QR code.
-///  * Tap the wallet (or the card): the cover slides away to the LEFT and
-///    the card is revealed in full; the flip arrows and the Download button
-///    fade in.
-///  * Tap the card (anywhere, including its left side) or use the arrows:
-///    the card flips between front and back in 3D.
-///  * "Close" slides the cover back in from the left.
+///  * Tap the wallet (or the card): the cover peels away to the LEFT,
+///    trailing a soft paper-peel shadow, and the card is revealed in full.
+///    Tap the card again to close — the cover slides back in from the left.
+///  * Swipe the open card left or right: it flips between front and back
+///    in 3D.
+///  * Download is always visible under the card. The Horizontal | Vertical
+///    switch is hidden for now (see [kShowCardLayoutSwitch]) — only the
+///    horizontal card is shown.
 ///
 /// Animations are driven by `Animation` objects around prebuilt,
 /// repaint-isolated children, so nothing heavy is rebuilt per frame.
@@ -55,12 +58,18 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
 
   late final AnimationController _open = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 850),
+    duration: const Duration(milliseconds: 1800),
   );
 
   late final AnimationController _flip = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 600),
+  );
+
+  // Idle shimmer over the closed cover (see WalletShine).
+  late final AnimationController _shine = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 4600),
   );
 
   // Intro: the cover slides in from the left.
@@ -76,13 +85,20 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
   // Open: the cover slides out to the left, the card is revealed.
   late final Animation<double> _coverShift = CurvedAnimation(
     parent: _open,
-    curve: const Interval(0, .85, curve: Curves.easeInOutCubic),
+    curve: const Interval(0, 1, curve: Curves.easeInOutCubic),
   );
   late final Animation<double> _coverFadeOut = Tween<double>(begin: 1, end: 0).animate(
-    CurvedAnimation(parent: _open, curve: const Interval(.5, .95, curve: Curves.easeIn)),
+    CurvedAnimation(parent: _open, curve: const Interval(.55, 1, curve: Curves.easeIn)),
   );
-  late final Animation<double> _cardScale = Tween<double>(begin: 1, end: 1.03).animate(
-    CurvedAnimation(parent: _open, curve: const Interval(.2, 1, curve: Curves.easeOutCubic)),
+  // A springy overshoot-and-settle pop as the cover peels away, like paper
+  // unwrapping off the card, instead of a flat linear grow — paired with a
+  // matching little rotational "settle" wobble (_cardTilt) so the card
+  // looks like it was just set down rather than simply scaled up.
+  late final Animation<double> _cardScale = Tween<double>(begin: 1, end: 1.045).animate(
+    CurvedAnimation(parent: _open, curve: const Interval(.15, 1, curve: Curves.easeOutBack)),
+  );
+  late final Animation<double> _cardTilt = Tween<double>(begin: -.05, end: 0).animate(
+    CurvedAnimation(parent: _open, curve: const Interval(.15, 1, curve: Curves.easeOutBack)),
   );
   late final Animation<double> _controlsFade = CurvedAnimation(
     parent: _open,
@@ -108,7 +124,9 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
       _open.value = 1;
       _isOpen = true;
     } else {
-      _intro.forward();
+      _intro.forward().whenComplete(() {
+        if (mounted && !_isOpen) _shine.repeat();
+      });
     }
   }
 
@@ -117,6 +135,7 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     _intro.dispose();
     _open.dispose();
     _flip.dispose();
+    _shine.dispose();
     super.dispose();
   }
 
@@ -124,6 +143,7 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     if (_isOpen) return;
     HapticFeedback.lightImpact();
     setState(() => _isOpen = true);
+    _shine.stop();
     _open.forward();
   }
 
@@ -132,7 +152,9 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     HapticFeedback.selectionClick();
     setState(() => _isOpen = false);
     _flip.animateBack(0, duration: const Duration(milliseconds: 280));
-    _open.reverse();
+    _open.reverse().whenComplete(() {
+      if (mounted && !_isOpen) _shine.repeat();
+    });
   }
 
   void _flipCard(int direction) {
@@ -146,7 +168,22 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
     }
   }
 
-  void _onCardTap() => _isOpen ? _flipCard(1) : _openWallet();
+  /// Tap: open the wallet, or close it again when it is open.
+  void _onCardTap() => _isOpen ? _closeWallet() : _openWallet();
+
+  double _dragDistance = 0;
+
+  /// Swipe (open wallet only): flips the card — swipe left turns it one way,
+  /// swipe right the other.
+  void _onSwipeEnd(DragEndDetails details) {
+    final velocity = details.primaryVelocity ?? 0;
+    final swiped = velocity.abs() > 250 || _dragDistance.abs() > 40;
+    if (swiped) {
+      final toLeft = velocity != 0 ? velocity < 0 : _dragDistance < 0;
+      _flipCard(toLeft ? 1 : -1);
+    }
+    _dragDistance = 0;
+  }
 
   Widget _qr(double size) {
     return Obx(
@@ -173,8 +210,19 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
       ),
       builder: (context, cached) {
         if (_open.isCompleted) return const SizedBox.shrink();
-        final dx = -(1 - _introSlide.value) * travel - _coverShift.value * travel;
-        return Transform.translate(offset: Offset(dx, 0), child: cached);
+        final shift = _coverShift.value;
+        final dx = -(1 - _introSlide.value) * travel - shift * travel;
+
+        // The cover peels away: it slides out to the left while swinging
+        // open on its left edge, like a flap being lifted.
+        return Transform(
+          alignment: Alignment.centerLeft,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, .0009)
+            ..translate(dx, 0.0)
+            ..rotateY(-shift * .62),
+          child: cached,
+        );
       },
     );
   }
@@ -193,7 +241,7 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
 
       return LayoutBuilder(
         builder: (context, constraints) {
-          final optionsHeight = 226.px(context);
+          final optionsHeight = (kShowCardLayoutSwitch ? 110 : 58).px(context);
           final gap = 14.px(context);
           final gutter = 16.px(context);
 
@@ -212,6 +260,13 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
           final coverHeight = cardHeight * 1.14;
           final coverWidth = cardWidth * .96;
           final travel = coverWidth + gutter + (constraints.maxWidth - stageWidth) / 2 + 12;
+
+          final coverShape = BorderRadius.only(
+            topLeft: Radius.circular(30.px(context)),
+            bottomLeft: Radius.circular(30.px(context)),
+            topRight: Radius.circular(38.px(context)),
+            bottomRight: Radius.circular(38.px(context)),
+          );
 
           final front = HorizontalCardFront(data: data);
           const back = HorizontalCardBack();
@@ -247,12 +302,30 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
                       top: (stageHeight - cardHeight) / 2,
                       width: cardWidth,
                       height: cardHeight,
-                      child: ScaleTransition(
-                        scale: _cardScale,
+                      child: AnimatedBuilder(
+                        animation: _open,
+                        builder: (context, child) => Transform.rotate(
+                          angle: _cardTilt.value,
+                          child: Transform.scale(scale: _cardScale.value, child: child),
+                        ),
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: _onCardTap,
-                          child: _flipper(front, back),
+                          onHorizontalDragStart: (_) => _dragDistance = 0,
+                          onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
+                          onHorizontalDragEnd: _onSwipeEnd,
+                          // Clipped to the card's own rounding so the peel
+                          // shadow never pokes out past the rounded corners.
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(cardWidth * 18 / 1050),
+                            child: Stack(
+                              children: [
+                                _flipper(front, back),
+                                // Paper-peel shadow trailing the departing cover.
+                                CardRevealShadow(animation: _coverShift, axis: Axis.horizontal),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -267,17 +340,19 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
                         child: GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTap: _openWallet,
-                          child: WalletPocket(
-                            qrView: _qr(120),
-                            shape: BorderRadius.only(
-                              topLeft: Radius.circular(30.px(context)),
-                              bottomLeft: Radius.circular(30.px(context)),
-                              topRight: Radius.circular(38.px(context)),
-                              bottomRight: Radius.circular(38.px(context)),
-                            ),
-                            border: Border(
-                              right: BorderSide(color: AppColors.accentGold.withOpacity(.85), width: 1.6),
-                            ),
+                          child: Stack(
+                            children: [
+                              Positioned.fill(
+                                child: WalletPocket(
+                                  qrView: _qr(120),
+                                  shape: coverShape,
+                                  border: Border(
+                                    right: BorderSide(color: AppColors.accentGold.withOpacity(.85), width: 1.6),
+                                  ),
+                                ),
+                              ),
+                              Positioned.fill(child: WalletShine(animation: _shine, shape: coverShape)),
+                            ],
                           ),
                         ),
                       ),
@@ -309,62 +384,62 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
         final angle = t * math.pi * _flipDirection;
         final showBack = t > .5;
 
+        // How edge-on the card is right now: 0 at rest (front or back
+        // facing flat), 1 exactly side-on at the midpoint — a small pull-in
+        // plus a shadow there makes the flip read as a solid card turning
+        // in space instead of a flat image stretching and snapping back.
+        final edgeOn = math.sin(t * math.pi);
+
         return Transform(
           alignment: Alignment.center,
           transform: Matrix4.identity()
-            ..setEntry(3, 2, .0009)
-            ..rotateY(angle),
-          child: showBack
-              ? Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.rotationY(math.pi),
-                  child: back,
-                )
-              : front,
+            ..setEntry(3, 2, .0011)
+            ..rotateY(angle)
+            ..scale(1 - edgeOn * .06),
+          child: Stack(
+            children: [
+              showBack
+                  ? Transform(
+                      alignment: Alignment.center,
+                      transform: Matrix4.rotationY(math.pi),
+                      child: back,
+                    )
+                  : front,
+              IgnorePointer(
+                child: Opacity(
+                  opacity: edgeOn * .4,
+                  child: const ColoredBox(color: Colors.black, child: SizedBox.expand()),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
   Widget _options(BuildContext context) {
-    return IgnorePointer(
-      ignoring: !_isOpen,
-      child: FadeTransition(
-        opacity: _controlsFade,
-        child: SlideTransition(
-          position: _controlsSlide,
-          child: Column(
-            children: [
-              WalletLayoutSwitch(controller: _controller),
-              SizedBox(height: 12.px(context)),
-              Row(
-                children: [
-                  WalletArrowButton(icon: Icons.chevron_left_rounded, onTap: () => _flipCard(-1)),
-                  const Expanded(
-                    child: Center(child: WalletPill(textKey: 'tap_to_flip_card')),
-                  ),
-                  WalletArrowButton(icon: Icons.chevron_right_rounded, onTap: () => _flipCard(1)),
-                ],
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        // The Horizontal | Vertical switch is hidden for now (see
+        // kShowCardLayoutSwitch) — only the horizontal card is shown, and it
+        // is always what gets downloaded. Download is always there.
+        if (kShowCardLayoutSwitch) ...[
+          IgnorePointer(
+            ignoring: !_isOpen,
+            child: FadeTransition(
+              opacity: _controlsFade,
+              child: SlideTransition(
+                position: _controlsSlide,
+                child: WalletLayoutSwitch(controller: _controller),
               ),
-              SizedBox(height: 14.px(context)),
-              WalletDownloadButton(controller: _controller),
-              SizedBox(height: 4.px(context)),
-              TextButton.icon(
-                onPressed: _closeWallet,
-                icon: Icon(Icons.lock_outline_rounded, size: 16.px(context)),
-                label: Text('close_wallet'.tr),
-                style: TextButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  textStyle: TextStyle(
-                    fontSize: 12.5.px(context),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+          SizedBox(height: 12.px(context)),
+        ],
+        WalletDownloadButton(controller: _controller),
+      ],
     );
   }
 }

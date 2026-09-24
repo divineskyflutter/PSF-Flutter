@@ -13,7 +13,7 @@ import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
 
 import '../controllers/profile_controller.dart';
-import 'document_thumbnail.dart';
+import 'documents_section.dart';
 import 'profile_card_style.dart';
 
 /// "Nominee" tab of [MyProfilePage] — one card per nominee (photo, name,
@@ -85,27 +85,13 @@ class _NomineeCard extends StatelessWidget {
       gujarati: nominee.gName,
     );
 
-    final documents = <MapEntry<String, String?>>[
-      MapEntry(AppStrings.aadharFrontPhotoLabel.tr, nominee.aadharFrontImageUrl),
-      MapEntry(AppStrings.aadharBackPhotoLabel.tr, nominee.aadharBackImageUrl),
-      MapEntry('nominee_passbook_cheque_label'.tr, nominee.passBookChequeUrl),
+    final documents = <DocumentItem>[
+      DocumentItem(label: AppStrings.aadharFrontPhotoLabel.tr, url: nominee.aadharFrontImageUrl),
+      DocumentItem(label: AppStrings.aadharBackPhotoLabel.tr, url: nominee.aadharBackImageUrl),
+      DocumentItem(label: 'nominee_passbook_cheque_label'.tr, url: nominee.passBookChequeUrl),
     ];
 
-    final availableImages = documents
-        .where((entry) => entry.value?.isNotEmpty ?? false)
-        .map((entry) => PreviewImageItem(imagePath: entry.value!))
-        .toList();
-
-    void openPreview(String? url) {
-      if (url == null || url.isEmpty) return;
-      final index = availableImages.indexWhere((image) => image.imagePath == url);
-      CommonImagePreview.show(
-        context: context,
-        images: availableImages,
-        initialIndex: index < 0 ? 0 : index,
-        mode: ImagePreviewMode.fullScreen,
-      );
-    }
+    final hasDocuments = documents.any((document) => document.url?.isNotEmpty ?? false);
 
     final photoUrl = nominee.photoUrl;
 
@@ -123,7 +109,7 @@ class _NomineeCard extends StatelessWidget {
                     ? () => CommonImagePreview.show(
                           context: context,
                           images: [PreviewImageItem(imagePath: photoUrl!)],
-                          mode: ImagePreviewMode.fullScreen,
+                          mode: ImagePreviewMode.dialog,
                         )
                     : null,
                 child: FramedImage(
@@ -187,23 +173,9 @@ class _NomineeCard extends StatelessWidget {
           InfoListTile(
             label: 'aadhaar_number'.tr,
             value: _notEmpty(nominee.aadharNo),
-            showDivider: availableImages.isNotEmpty,
+            showDivider: hasDocuments,
           ),
-          if (availableImages.isNotEmpty) ...[
-            SizedBox(height: 12.px(context)),
-            Wrap(
-              spacing: 8.px(context),
-              runSpacing: 12.px(context),
-              children: [
-                for (final entry in documents)
-                  DocumentThumbnail(
-                    label: entry.key,
-                    imageUrl: entry.value,
-                    onTap: () => openPreview(entry.value),
-                  ),
-              ],
-            ),
-          ],
+          if (hasDocuments) DocumentsSection(documents: documents, framed: false),
         ],
       ),
     );

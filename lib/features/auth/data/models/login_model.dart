@@ -33,6 +33,15 @@ class LoginModel {
   final String? schemeName;
   final String? joiningDate;
 
+  /// `true` when this member's registration is still open for correction —
+  /// a sibling of `memberDetail` in the real response, `false`/missing on a
+  /// normal completed member. Login still succeeds either way (this isn't
+  /// a rejection like the "pending"/"in review" cases — see
+  /// LoginRepositoryImpl/LoginBlockedReason); LoginScreen reads this to
+  /// send the member to the registration wizard (editable, prefilled)
+  /// instead of Home.
+  final bool isInEditMode;
+
   /// Auth tokens from `data.authorizeToken` — kept separate from [toJson]
   /// on purpose: tokens already have their own dedicated storage (see
   /// `TokenManager`/`AppSecureStorage.saveTokens`), so they are not
@@ -63,6 +72,7 @@ class LoginModel {
     this.photoUrl,
     this.schemeName,
     this.joiningDate,
+    this.isInEditMode = false,
     this.accessToken,
     this.refreshToken,
     this.raw = const {},
@@ -89,6 +99,7 @@ class LoginModel {
       photoUrl: photoUrl,
       schemeName: schemeName,
       joiningDate: joiningDate,
+      isInEditMode: isInEditMode,
       accessToken: accessToken,
       refreshToken: refreshToken,
       raw: raw,
@@ -130,6 +141,7 @@ class LoginModel {
       ]),
       schemeName: _firstNonEmptyKey(json, const ['schemeName']),
       joiningDate: _firstNonEmptyKey(json, const ['joiningDate']),
+      isInEditMode: json['isInEditMode'] == true,
       raw: json,
     );
   }

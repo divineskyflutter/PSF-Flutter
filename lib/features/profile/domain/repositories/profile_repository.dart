@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../entities/contact_entity.dart';
 import '../entities/member_profile_entity.dart';
 import '../entities/passbook_entry_entity.dart';
@@ -16,4 +18,8 @@ abstract class ProfileRepository {
   Future<List<PassbookEntryEntity>> getPassbook();
 
   Future<List<ContactEntity>> getContactUsList();
+
+  /// The signed-in member's application, rendered as a PDF by the server —
+  /// see `ProfileRemoteDataSource.generatePdf`.
+  Future<Uint8List> generateApplicationPdf();
 }

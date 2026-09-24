@@ -61,6 +61,19 @@ class RegistrationPendingScreen extends StatefulWidget {
 
 class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
     with TickerProviderStateMixin, WidgetsBindingObserver {
+  // Reached two different ways: right after RegistrationPreviewScreen
+  // submits (the normal case below — "Registration submitted!") or
+  // straight from a login attempt on an application that's still under
+  // review (see LoginController/LoginScreen) — a returning member, not
+  // someone who just finished submitting, so the "Congratulations, just
+  // submitted" framing would be wrong for them. Everything else on this
+  // screen (the pending notice, approval time, contact details) reads
+  // correctly either way.
+  bool get _fromLogin {
+    final arguments = Get.arguments;
+    return arguments is Map && arguments['fromLogin'] == true;
+  }
+
   late final _FireworkShow _show;
   late final AnimationController _fireworkController;
   late final AnimationController _successController;
@@ -267,7 +280,9 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
                     const SizedBox(height: 26),
 
                     Text(
-                      'registration_submitted'.tr,
+                      _fromLogin
+                          ? 'welcome_back_review_title'.tr
+                          : 'registration_submitted'.tr,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 24,
@@ -279,7 +294,9 @@ class _RegistrationPendingScreenState extends State<RegistrationPendingScreen>
                     const SizedBox(height: 10),
 
                     Text(
-                      'registration_submitted_hint'.tr,
+                      _fromLogin
+                          ? 'welcome_back_review_hint'.tr
+                          : 'registration_submitted_hint'.tr,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         height: 1.5,

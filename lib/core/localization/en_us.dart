@@ -1,7 +1,9 @@
+import 'info_pages_strings.dart';
 import 'registration_strings.dart';
 
 const Map<String, String> enUS = {
   ...registrationEn,
+  ...infoPagesEn,
   // Common
   'app_name': 'PSF Foundation',
   'welcome': 'Welcome',
@@ -341,6 +343,7 @@ const Map<String, String> enUS = {
   'session_expired_message': 'Your session has expired. Please login again.',
   // Bottom nav / side menu / member card
   'nav_card': 'Card',
+  'press_back_again_to_exit': 'Press back again to exit',
   'member_card': 'Member Card',
   'menu': 'Menu',
   'view_profile': 'View Profile',

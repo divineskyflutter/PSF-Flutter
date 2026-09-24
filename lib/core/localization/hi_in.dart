@@ -1,7 +1,9 @@
+import 'info_pages_strings.dart';
 import 'registration_strings.dart';
 
 const Map<String, String> hiIN = {
   ...registrationHi,
+  ...infoPagesHi,
   // Common
   'app_name': 'पीएसएफ फाउंडेशन',
   'welcome': 'स्वागत है',
@@ -365,6 +367,7 @@ const Map<String, String> hiIN = {
   'session_expired_message': 'आपका सत्र समाप्त हो गया है। कृपया पुनः लॉगिन करें।',
   // Bottom nav / side menu / member card
   'nav_card': 'कार्ड',
+  'press_back_again_to_exit': 'बाहर निकलने के लिए फिर से बैक दबाएँ',
   'member_card': 'सदस्य कार्ड',
   'menu': 'मेनू',
   'view_profile': 'प्रोफ़ाइल देखें',

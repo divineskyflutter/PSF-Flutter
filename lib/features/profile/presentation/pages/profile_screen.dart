@@ -3,333 +3,388 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
-import 'package:psf_application/app/routes/app_routes.dart';
-import 'package:psf_application/core/localization/language_controller.dart';
-import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
-import 'package:psf_application/shared/widgets/common/app_menu_tile.dart';
-import 'package:psf_application/shared/widgets/dialogs/app_dialog.dart';
+import 'package:psf_application/shared/widgets/common/app_sub_page_header.dart';
+import 'package:psf_application/shared/widgets/states/app_state_view.dart';
+import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
 
+import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 
 import '../controllers/profile_controller.dart';
-import '../widgets/profile_avatar_block.dart';
+import '../widgets/my_profile_health_tab.dart';
+import '../widgets/my_profile_nominee_tab.dart';
+import '../widgets/my_profile_personal_tab.dart';
+import '../widgets/profile_card_style.dart';
 
-/// Profile tab root — a plain profile summary card (photo + name +
-/// mobile, see [ProfileAvatarBlock]) and the settings-style menu
-/// (Profile / Membership Card / Passbook / Language / About Us / Terms &
-/// Conditions / Privacy Policy / Contact Us / Logout / Delete Account),
-/// all built from [AppMenuTile] so every row looks and behaves the same.
-///
-/// The summary card used to be a wavy gradient header (`_ProfileHeader`,
-/// matching Home's old header style) — Nikhil asked for a plain card
-/// instead, not another "app bar" style header, so it's now just a
-/// [AppColors.primaryDark] rounded card like any other card on this
-/// screen. Tapping it (or the "My Profile" menu row below) still opens
-/// [MyProfilePage] for the full, editable details.
-class ProfileScreen extends StatelessWidget {
+/// The Profile tab — the member's full profile shown directly (no menu in
+/// between). Member photo centered up top (tap to preview), then a shadowed
+/// segmented control switching between three read-only tabs — Personal /
+/// Nominee / Health Declaration — each showing the matching slice of
+/// whatever the member's last login response returned (see
+/// `ProfileController.loadProfileFromLocalLogin`). The Personal and Nominee
+/// tabs keep their document photos in a collapsible Documents section.
+/// All data here is display-only: it's refreshed by logging in again, not
+/// edited on this screen.
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final controller = Get.find<ProfileController>();
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
 
+class _ProfileScreenState extends State<ProfileScreen> {
+  final ProfileController _controller = Get.find<ProfileController>();
+
+  int _selectedTab = 0;
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        bottom: false,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16.px(context),
-                  20.px(context),
-                  16.px(context),
-                  0,
-                ),
-                child: _ProfileSummaryCard(controller: controller),
+      // The header stays fixed and the page scrolls UNDER it, so the wavy
+      // edge overlays the content (same look as the Home screen) instead of
+      // the content being cut off by a straight line beneath the header.
+      extendBodyBehindAppBar: true,
+      appBar: AppSubPageHeader(
+        title: AppStrings.myProfile.tr,
+        // A tab of the bottom bar, not a pushed page — the back arrow
+        // switches to the Home tab instead of popping a route (there is
+        // none to pop); the system back gesture does the same, handled
+        // once for every tab by MainNavigationScreen's own PopScope.
+        onBack: () => Get.find<MainNavigationController>()
+            .changeTab(MainNavigationController.homeTab),
+        actions: [_DownloadPdfButton(controller: _controller)],
+      ),
+      // Whatever card happens to be scrolled to the very bottom edge gets
+      // faded to transparent there instead of ending in a hard, square-cut
+      // edge sitting right against the floating bottom bar — a soft blend
+      // into the page background (matching where the bar floats) rather
+      // than a box-looking cutoff, regardless of scroll position.
+      body: ShaderMask(
+        shaderCallback: (bounds) => const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Colors.white, Colors.transparent],
+          stops: [0, .9, 1],
+        ).createShader(bounds),
+        blendMode: BlendMode.dstIn,
+        child: SafeArea(
+          top: false,
+          child: Obx(() {
+            final member = _controller.memberDetails.value;
+            final profile = _controller.profile.value;
+            final health = _controller.healthDeclaration.value;
+            final nominees = _controller.nominees.toList();
+
+            // Read here (not just inside the tab widgets) so the whole page
+            // rebuilds the moment the enum bundle arrives — gender / marital
+            // status / relation / member status then switch from raw numeric
+            // ids to their real names.
+            _controller.enumBundle.value;
+
+            if (member == null && profile == null) {
+              return Padding(
+                padding: EdgeInsets.only(top: AppSubPageHeader.totalHeight()),
+                child: AppStateView.empty(message: 'no_data_found'.tr),
+              );
+            }
+
+            final photoUrl = member?.imageUrl ?? profile?.photoUrl;
+            final displayName = (member?.fullName.isNotEmpty ?? false)
+                ? member!.fullName
+                : (profile?.fullName ?? '');
+
+            final Widget tabBody;
+            switch (_selectedTab) {
+              case 0:
+                tabBody = member != null
+                    ? MyProfilePersonalTab(
+                        member: member, controller: _controller)
+                    : AppStateView.empty(message: 'no_data_found'.tr);
+              case 1:
+                tabBody = MyProfileNomineeTab(
+                  nominees: nominees,
+                  controller: _controller,
+                );
+              default:
+                tabBody = health != null
+                    ? MyProfileHealthTab(health: health)
+                    : AppStateView.empty(message: 'no_data_found'.tr);
+            }
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                18.px(context),
+                AppSubPageHeader.totalHeight() + 12.px(context),
+                18.px(context),
+                // Clear the bottom bar, which floats over the page — same
+                // clearance as Home, so both tabs leave an identical gap.
+                32.px(context) + AppBottomNavBar.occupiedHeight(context),
               ),
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16.px(context),
-                  20.px(context),
-                  16.px(context),
-                  // Clear the bottom bar, which floats over the page.
-                  32.px(context) + AppBottomNavBar.occupiedHeight(context),
-                ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.card,
-                    borderRadius: BorderRadius.circular(20.px(context)),
-                    boxShadow: const [
-                      BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
-                    ],
+              child: Column(
+                children: [
+                  _ProfileAvatar(photoUrl: photoUrl, name: displayName),
+                  SizedBox(height: 22.px(context)),
+                  _TabSelector(
+                    selectedIndex: _selectedTab,
+                    onChanged: (index) => setState(() => _selectedTab = index),
                   ),
-                  child: Column(
-                    children: [
-                      SizedBox(height: 6.px(context)),
-                      AppMenuTile(
-                        icon: Icons.person_outline_rounded,
-                        label: AppStrings.myProfile.tr,
-                        onTap: () => Get.toNamed(AppRoutes.myProfile),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.badge_outlined,
-                        label: AppStrings.membershipCard.tr,
-                        onTap: () => Get.toNamed(AppRoutes.membershipCard),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.menu_book_outlined,
-                        label: AppStrings.passbook.tr,
-                        onTap: () => Get.toNamed(AppRoutes.passbook),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.translate_rounded,
-                        label: AppStrings.language.tr,
-                        onTap: () => _openLanguageSettings(context),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.info_outline_rounded,
-                        label: AppStrings.aboutUs.tr,
-                        onTap: () => Get.toNamed(AppRoutes.aboutUs),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.description_outlined,
-                        label: AppStrings.termsAndConditionsApply.tr,
-                        onTap: () => Get.toNamed(AppRoutes.termsAndConditions),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.shield_outlined,
-                        label: AppStrings.privacyPolicy.tr,
-                        onTap: () => Get.toNamed(AppRoutes.privacyPolicy),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.support_agent_outlined,
-                        label: AppStrings.contactUs.tr,
-                        onTap: () => Get.toNamed(AppRoutes.contactUs),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.logout_rounded,
-                        label: AppStrings.logout.tr,
-                        iconBackgroundColor: AppColors.warning.withOpacity(.10),
-                        iconColor: AppColors.warning,
-                        onTap: () => _confirmLogout(controller),
-                      ),
-                      AppMenuTile(
-                        icon: Icons.delete_outline_rounded,
-                        label: AppStrings.deleteAccount.tr,
-                        iconBackgroundColor: AppColors.danger.withOpacity(.10),
-                        iconColor: AppColors.danger,
-                        labelColor: AppColors.danger,
-                        showDivider: false,
-                        onTap: () => Get.toNamed(AppRoutes.deleteAccount),
-                      ),
-                      SizedBox(height: 6.px(context)),
-                    ],
+                  SizedBox(height: 18.px(context)),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 260),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeIn,
+                    transitionBuilder: (child, animation) {
+                      return FadeTransition(
+                        opacity: animation,
+                        child: SlideTransition(
+                          position: Tween<Offset>(
+                            begin: const Offset(0, .04),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: KeyedSubtree(
+                      key: ValueKey(_selectedTab),
+                      child: tabBody,
+                    ),
                   ),
-                ),
+                ],
               ),
-            ],
-          ),
+            );
+          }),
         ),
       ),
     );
   }
+}
 
-  void _confirmLogout(ProfileController controller) {
-    AppDialog.logout(
-      title: AppStrings.logout.tr,
-      message: AppStrings.logoutConfirmMessage.tr,
-      logoutText: AppStrings.logout.tr,
-      cancelText: AppStrings.cancel.tr,
-      onLogout: controller.logout,
-    );
-  }
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({required this.photoUrl, required this.name});
 
-  void _openLanguageSettings(BuildContext context) {
-    Get.bottomSheet(
-      const _LanguageSettingsSheet(),
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
+  final String? photoUrl;
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoUrl?.isNotEmpty ?? false;
+
+    return Column(
+      children: [
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: hasPhoto
+              ? () => CommonImagePreview.show(
+                    context: context,
+                    images: [PreviewImageItem(imagePath: photoUrl!)],
+                    mode: ImagePreviewMode.dialog,
+                  )
+              : null,
+          child: FramedImage(
+            url: photoUrl,
+            size: 104.px(context),
+            circle: true,
+            fallbackIcon: Icons.person_rounded,
+          ),
+        ),
+        if (name.isNotEmpty) ...[
+          SizedBox(height: 12.px(context)),
+          Text(
+            name,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 18.px(context),
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
 
-/// Plain card version of the old wavy gradient header — no clipped wave,
-/// no gradient, just [ProfileAvatarBlock] (photo + name + mobile) on a
-/// solid [AppColors.primaryDark] card with a shadow, same rounded-corner
-/// language as the menu card below it. No edit affordance here — editing
-/// only happens on [MyProfilePage], reached via the "My Profile" menu row
-/// (or by tapping this card itself).
-class _ProfileSummaryCard extends StatelessWidget {
-  const _ProfileSummaryCard({required this.controller});
+/// Three-tab segmented control with a gradient "pill" that slides under the
+/// selected tab. Labels get the full width of their tab with no extra
+/// padding and wrap onto a second centered line instead of overflowing.
+class _TabSelector extends StatelessWidget {
+  const _TabSelector({required this.selectedIndex, required this.onChanged});
+
+  final int selectedIndex;
+
+  final ValueChanged<int> onChanged;
+
+  static const _icons = [
+    Icons.badge_rounded,
+    Icons.family_restroom_rounded,
+    Icons.health_and_safety_rounded,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final labels = [
+      AppStrings.personalTab.tr,
+      AppStrings.nomineeTab.tr,
+      AppStrings.healthDeclarationTab.tr,
+    ];
+
+    return Container(
+      padding: EdgeInsets.all(4.px(context)),
+      decoration: profileCardDecoration(context).copyWith(
+        borderRadius: BorderRadius.circular(20.px(context)),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedAlign(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutBack,
+              alignment: Alignment(-1 + selectedIndex * 1.0, 0),
+              child: FractionallySizedBox(
+                widthFactor: 1 / labels.length,
+                heightFactor: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: AppColors.buttonGradient,
+                    borderRadius: BorderRadius.circular(16.px(context)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(.38),
+                        blurRadius: 12,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Row(
+            children: [
+              for (var i = 0; i < labels.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(i),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 2.px(context),
+                        vertical: 10.px(context),
+                      ),
+                      child: _TabLabel(
+                        icon: _icons[i],
+                        label: labels[i],
+                        selected: selectedIndex == i,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TabLabel extends StatelessWidget {
+  const _TabLabel({
+    required this.icon,
+    required this.label,
+    required this.selected,
+  });
+
+  final IconData icon;
+
+  final String label;
+
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        AnimatedScale(
+          scale: selected ? 1.15 : 1,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutBack,
+          child: Icon(
+            icon,
+            size: 20.px(context),
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
+        ),
+        SizedBox(height: 4.px(context)),
+        AnimatedDefaultTextStyle(
+          duration: const Duration(milliseconds: 220),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11.5.px(context),
+            height: 1.2,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? Colors.white : AppColors.textSecondary,
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            softWrap: true,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Header action that downloads the member's application PDF
+/// (`ProfileController.downloadApplicationPdf`) — same translucent-circle
+/// look as [AppHeaderIconButton], swapping the icon for a small spinner
+/// while the request is in flight so it never looks unresponsive.
+class _DownloadPdfButton extends StatelessWidget {
+  const _DownloadPdfButton({required this.controller});
 
   final ProfileController controller;
 
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final profile = controller.profile.value;
+      final busy = controller.isDownloadingPdf.value;
+      final size = 40.px(context);
 
-      return InkWell(
-        borderRadius: BorderRadius.circular(20.px(context)),
-        onTap: () => Get.toNamed(AppRoutes.myProfile),
-        child: Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(18.px(context)),
-          decoration: BoxDecoration(
-            color: AppColors.primaryDark,
-            borderRadius: BorderRadius.circular(20.px(context)),
-            boxShadow: const [
-              BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
-            ],
-          ),
-          child: ProfileAvatarBlock(
-            name: profile?.fullName.isNotEmpty == true
-                ? profile!.fullName
-                : AppStrings.myProfile.tr,
-            mobile: profile?.mobile?.isNotEmpty == true
-                ? profile!.mobile!
-                : '-',
-            photoUrl: profile?.photoUrl,
+      return Material(
+        color: Colors.white.withOpacity(.16),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: busy ? null : controller.downloadApplicationPdf,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Center(
+              child: busy
+                  ? SizedBox(
+                      width: 18.px(context),
+                      height: 18.px(context),
+                      child: const CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      Icons.download_rounded,
+                      color: Colors.white,
+                      size: 20.px(context),
+                    ),
+            ),
           ),
         ),
       );
     });
-  }
-}
-
-class _LanguageSettingsSheet extends StatelessWidget {
-  const _LanguageSettingsSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        20.px(context),
-        16.px(context),
-        20.px(context),
-        28.px(context),
-      ),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24.px(context))),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: EdgeInsets.only(bottom: 16.px(context)),
-                decoration: BoxDecoration(
-                  color: AppColors.border,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-            Text(
-              AppStrings.chooseLanguage.tr,
-              style: TextStyle(fontSize: 16.px(context), fontWeight: FontWeight.w700),
-            ),
-            SizedBox(height: 16.px(context)),
-            const _LanguageOptionsList(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Applies the chosen language immediately and closes the sheet — unlike
-/// the onboarding language screen (which routes onward on "Continue"),
-/// this is a settings-style picker: no separate confirm step.
-class _LanguageOptionsList extends StatelessWidget {
-  const _LanguageOptionsList();
-
-  @override
-  Widget build(BuildContext context) {
-    final languageController = Get.find<LanguageController>();
-
-    return Obx(() {
-      final currentLanguage = languageController.currentAppLanguage;
-
-      return Column(
-        children: [
-          for (final language in AppLanguage.values) ...[
-            _LanguageTile(
-              language: language,
-              isSelected: language == currentLanguage,
-              onTap: () async {
-                await languageController.changeAppLanguage(language);
-                if (context.mounted) Get.back();
-              },
-            ),
-            if (language != AppLanguage.values.last) SizedBox(height: 10.px(context)),
-          ],
-        ],
-      );
-    });
-  }
-}
-
-class _LanguageTile extends StatelessWidget {
-  const _LanguageTile({
-    required this.language,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final AppLanguage language;
-
-  final bool isSelected;
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: isSelected ? AppColors.primary.withOpacity(.08) : AppColors.background,
-      borderRadius: BorderRadius.circular(16.px(context)),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16.px(context)),
-        child: Container(
-          padding: EdgeInsets.symmetric(horizontal: 16.px(context), vertical: 14.px(context)),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16.px(context)),
-            border: Border.all(
-              color: isSelected ? AppColors.primary : AppColors.border,
-              width: isSelected ? 1.4 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  language.displayName,
-                  style: TextStyle(
-                    fontSize: 15.px(context),
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-              Icon(
-                isSelected ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                color: isSelected ? AppColors.primary : AppColors.textSecondary.withOpacity(.5),
-                size: 20.px(context),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

@@ -22,7 +22,6 @@ abstract class AppRoutes {
   // Profile
   // ------------------------------------------------------------
 
-  static const myProfile = '/profile/my-profile';
   static const membershipCard = '/profile/membership-card';
   static const passbook = '/profile/passbook';
   static const aboutUs = '/profile/about-us';

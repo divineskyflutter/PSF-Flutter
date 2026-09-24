@@ -19,7 +19,6 @@ import 'package:psf_application/features/profile/presentation/pages/about_us_pag
 import 'package:psf_application/features/profile/presentation/pages/contact_us_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/delete_account_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/membership_card_page.dart';
-import 'package:psf_application/features/profile/presentation/pages/my_profile_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/passbook_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/privacy_policy_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/terms_conditions_page.dart';
@@ -101,7 +100,6 @@ class AppPages {
     // reuse the controllers MainNavigationBinding already registered.
     // ------------------------------------------------------------
 
-    GetPage(name: AppRoutes.myProfile, page: () => const MyProfilePage()),
     GetPage(name: AppRoutes.membershipCard, page: () => const MembershipCardPage()),
     GetPage(name: AppRoutes.passbook, page: () => const PassbookPage()),
     GetPage(name: AppRoutes.aboutUs, page: () => const AboutUsPage()),

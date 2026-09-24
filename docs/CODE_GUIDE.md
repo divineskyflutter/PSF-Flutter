@@ -47,7 +47,7 @@ utils, models).
 | `constants/api_end_points.dart` | Every backend URL in one place. **Added:** `getMemberQrCode` (`POST /api/Api/GetMemberQrCode?Id=`). |
 | `constants/app_assets.dart` | Asset paths. **Added:** `cardPaper`, `chairmanSignature`. |
 | `constants/app_colors.dart` | Theme colours. **Added:** `accentGold` (card trim / highlights). |
-| `routes/app_routes.dart`, `routes/app_pages.dart` | Route names and the page + binding for each. **Added:** `/loans`. |
+| `routes/app_routes.dart`, `routes/app_pages.dart` | Route names and the page + binding for each. **Added:** `/loans`. **Removed:** `/profile/my-profile` (the Profile tab now *is* My Profile). |
 
 ### `lib/core/`
 | File | What it holds / why |
@@ -60,6 +60,7 @@ utils, models).
 | `network/auth/token_manager.dart` | In-memory access/refresh token (seeded from secure storage at startup). |
 | `storage/app_prefs.dart`, `app_secure_storage.dart` | SharedPreferences (cache) and flutter_secure_storage (tokens, member id). |
 | `localization/en_us.dart`, `hi_in.dart`, `gu_in.dart` | All translation keys. **Added:** card, drawer, wallet, enum (`enum_*`) and layout-switch keys. |
+| `localization/info_pages_strings.dart` | **New:** English / Hindi / Gujarati copy for the Contact Us and About Us screens (spread into the three maps above). |
 | `localization/language_controller.dart` | Current language + switching. |
 | `theme/*` | App theme and theme controller. |
 
@@ -89,16 +90,24 @@ route/UI touch-ups this round.
 | `presentation/pages/main_navigation_screen.dart` | The shell: Profile / Home / Card tabs in an `IndexedStack` (tabs keep state), floating bottom bar, swipe-from-left drawer. |
 | `presentation/controllers/main_navigation_controller.dart` | Selected tab + the `Scaffold` key (so any tab can open the drawer). Tab order: Profile, Home (opens first), Card. |
 | `presentation/widgets/app_bottom_nav_bar.dart` | **Redesigned:** compact floating bar, raised Home button, no ripple. |
-| `presentation/widgets/app_side_drawer.dart` | **New:** full-screen frosted drawer — member photo/name/mobile (photo opens My Profile) and the wallet + card (`MemberWalletPanel`). |
+| `presentation/widgets/app_side_drawer.dart` | **New:** full-screen frosted drawer — member photo/name/mobile (display only, not tappable) and a menu: Membership Card, About Us, Contact Us, Language, Logout. The header and menu fade in one after another each time it opens. |
 | `bindings/main_navigation_binding.dart` | Wires every tab's controllers, including `MemberCardController`. |
 
 ### `lib/features/profile/`
-* `pages/profile_screen.dart` — Profile tab.
-* `pages/my_profile_page.dart` — **Reworked:** header + sliding Personal / Nominee / Health tabs, framed images, image-count badge.
-* `widgets/my_profile_*_tab.dart` — the three tabs.
-* `widgets/profile_card_style.dart` — **New:** shared card look (border + shadow) and `FramedImage` used for every photo on My Profile.
-* `widgets/document_thumbnail.dart` — labelled framed image tile.
-* `controllers/profile_controller.dart` — profile, nominees, health data and the enum bundle. **Changed:** `ensureEnumBundle()` fetches the bundle if login hasn't cached it yet, so profile/card show names instead of ids.
+* `pages/profile_screen.dart` — **The Profile tab = My Profile:** photo + name, sliding Personal / Nominee / Health tabs (read-only, from the login data). Clears the floating bottom bar when scrolled to the end.
+* `widgets/my_profile_personal_tab.dart` — member details first, then a collapsible **Documents** section (Aadhaar front/back, PAN; the profile photo is left out because it is already at the top).
+* `widgets/my_profile_nominee_tab.dart` — one card per nominee; each has its own collapsible Documents section.
+* `widgets/documents_section.dart` — **New:** the open/close "Documents" row (folder icon, uploaded count, animated chevron) revealing the thumbnails; tapping one opens the zoomable preview.
+* `widgets/my_profile_health_tab.dart`, `document_thumbnail.dart` — health declaration and the framed thumbnail.
+* `widgets/profile_card_style.dart` — shared card look (border + shadow) and `FramedImage`.
+* `widgets/language_settings_sheet.dart` — **New (moved):** the language picker bottom sheet, opened from the drawer.
+* `pages/contact_us_page.dart` — **Rebuilt:** hero header with Call / WhatsApp, the team (Office, Bharat Variya, Bipin Ghoghari) with Call + WhatsApp buttons, office hours with an Open/Closed badge, email, and both office addresses with "Open in Maps". Names and addresses follow the selected language; sections animate in.
+* `pages/about_us_page.dart` — **Rebuilt:** animated header with the emblem, count-up statistics, story, mission, vision, programs, values, journey timeline, leaders, registration details and a "Contact us" call-to-action.
+* `data/contact_us_info.dart`, `data/about_us_info.dart` — the content behind those two pages as plain constants. **The About Us numbers, programs and milestones are dummy data — replace them there.**
+* `pages/membership_card_page.dart` — physical-style membership card page (opened from the drawer).
+* `pages/passbook_page.dart`, `terms_conditions_page.dart`, `privacy_policy_page.dart`, `delete_account_page.dart` — still in the code and routes but no longer linked from any menu (removed for now).
+* `controllers/profile_controller.dart` — profile, nominees, health data and the enum bundle. `ensureEnumBundle()` fetches the bundle if login hasn't cached it yet, so names show instead of ids.
+* `widgets/profile_avatar_block.dart` — no longer used by any screen.
 
 ### `lib/features/member_card/` — the digital member card (new feature)
 
@@ -135,15 +144,15 @@ presentation/
 | `printed_card_style.dart` | Shared look of the printed card: colours, paper texture, founders' details, member-number format (`PSK  -`), the chairman signature widget, `CardShell`, `CardFieldRow`, `CardTimelineIcon`. Both layouts use it so they always match. |
 | `horizontal_card_faces.dart` | `HorizontalCardFront/Back` — exact reproduction of the foundation's printed card (landscape). Everything is scaled from a 1050-wide design, so it looks identical on screen and in the PDF. |
 | `vertical_card_faces.dart` | `VerticalCardFront/Back` — same design re-flowed for portrait (540-wide design). |
-| `horizontal_wallet_panel.dart` | Wallet for the landscape card: the cover slides in from the **left**, tap → slides out to the left, tap the card to flip (3-D), flip arrows, layout switch, Download, Close. |
-| `vertical_wallet_panel.dart` | Same for the portrait card: the pocket drops from above and slides down when opened. |
+| `horizontal_wallet_panel.dart` | Wallet for the landscape card: the cover slides in from the **left** with an idle shine; tap → it peels away to the left (slide + swing open); tap the card again → it closes; **swipe** the open card to flip it (3-D). Download is always visible; the layout switch appears when open. No instruction texts or arrows. |
+| `vertical_wallet_panel.dart` | Same behaviour for the portrait card: the pocket drops in from above and peels down/away when opened. |
 | `member_wallet_panel.dart` | Picks the panel for the selected layout and cross-fades between them. |
-| `wallet_pouch.dart` | The wallet drawings: `WalletBack` and `WalletPocket` (QR, stitching, "tap to open"). |
-| `wallet_controls.dart` | Shared buttons: label pill, flip arrows, Download button. |
+| `wallet_pouch.dart` | The wallet drawings: `WalletBack`, `WalletPocket` (QR, stitching) and `WalletShine` (the sweeping light band, in its own repaint layer). |
+| `wallet_controls.dart` | The shared Download button. |
 | `wallet_layout_switch.dart` | The Horizontal \| Vertical switch (sliding highlight). |
 | `member_qr_view.dart` | QR box with loading and "unavailable — tap to retry" states. |
 | `printed_card_pdf.dart` | Builds the PDF: renders the same card widgets off-screen to images and places them on the page (so Gujarati/Hindi text needs no PDF fonts). Horizontal → front above back; vertical → side by side; 16 pt margin, 14 pt gap. |
-| `member_card_screen.dart` | The Card tab — intentionally empty for now (the wallet lives in the drawer). |
+| `member_card_screen.dart` | **The Card tab** — the wallet and card on a teal gradient. The wallet is only built while this tab is showing, so each visit replays its entrance. |
 
 **Card data flow:** login caches profile → `ProfileController` → `MemberCardController.buildData()` → `MemberCardData` → card faces (screen) and `PrintedCardPdf` (download).
 
@@ -154,6 +163,7 @@ transparent).
 ### `lib/shared/`
 | File | What it holds / why |
 |---|---|
+| `widgets/common/staggered_reveal.dart` | **New:** fades + slides a section in `index x 90 ms` after the screen appears — used by Contact Us and About Us. |
 | `utils/app_date_format.dart` | **New:** dates in the selected language (`medium`) and `dd / MM / yyyy` (`numeric`). Needs `initializeDateFormatting()` (called in `main.dart`). |
 | `utils/localized_field.dart` | Picks the Hindi/Gujarati transliteration of a field when available. |
 | `extensions/new_responsive_extensions.dart` | The `.px(context)` sizing helper. |
@@ -181,6 +191,9 @@ transparent).
 * **QR has its own failure state** and never blocks the card (the endpoint has failed on the server before).
 * **Member number is separate from the DB id.** It shows `PSK  -` until a real `memberNo` exists.
 * **Layout choice is in memory only** (not saved between app restarts).
+* **The Profile tab is My Profile.** Menu items moved to the drawer, so the profile is one tap away and the bottom bar stays visible.
+* **Documents are collapsed by default** so the member's details come first; the count (`3/3`) shows what was uploaded.
+* **Contact/About content is data, not layout** — edit `contact_us_info.dart` / `about_us_info.dart` and `info_pages_strings.dart`; the screens follow.
 
 ---
 

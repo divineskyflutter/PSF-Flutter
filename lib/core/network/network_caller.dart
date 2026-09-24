@@ -92,6 +92,32 @@ class NetworkCaller {
     );
   }
 
+  /// Same as [postRequestBytes], but for endpoints that need a JSON [body]
+  /// rather than query parameters (e.g. `GeneratePdf`, which takes
+  /// `{"id": memberId}` and returns the PDF file itself as the response).
+  Future<Uint8List> postRequestBytesWithBody(
+      String url, {
+        Map<String, dynamic>? body,
+        bool requireToken = true,
+        bool suppressErrorToast = false,
+      }) {
+    return _execute<Uint8List>(
+          (cancelToken) => _dio.post<List<int>>(
+        url,
+        data: body,
+        cancelToken: cancelToken,
+        options: Options(
+          responseType: ResponseType.bytes,
+          extra: {
+            'requireToken': requireToken,
+            'suppressErrorToast': suppressErrorToast,
+          },
+        ),
+      ),
+      (data) => Uint8List.fromList((data as List).cast<int>()),
+    );
+  }
+
   Future<ApiResponseModel> patchRequest(
       String url, {
         Map<String, dynamic>? body,

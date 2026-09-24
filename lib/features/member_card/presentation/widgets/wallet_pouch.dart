@@ -31,8 +31,7 @@ class WalletBack extends StatelessWidget {
 }
 
 /// The wallet's front pocket, covering ~90% of the card: teal gradient,
-/// stitched border, a gold clasp line, the member's QR code and a
-/// "tap to open" pill. [qrView] is supplied by the caller, so this widget
+/// stitched border, a gold clasp line and the member's QR code. [qrView] is supplied by the caller, so this widget
 /// knows nothing about loading the QR. Sizes come from `.px(context)` and
 /// the pocket's own height, so it holds up on any screen.
 class WalletPocket extends StatelessWidget {
@@ -108,46 +107,6 @@ class WalletPocket extends StatelessWidget {
                             letterSpacing: .4,
                           ),
                         ),
-                        SizedBox(height: 16.px(context)),
-                        Container(
-                          constraints: BoxConstraints(maxWidth: w - 44.px(context)),
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 16.px(context),
-                            vertical: 9.px(context),
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(.16),
-                            borderRadius: BorderRadius.circular(30.px(context)),
-                            border: Border.all(
-                              color: AppColors.accentGold.withOpacity(.9),
-                              width: 1.2,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.lock_open_rounded,
-                                color: AppColors.accentGold,
-                                size: 16.px(context),
-                              ),
-                              SizedBox(width: 7.px(context)),
-                              Flexible(
-                                child: Text(
-                                  'tap_to_open_card'.tr,
-                                  maxLines: 2,
-                                  textAlign: TextAlign.center,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5.px(context),
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -214,4 +173,146 @@ class _StitchPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _StitchPainter oldDelegate) => oldDelegate.radius != radius;
+}
+
+/// A soft diagonal band of light that sweeps across the wallet cover every
+/// few seconds while it is closed, so the cover feels like glossy leather.
+/// Lives in its own repaint layer above the cover, so animating it never
+/// re-rasterizes the cover (QR code, stitching) underneath. [animation] runs
+/// 0 -> 1 per cycle; the band crosses during the first part and rests.
+class WalletShine extends StatelessWidget {
+  const WalletShine({super.key, required this.animation, required this.shape});
+
+  final Animation<double> animation;
+
+  final BorderRadius shape;
+
+  static const double _sweepShare = .34;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: ClipRRect(
+          borderRadius: shape,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final bandWidth = width * .34;
+
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) {
+                  if (animation.value > _sweepShare) return const SizedBox.expand();
+
+                  final t = Curves.easeInOut.transform(animation.value / _sweepShare);
+                  final dx = -bandWidth * 1.4 + t * (width + bandWidth * 2.2);
+
+                  // A second, thinner golden streak trails slightly behind
+                  // the main white one — two-tone instead of a single flat
+                  // sweep, like light catching an embossed edge a beat
+                  // after the main glare passes.
+                  final goldT = ((animation.value - .05) / _sweepShare).clamp(0.0, 1.0);
+                  final goldWidth = bandWidth * .4;
+                  final goldDx = -goldWidth * 1.4 + Curves.easeInOut.transform(goldT) * (width + goldWidth * 2.2);
+
+                  return Stack(
+                    children: [
+                      Positioned(
+                        left: dx,
+                        top: -10,
+                        bottom: -10,
+                        width: bandWidth,
+                        child: Transform(
+                          transform: Matrix4.skewX(-.34),
+                          child: const DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [Color(0x00FFFFFF), Color(0x38FFFFFF), Color(0x00FFFFFF)],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (goldT > 0 && goldT < 1)
+                        Positioned(
+                          left: goldDx,
+                          top: -10,
+                          bottom: -10,
+                          width: goldWidth,
+                          child: Transform(
+                            transform: Matrix4.skewX(-.34),
+                            child: const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Color(0x00E3C16F), Color(0x55E3C16F), Color(0x00E3C16F)],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A soft shadow that trails the wallet cover as it peels away — like a
+/// sticker or a sheet of paper being lifted off the card underneath it,
+/// rather than the cover simply vanishing. Thickest while the cover is
+/// closed, it thins to nothing as the cover finishes opening.
+///
+/// [axis] matches the cover's own travel: horizontal for the landscape
+/// wallet (the cover peels to the left), vertical for the portrait one
+/// (the cover peels upward).
+class CardRevealShadow extends StatelessWidget {
+  const CardRevealShadow({super.key, required this.animation, this.axis = Axis.horizontal});
+
+  /// 0 (cover fully closed) -> 1 (cover fully open) — typically the same
+  /// curved animation driving the cover itself.
+  final Animation<double> animation;
+
+  final Axis axis;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: animation,
+          builder: (context, _) {
+            final t = animation.value.clamp(0.0, 1.0);
+            if (t >= 1) return const SizedBox.shrink();
+
+            final begin = axis == Axis.horizontal ? Alignment.centerLeft : Alignment.topCenter;
+            final end = axis == Axis.horizontal ? Alignment.centerRight : Alignment.bottomCenter;
+
+            return FractionallySizedBox(
+              alignment: begin,
+              widthFactor: axis == Axis.horizontal ? (1 - t) : 1,
+              heightFactor: axis == Axis.vertical ? (1 - t) : 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: begin,
+                    end: end,
+                    colors: [
+                      Colors.black.withOpacity(.24 * (1 - t)),
+                      Colors.black.withOpacity(0),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }

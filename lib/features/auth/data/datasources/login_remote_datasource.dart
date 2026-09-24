@@ -14,6 +14,14 @@ class LoginRemoteDataSource {
       ApiEndPoints.login,
       body: request.toJson(),
       requireToken: false,
+      // ErrorInterceptor would otherwise auto-toast the raw envelope
+      // message itself, right before LoginController's own catch block
+      // toasts the *same* text again (LoginRepositoryImpl.login already
+      // rethrows the API's exact `message`) — one real error would show as
+      // two stacked toasts. Suppressing it here leaves LoginController as
+      // the single place that shows the login error, still with the exact
+      // text the API sent.
+      suppressErrorToast: true,
     );
   }
 }

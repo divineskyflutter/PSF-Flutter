@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 
 import '../../domain/entities/contact_entity.dart';
@@ -106,5 +108,11 @@ class ProfileRepositoryImpl implements ProfileRepository {
     final list = (response.data as List?) ?? [];
 
     return list.map((e) => ContactModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<Uint8List> generateApplicationPdf() async {
+    final memberId = await _requireMemberId();
+    return _remoteDataSource.generatePdf(memberId: memberId);
   }
 }

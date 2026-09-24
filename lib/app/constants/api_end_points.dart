@@ -136,6 +136,12 @@ class ApiEndPoints {
   static String get getMemberQrCode =>
       '$baseUrl/api/Api/GetMemberQrCode';
 
+  // Renders the member's application as a PDF — a POST with `{"id": <memberId>}`
+  // as the JSON body; the response is the raw PDF file itself (no envelope),
+  // ready to save straight to disk. Used by the My Profile download button.
+  static String get generatePdf =>
+      '$baseUrl/api/Api/GeneratePdf';
+
   // Full member profile (for the My Profile / Membership Card screens).
   static String get getMemberProfile =>
       '$baseUrl/api/Member/GetMemberProfile';
