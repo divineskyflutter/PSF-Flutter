@@ -1,3 +1,5 @@
+import 'query_item_model.dart';
+
 /// The signed-in member's basic profile data, parsed out of the real
 /// `POST /api/Api/MemberLogin` success response's `data.memberDetail`
 /// object (see `LoginRepositoryImpl`, which flattens `memberDetail` plus
@@ -42,6 +44,20 @@ class LoginModel {
   /// instead of Home.
   final bool isInEditMode;
 
+  /// Admin-flagged fields still needing correction (a sibling of
+  /// `memberDetail` in the real response) — empty on a normal login. Not
+  /// included in [toJson]/persisted storage on purpose: a stale cached
+  /// list could block on already-resolved queries or miss new ones, so
+  /// this is only ever fresh, in-memory data for the current login
+  /// session. See [hasUnresolvedQueries] and `QueryResolutionState`.
+  final List<QueryItem> queries;
+
+  /// `true` only when there's an active registration edit AND specific
+  /// fields have been flagged for correction — the trigger for the
+  /// restricted query-resolution flow (see LoginScreen), as opposed to
+  /// the full open-everything edit wizard [isInEditMode] alone leads to.
+  bool get hasUnresolvedQueries => isInEditMode && queries.isNotEmpty;
+
   /// Auth tokens from `data.authorizeToken` — kept separate from [toJson]
   /// on purpose: tokens already have their own dedicated storage (see
   /// `TokenManager`/`AppSecureStorage.saveTokens`), so they are not
@@ -73,6 +89,7 @@ class LoginModel {
     this.schemeName,
     this.joiningDate,
     this.isInEditMode = false,
+    this.queries = const [],
     this.accessToken,
     this.refreshToken,
     this.raw = const {},
@@ -100,6 +117,7 @@ class LoginModel {
       schemeName: schemeName,
       joiningDate: joiningDate,
       isInEditMode: isInEditMode,
+      queries: queries,
       accessToken: accessToken,
       refreshToken: refreshToken,
       raw: raw,
@@ -142,6 +160,9 @@ class LoginModel {
       schemeName: _firstNonEmptyKey(json, const ['schemeName']),
       joiningDate: _firstNonEmptyKey(json, const ['joiningDate']),
       isInEditMode: json['isInEditMode'] == true,
+      queries: (json['queries'] as List? ?? [])
+          .map((e) => QueryItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
       raw: json,
     );
   }

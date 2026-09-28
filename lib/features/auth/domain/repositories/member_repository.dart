@@ -58,4 +58,10 @@ abstract class MemberRepository {
   Future<bool> savePreviewScreen({
     required int memberId,
   });
+
+  /// `QueryResolve` — marks a single admin-flagged query (by its own
+  /// [queryId], not the member's id) as resolved, after the field it
+  /// points at has been edited and the containing screen's own save API
+  /// has already succeeded. Returns `true` on success.
+  Future<bool> queryResolve({required int queryId});
 }

@@ -93,4 +93,16 @@ class MemberRemoteDataSource {
       requireToken: false,
     );
   }
+
+  /// `QueryResolve` — request body is just `{"id": queryId}` (confirmed
+  /// against swagger: `CommonGetByIdModel`, same shape as the other
+  /// id-only calls above) — `id` here is the query's own id, not the
+  /// member's.
+  Future<ApiResponseModel> queryResolve({required int queryId}) async {
+    return await _networkCaller.postRequest(
+      ApiEndPoints.queryResolve,
+      body: {'id': queryId},
+      requireToken: false,
+    );
+  }
 }

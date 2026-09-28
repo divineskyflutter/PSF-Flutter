@@ -103,6 +103,9 @@ class LoginRepositoryImpl implements LoginRepository {
       // so LoginScreen sends them to the wizard instead of Home. See
       // LoginModel.isInEditMode.
       'isInEditMode': data['isInEditMode'] == true,
+      // Also a sibling of `memberDetail` — admin-flagged fields still
+      // needing correction. See LoginModel.queries.
+      if (data['queries'] != null) 'queries': data['queries'],
     };
 
     var result = LoginModel.fromJson(merged);

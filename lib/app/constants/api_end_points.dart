@@ -80,6 +80,15 @@ class ApiEndPoints {
   static String get getHealthDeclarationByMemberId =>
       '$baseUrl/api/HealthDeclaration/GetHealthDeclarationByMemberId';
 
+  /// Marks one admin-flagged query as resolved, after the field it points
+  /// at has been edited and that screen's own save API has already
+  /// succeeded. Request body is `{"id": queryId}` (confirmed against
+  /// swagger: takes `CommonGetByIdModel`, same shape as
+  /// [saveRulesRegulationScreen]/[saveNomineeScreen]) — `id` here is the
+  /// query's own id, not the member's. See QueryResolutionState.
+  static String get queryResolve =>
+      '$baseUrl/api/Member/QueryResolve';
+
   // ============================================================
   // Rules & Declaration step (step 5's accept-checkbox screen) — distinct
   // from [saveRulesRegulationScreen] above, which is called earlier, from

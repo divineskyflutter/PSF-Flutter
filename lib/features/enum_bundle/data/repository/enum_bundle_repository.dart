@@ -24,6 +24,13 @@ class EnumBundleRepository {
         // Nominee-relation options for the Nominee step's relationship
         // dropdown — same reasoning as gender/maritalStatus above.
         'relation': true,
+        // Table/field-name lookups for the post-login query-resolution
+        // flow (see QueryItem/QueryResolutionState) — a query only carries
+        // numeric tableId/fieldId, these resolve them to names.
+        'querytables': true,
+        'tblMemberField': true,
+        'tblNomineeField': true,
+        'tblHealthDeclarationFields': true,
       },
       requireToken: false, // this endpoint doesn't need a token — flip per call
     );

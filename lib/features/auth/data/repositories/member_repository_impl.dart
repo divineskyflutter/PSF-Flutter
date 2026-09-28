@@ -208,6 +208,21 @@ class MemberRepositoryImpl implements MemberRepository {
     return true;
   }
 
+  @override
+  Future<bool> queryResolve({required int queryId}) async {
+    final response = await _remoteDataSource.queryResolve(queryId: queryId);
+
+    if (!response.status) {
+      throw Exception(
+        response.message.isEmpty
+            ? 'Failed to resolve query.'
+            : response.message,
+      );
+    }
+
+    return true;
+  }
+
   bool _isMemberNotFoundMessage(String message) {
     final normalized = message.toLowerCase();
     return normalized.contains('not found') ||

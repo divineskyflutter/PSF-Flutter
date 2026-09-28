@@ -37,6 +37,22 @@ class EnumBundleModel {
   /// dropdown, sending the option's `id` as `NomineeModel.relation`.
   final List<EnumItem> relation;
 
+  /// Which member-record table a query (see `QueryItem.tableId`) points
+  /// at — `tblMember` (1) / `tblNominee` (2) / `tblHealthDeclaration` (3).
+  final List<EnumItem> queryTables;
+
+  /// Every queryable field on `tblMember`, keyed by the same `fieldId` a
+  /// `QueryItem` carries. A name's `G`/`H` prefix (e.g. `GAddress`,
+  /// `HAddress` vs plain `Address`) marks it as the Gujarati/Hindi variant
+  /// of that field — see `ScriptDetector.requiredScriptFor`.
+  final List<EnumItem> memberFields;
+
+  /// Same idea as [memberFields], for `tblNominee`.
+  final List<EnumItem> nomineeFields;
+
+  /// Same idea as [memberFields], for `tblHealthDeclaration`.
+  final List<EnumItem> healthDeclarationFields;
+
   EnumBundleModel({
     required this.moduleType,
     required this.platform,
@@ -45,6 +61,10 @@ class EnumBundleModel {
     required this.gender,
     required this.maritalStatus,
     required this.relation,
+    required this.queryTables,
+    required this.memberFields,
+    required this.nomineeFields,
+    required this.healthDeclarationFields,
   });
 
   factory EnumBundleModel.fromJson(Map<String, dynamic> json) {
@@ -64,6 +84,12 @@ class EnumBundleModel {
       // a live response, so double-check this key if the relation dropdown
       // ever comes back empty on a backend that does define a Relation list.
       relation: parse('Relation'),
+      // These 4 mirror their request flag's own casing exactly (confirmed
+      // against a live response), unlike the PascalCase blocks above.
+      queryTables: parse('Querytables'),
+      memberFields: parse('tblMemberField'),
+      nomineeFields: parse('tblNomineeField'),
+      healthDeclarationFields: parse('tblHealthDeclarationFields'),
     );
   }
 
@@ -75,10 +101,14 @@ class EnumBundleModel {
         gender: const [],
         maritalStatus: const [],
         relation: const [],
+        queryTables: const [],
+        memberFields: const [],
+        nomineeFields: const [],
+        healthDeclarationFields: const [],
       );
 
-  /// Round-trips through the same PascalCase keys [fromJson] reads, so a
-  /// cached bundle (see `LoginController`'s post-login fetch and
+  /// Round-trips through the same keys [fromJson] reads, so a cached
+  /// bundle (see `LoginController`'s post-login fetch and
   /// `AppPrefs.enumBundleJson`) can be decoded straight back with
   /// `EnumBundleModel.fromJson` — no separate cache-parsing path needed.
   Map<String, dynamic> toJson() => {
@@ -89,6 +119,11 @@ class EnumBundleModel {
         'Gender': gender.map((e) => e.toJson()).toList(),
         'MaritalStatus': maritalStatus.map((e) => e.toJson()).toList(),
         'Relation': relation.map((e) => e.toJson()).toList(),
+        'Querytables': queryTables.map((e) => e.toJson()).toList(),
+        'tblMemberField': memberFields.map((e) => e.toJson()).toList(),
+        'tblNomineeField': nomineeFields.map((e) => e.toJson()).toList(),
+        'tblHealthDeclarationFields':
+            healthDeclarationFields.map((e) => e.toJson()).toList(),
       };
 
   /// Look up an option's display `name` by its enum `id` (e.g. resolving
