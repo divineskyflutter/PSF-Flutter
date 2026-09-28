@@ -151,6 +151,11 @@ class _LoginScreenState extends State<LoginScreen> {
         // nothing to resolve.
         final regController = Get.find<RegistrationController>();
         regController.isEditingAfterLogin = true;
+        // Field names (which field is Gujarati/Hindi/plain) come from the
+        // enum bundle — make sure they're here before the flow is set up,
+        // otherwise a fast login would start it with every field looking
+        // plain and nothing highlighted.
+        await regController.ensureFieldEnumsLoaded();
         regController.startQueryResolutionMode(loggedInUser!.queries);
         Get.toNamed(AppRoutes.memberRegistrationStep1);
         return;

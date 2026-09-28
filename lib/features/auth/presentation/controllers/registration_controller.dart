@@ -84,8 +84,17 @@ class RegistrationController extends GetxController {
   /// that's actually queried.
   void startQueryResolutionMode(List<QueryItem> queries) {
     queryState.start(queries);
-    seedQueryModeStep1Fields();
+    _primeQueryModeTables();
+  }
+
+  /// (Re)computes every table's current pass, seeds the shared input boxes
+  /// and flags script mismatches. Runs when the flow starts AND again when
+  /// the field-name list arrives — a login can finish before the enum
+  /// bundle does, and until the names are known every field looks plain
+  /// (no Gujarati/Hindi variant), so nothing would be set up correctly.
+  void _primeQueryModeTables() {
     queryState.primeLocalLanguageForScreen(1);
+    seedQueryModeStep1Fields();
     recheckStep1ScriptMismatches();
 
     // Nominee data itself loads separately (loadExistingNominees, called
@@ -100,10 +109,18 @@ class RegistrationController extends GetxController {
     // Declaration, from the screen's initState) — same reseed-after-load
     // pattern as Nominee above.
     if (queryState.hasQueriesForTable(3)) {
-      seedQueryModeHealthFields();
       queryState.primeLocalLanguageForScreen(3);
+      seedQueryModeHealthFields();
       recheckHealthScriptMismatches();
     }
+  }
+
+  /// Makes sure the field-name lists are loaded before the query flow is
+  /// set up — the login screen awaits this so a fast login never starts
+  /// the flow with no names known.
+  Future<void> ensureFieldEnumsLoaded() async {
+    if (queryState.hasFieldNames) return;
+    await loadEnumOptions();
   }
 
   /// Flags (or clears) each currently-unlocked Step 1 field's script
@@ -142,6 +159,11 @@ class RegistrationController extends GetxController {
       if (variantId != null) {
         spec.controller.text = queryModeStep1FieldText(variantId);
       }
+    }
+
+    final nameScript = queryModeNameScript();
+    if (nameScript != null) {
+      queryFullNameController.text = queryModeFullNameText(nameScript);
     }
   }
 
@@ -935,10 +957,20 @@ class RegistrationController extends GetxController {
                   queryState.hasQueryFor(3, 32) ||
                   queryState.hasQueryFor(3, 33)));
 
-      final hasIllness = hasCurrentIllness.value == true;
-      final hasSurgery = hadSurgery.value == true;
-      final hasMedication = onRegularMedication.value == true;
-      final hasAllergy = hasAllergies.value == true;
+      // Same idea as [sendHereditary]: a queried detail field is shown
+      // (and must be sent) even while its yes/no answer is "no".
+      bool queried(List<int> ids) =>
+          queryState.isActive &&
+          ids.any((id) => queryState.hasQueryFor(3, id));
+
+      final hasIllness =
+          hasCurrentIllness.value == true || queried(const [4, 30, 31]);
+      final hasSurgery =
+          hadSurgery.value == true || queried(const [20, 34, 35, 21]);
+      final hasMedication =
+          onRegularMedication.value == true || queried(const [23]);
+      final hasAllergy =
+          hasAllergies.value == true || queried(const [25, 36, 37]);
 
       final request = HealthDeclarationModel(
         healthDeclarationId: healthDeclarationId.value ?? 0,
@@ -1098,6 +1130,9 @@ class RegistrationController extends GetxController {
       maritalStatusOptions.value = bundle.maritalStatus;
       relationOptions.value = bundle.relation;
       queryState.setFieldEnums(bundle);
+      // The flow may already be running (login can finish before this
+      // load does) — set every table up again now the names are known.
+      if (queryState.isActive) _primeQueryModeTables();
     } catch (e) {
       debugPrint('Failed to load enum bundle: $e');
 
@@ -1264,6 +1299,89 @@ class RegistrationController extends GetxController {
     return original ?? '';
   }
 
+  /// The saved value of [model] in the currently selected app language,
+  /// falling back to the plain text — `null` when the model holds nothing
+  /// at all (never translated / never loaded), so callers can leave
+  /// whatever the box already shows alone.
+  String? _localizedOrNull(LocalizedTextModel model) {
+    if (model.original.trim().isEmpty &&
+        model.hindi.trim().isEmpty &&
+        model.gujarati.trim().isEmpty) {
+      return null;
+    }
+    return _resumeLocalizedValue(
+      original: model.original,
+      hindi: model.hindi,
+      gujarati: model.gujarati,
+    );
+  }
+
+  /// "First Middle Surname" in the current app language (see
+  /// [_localizedOrNull]); `null` if no name has been loaded yet.
+  String? localizedFullNameText() {
+    final parts = [
+      _localizedOrNull(firstNameLanguages.value),
+      _localizedOrNull(middleNameLanguages.value),
+      _localizedOrNull(surnameLanguages.value),
+    ].whereType<String>().where((p) => p.trim().isNotEmpty).toList();
+    return parts.isEmpty ? null : parts.join(' ');
+  }
+
+  /// Re-shows every saved text value (name-like fields, address block,
+  /// occupation, nominee names, health detail boxes) in the app language
+  /// that was just selected — the values came from the API with English,
+  /// Hindi and Gujarati versions all together, so switching language just
+  /// picks the matching one. Numbers (Aadhaar, PAN, mobile, share...) have
+  /// no language versions and stay as they are. In query mode, a box that
+  /// is currently open for correcting one specific language keeps showing
+  /// that language (it is the thing being fixed).
+  void refreshLocalizedDisplay() {
+    _ensureStep1TripleFields();
+    for (final spec in _step1TripleFields) {
+      if (queryState.isActive &&
+          queryModeVariantFor(spec.baseId, spec.hId, spec.gId) != null) {
+        continue;
+      }
+      final text = _localizedOrNull(spec.model.value);
+      if (text != null && spec.controller.text != text) {
+        spec.controller.text = text;
+      }
+    }
+
+    for (final (baseId, hId, gId) in const [
+      (18, 32, 33),
+      (29, 38, 39),
+      (4, 30, 31),
+      (20, 34, 35),
+      (25, 36, 37),
+    ]) {
+      if (queryState.isActive &&
+          queryModeVariantFor(baseId, hId, gId, tableId: 3) != null) {
+        continue;
+      }
+      final match = _healthFieldSpecFor(baseId);
+      if (match == null) continue;
+      final (textController, model, _) = match;
+      final text = _localizedOrNull(model.value);
+      if (text != null && textController.text != text) {
+        textController.text = text;
+      }
+    }
+
+    for (var i = 0; i < nomineeSlots.length; i++) {
+      final slot = nomineeSlots[i];
+      if (queryState.isActive &&
+          queryModeVariantFor(2, 8, 9, tableId: 2, itemNumber: i + 1) !=
+              null) {
+        continue;
+      }
+      final text = _localizedOrNull(slot.nameLanguages.value);
+      if (text != null && slot.nameController.text != text) {
+        slot.nameController.text = text;
+      }
+    }
+  }
+
   /// Runs translateNameFieldOnUnfocus for every step-2 field that's dirty
   /// or still incomplete, in parallel — mirrors register_screen._continue's
   /// pre-save translation batch.
@@ -1399,6 +1517,8 @@ class RegistrationController extends GetxController {
         ScriptType.latin => spec.model.value.original,
       };
     }
+    final nameScript = _nameScriptOf(fieldId);
+    if (nameScript != null) return queryModeFullNameText(nameScript);
     // The 2 plain (no language variant) Step 1 fields query mode can
     // unlock — Aadhaar/PAN numbers — aren't triple-fields, so they fall
     // through _step1FieldSpecFor above.
@@ -1436,6 +1556,112 @@ class RegistrationController extends GetxController {
       fieldId,
       !ScriptDetector.matchesRequiredScript(text, fieldName),
     );
+  }
+
+  // ---- Name parts (the one "Full Name" box) --------------------------
+  //
+  // The app has ONE Full Name box for First + Middle + Surname, but the
+  // admin can flag each part in each language separately (FirstName=3,
+  // LastName/middle=4, Surname=2 and their Gujarati 7/8/6 and Hindi
+  // 10/11/9 versions). In query mode that box is reused for whichever
+  // language is currently being fixed, showing/editing that language's
+  // three parts together; any edit resolves every flagged name part of
+  // that language.
+
+  static const Map<ScriptType, List<int>> _nameIdsByScript = {
+    ScriptType.latin: [3, 4, 2],
+    ScriptType.gujarati: [7, 8, 6],
+    ScriptType.devanagari: [10, 11, 9],
+  };
+
+  /// The box the Full Name field shows/edits in query mode (kept separate
+  /// from the screen's own normal Full Name controller).
+  final TextEditingController queryFullNameController =
+      TextEditingController();
+
+  ScriptType? _nameScriptOf(int fieldId) {
+    for (final entry in _nameIdsByScript.entries) {
+      if (entry.value.contains(fieldId)) return entry.key;
+    }
+    return null;
+  }
+
+  /// The language whose flagged name parts are open for editing right now,
+  /// or `null` when no name part is flagged in the current pass.
+  ScriptType? queryModeNameScript() {
+    for (final script in const [
+      ScriptType.gujarati,
+      ScriptType.devanagari,
+      ScriptType.latin,
+    ]) {
+      if (_nameIdsByScript[script]!
+          .any((id) => queryState.isFieldEditable(1, id))) {
+        return script;
+      }
+    }
+    return null;
+  }
+
+  /// The flagged name-part ids of [script]'s language.
+  List<int> queryModeQueriedNameIds(ScriptType script) => [
+        for (final id in _nameIdsByScript[script]!)
+          if (queryState.hasQueryFor(1, id)) id,
+      ];
+
+  /// "First Middle Surname" in [script]'s language, from the saved values.
+  String queryModeFullNameText(ScriptType script) {
+    String part(Rx<LocalizedTextModel> model) => switch (script) {
+          ScriptType.gujarati => model.value.gujarati,
+          ScriptType.devanagari => model.value.hindi,
+          ScriptType.latin => model.value.original,
+        };
+    return [
+      part(firstNameLanguages),
+      part(middleNameLanguages),
+      part(surnameLanguages),
+    ].where((p) => p.trim().isNotEmpty).join(' ');
+  }
+
+  /// Writes an edited Full Name into the current language's first/middle/
+  /// surname slots, marks every flagged name part of that language as
+  /// touched, and checks the text is in the required script.
+  void queryModeUpdateFullName(String text) {
+    final script = queryModeNameScript();
+    if (script == null) return;
+
+    final words =
+        text.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    final parts = words.length >= 3
+        ? [words.first, words.sublist(1, words.length - 1).join(' '), words.last]
+        : words.length == 2
+            ? [words[0], '', words[1]]
+            : [words.isEmpty ? '' : words[0], '', ''];
+
+    void write(Rx<LocalizedTextModel> model, String value) {
+      model.value = switch (script) {
+        ScriptType.gujarati => model.value.copyWith(gujarati: value),
+        ScriptType.devanagari => model.value.copyWith(hindi: value),
+        ScriptType.latin =>
+          model.value.copyWith(original: value, english: value),
+      };
+    }
+
+    write(firstNameLanguages, parts[0]);
+    write(middleNameLanguages, parts[1]);
+    write(surnameLanguages, parts[2]);
+
+    for (final id in _nameIdsByScript[script]!) {
+      if (!queryState.hasQueryFor(1, id)) continue;
+      queryState.markTouched(1, id);
+      queryState.setScriptMismatch(
+        1,
+        id,
+        !ScriptDetector.matchesRequiredScript(
+          text,
+          queryState.fieldNameFor(1, id),
+        ),
+      );
+    }
   }
 
   /// Same idea as [queryModeUpdateStep1Field], for a plain field with no
@@ -1663,6 +1889,15 @@ class RegistrationController extends GetxController {
       29 => (otherHealthDetailController, otherHealthDetailLanguages, ScriptType.latin),
       38 => (otherHealthDetailController, otherHealthDetailLanguages, ScriptType.devanagari),
       39 => (otherHealthDetailController, otherHealthDetailLanguages, ScriptType.gujarati),
+      4 => (seriousIllnessDetailController, seriousIllnessLanguages, ScriptType.latin),
+      30 => (seriousIllnessDetailController, seriousIllnessLanguages, ScriptType.devanagari),
+      31 => (seriousIllnessDetailController, seriousIllnessLanguages, ScriptType.gujarati),
+      20 => (surgeryDetailController, surgeryLanguages, ScriptType.latin),
+      34 => (surgeryDetailController, surgeryLanguages, ScriptType.devanagari),
+      35 => (surgeryDetailController, surgeryLanguages, ScriptType.gujarati),
+      25 => (allergyDetailController, allergyLanguages, ScriptType.latin),
+      36 => (allergyDetailController, allergyLanguages, ScriptType.devanagari),
+      37 => (allergyDetailController, allergyLanguages, ScriptType.gujarati),
       _ => null,
     };
   }
@@ -1679,7 +1914,13 @@ class RegistrationController extends GetxController {
   }
 
   void seedQueryModeHealthFields() {
-    for (final (baseId, hId, gId) in const [(18, 32, 33), (29, 38, 39)]) {
+    for (final (baseId, hId, gId) in const [
+      (18, 32, 33),
+      (29, 38, 39),
+      (4, 30, 31),
+      (20, 34, 35),
+      (25, 36, 37),
+    ]) {
       final variantId = queryModeVariantFor(baseId, hId, gId, tableId: 3);
       if (variantId == null) continue;
       final match = _healthFieldSpecFor(variantId);
@@ -3242,6 +3483,10 @@ class RegistrationController extends GetxController {
         AppDatePicker.format(
           selectedDate,
         );
+
+    if (queryState.isActive) {
+      queryModeTouchSimpleField(1, 18, dateOfBirthController.text);
+    }
   }
 
   /// Date picker for the Health step's surgery detail (`surgeryDate` on
@@ -3269,6 +3514,10 @@ class RegistrationController extends GetxController {
         AppDatePicker.format(
           selectedDate,
         );
+
+    if (queryState.isActive) {
+      queryModeTouchSimpleField(3, 21, surgeryDateController.text);
+    }
   }
 
   /// Date-of-birth picker for one nominee slot — [slotIndex] into

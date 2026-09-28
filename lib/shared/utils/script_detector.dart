@@ -8,6 +8,14 @@ enum ScriptType { latin, devanagari, gujarati }
 class ScriptDetector {
   ScriptDetector._();
 
+  static const _plainNamesStartingWithGH = {
+    'Gender',
+    'HeartDisease',
+    'HeartAttack',
+    'HighBloodPressure',
+    'HIV',
+  };
+
   static const _devanagariStart = 0x0900;
   static const _devanagariEnd = 0x097F;
   static const _gujaratiStart = 0x0A80;
@@ -55,6 +63,10 @@ class ScriptDetector {
   /// plain prefix (e.g. `GAddress` -> Gujarati, `HAddress` -> Hindi,
   /// `Address` -> Latin/plain).
   static ScriptType requiredScriptFor(String fieldName) {
+    // Plain fields whose own name merely happens to start with G/H — not
+    // Gujarati/Hindi variants (Gender, HeartDisease, HeartAttack,
+    // HighBloodPressure, HIV).
+    if (_plainNamesStartingWithGH.contains(fieldName)) return ScriptType.latin;
     if (fieldName.startsWith('G')) return ScriptType.gujarati;
     if (fieldName.startsWith('H')) return ScriptType.devanagari;
     return ScriptType.latin;

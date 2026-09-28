@@ -48,6 +48,24 @@ class QueryResolutionState {
   /// reads [isTableApiResolved] rebuilds once QueryResolve has been sent.
   final RxInt apiResolvedTick = 0.obs;
 
+  /// Bumped when the field-name lists arrive (see [setFieldEnums]), so
+  /// anything showing "is this field editable" rebuilds even if the pass
+  /// itself didn't change — the answer depends on each field's name.
+  final RxInt namesTick = 0.obs;
+
+  /// `true` once the enum bundle's field-name lists have been received.
+  bool get hasFieldNames => _memberFields.isNotEmpty;
+
+  /// Fields a member can never edit in the app (ids, status, audit
+  /// columns, the login mobile number...). If one is somehow flagged there
+  /// is nothing on screen to fix — keeping it would block Next forever with
+  /// nothing highlighted, so it's left out of the flow.
+  static const _unfixableFields = <int, Set<int>>{
+    1: {1, 5, 15, 16, 36, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60},
+    2: {1, 7},
+    3: {1, 2},
+  };
+
   /// Language this flow's own labels and toasts are shown in. The screen
   /// keeps it mirroring the app's real language (the top-right picker
   /// opens the same sheet as the drawer), so `.tr` text and flow-localized
@@ -58,7 +76,11 @@ class QueryResolutionState {
   bool get isActive => _queries.isNotEmpty;
 
   void start(List<QueryItem> queries) {
-    _queries = queries;
+    _queries = queries
+        .where((query) =>
+            !(_unfixableFields[query.tableId]?.contains(query.fieldId) ??
+                false))
+        .toList();
     _resolved.clear();
     _scriptMismatch.clear();
     _toastedForMismatch.clear();
@@ -83,6 +105,7 @@ class QueryResolutionState {
     _memberFields = bundle.memberFields;
     _nomineeFields = bundle.nomineeFields;
     _healthFields = bundle.healthDeclarationFields;
+    namesTick.value++;
   }
 
   List<EnumItem> _fieldsFor(int tableId) => switch (tableId) {
@@ -157,6 +180,9 @@ class QueryResolutionState {
   /// isFieldEditable(...)` so normal (non-query) sessions stay fully
   /// editable as today.
   bool isFieldEditable(int tableId, int fieldId, {int? itemNumber}) {
+    // Always a real Rx read (also keeps any Obx around this valid, and
+    // rebuilds it when the field names arrive late).
+    namesTick.value;
     final query = _lookup(tableId, fieldId, itemNumber: itemNumber);
     if (query == null) return false;
     final requiredScript =
@@ -214,6 +240,46 @@ class QueryResolutionState {
   /// still reachable, fully locked, going back).
   bool hasQueriesForTable(int tableId) =>
       _queries.any((query) => query.tableId == tableId);
+
+  /// Readable names (Gujarati/Hindi versions folded together, e.g.
+  /// `GAddress` + `HAddress` -> "Address") of the fields on [tableId]
+  /// still waiting to be fixed — shown in a banner at the top of the step,
+  /// so any flagged field is at least named on screen even if it ever had
+  /// no box of its own.
+  List<String> flaggedFieldLabels(int tableId, {int? itemNumber}) {
+    apiResolvedTick.value;
+    final labels = <String>[];
+    for (final query in _queries) {
+      if (query.tableId != tableId) continue;
+      if (tableId == 2 &&
+          itemNumber != null &&
+          query.itemNumber != itemNumber) {
+        continue;
+      }
+      if (_apiResolvedQueryIds.contains(query.queryId)) continue;
+      final label = _friendlyFieldLabel(fieldNameFor(tableId, query.fieldId));
+      if (label.isNotEmpty && !labels.contains(label)) labels.add(label);
+    }
+    return labels;
+  }
+
+  static String _friendlyFieldLabel(String name) {
+    if (name.isEmpty) return '';
+    var base = name;
+    if (base.length > 1 &&
+        ScriptDetector.requiredScriptFor(base) != ScriptType.latin) {
+      base = base.substring(1);
+    }
+    base = base
+        .replaceAll('_', ' ')
+        .replaceAllMapped(
+          RegExp(r'(?<=[a-z0-9])(?=[A-Z])'),
+          (match) => ' ',
+        )
+        .trim();
+    if (base.isEmpty) return '';
+    return base[0].toUpperCase() + base.substring(1);
+  }
 
   /// Total number of queries on [tableId] (and, for nominees,
   /// [itemNumber]) — compare against [resolvedQueryIdsFor]'s length to

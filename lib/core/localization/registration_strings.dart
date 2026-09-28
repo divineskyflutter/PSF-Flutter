@@ -171,6 +171,7 @@ const registrationEn = <String, String>{
   // app language — now routed through .tr like every other user-facing
   // string on this screen.
   'field_translation_failed': '@label could not be translated. Please check your connection and try again.',
+  'query_flagged_banner': 'Please correct these fields',
   'query_field_wrong_script': 'This field must be entered in @language.',
   'query_resolve_all_fields_error': 'Please fix every highlighted field before continuing.',
   'query_pass_advanced_toast': '@prevLanguage data updated. Now enter @nextLanguage data.',
@@ -365,6 +366,7 @@ const registrationHi = <String, String>{
   'invalid_village_format': 'केवल अक्षर, अंक, , और - मान्य',
 
   'field_translation_failed': '@label अनुवादित नहीं हो सका। कृपया अपना कनेक्शन जाँचें और फिर से प्रयास करें।',
+  'query_flagged_banner': 'कृपया ये फ़ील्ड ठीक करें',
   'query_field_wrong_script': 'यह फ़ील्ड @language में दर्ज करनी होगी।',
   'query_resolve_all_fields_error': 'कृपया आगे बढ़ने से पहले हर हाइलाइट किया गया फ़ील्ड ठीक करें।',
   'query_pass_advanced_toast': '@prevLanguage डेटा अपडेट हो गया। अब @nextLanguage डेटा दर्ज करें।',
@@ -555,6 +557,7 @@ const registrationGu = <String, String>{
   'invalid_village_format': 'ફક્ત અક્ષર, અંક, , અને - માન્ય',
 
   'field_translation_failed': '@label અનુવાદિત થઈ શક્યું નથી. કૃપા કરીને તમારું કનેક્શન ચકાસો અને ફરી પ્રયાસ કરો.',
+  'query_flagged_banner': 'કૃપા કરીને આ ફીલ્ડ સુધારો',
   'query_field_wrong_script': 'આ ફીલ્ડ @language માં દાખલ કરવી આવશ્યક છે.',
   'query_resolve_all_fields_error': 'કૃપા કરીને આગળ વધતા પહેલા દરેક હાઇલાઇટ કરેલ ફીલ્ડ સુધારો.',
   'query_pass_advanced_toast': '@prevLanguage ડેટા અપડેટ થયો. હવે @nextLanguage ડેટા દાખલ કરો.',

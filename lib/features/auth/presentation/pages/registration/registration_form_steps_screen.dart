@@ -334,6 +334,7 @@ class _MemberRegistrationScreenState
   final GlobalKey _panNumberKey = GlobalKey();
   final GlobalKey _panImageKey = GlobalKey();
   final GlobalKey _occupationKey = GlobalKey();
+  final GlobalKey _mobile2Key = GlobalKey();
   final GlobalKey _signatureKey = GlobalKey();
 
   /// Kept alive across every letters<->digits keyboard-zone switch on the
@@ -656,6 +657,14 @@ class _MemberRegistrationScreenState
     if (occupationIds.contains(fieldId)) return _occupationKey;
     if (fieldId == 41) return _aadharNumberKey;
     if (fieldId == 43) return _panNumberKey;
+    // Name parts (Surname/FirstName/LastName and their G/H versions) all
+    // live in the one Full Name box.
+    const nameIds = {2, 3, 4, 6, 7, 8, 9, 10, 11};
+    if (nameIds.contains(fieldId)) return _fullNameKey;
+    if (fieldId == 18) return _dobKey;
+    if (fieldId == 19) return _genderKey;
+    if (fieldId == 20) return _maritalStatusKey;
+    if (fieldId == 37) return _mobile2Key;
     return null;
   }
 
@@ -699,6 +708,10 @@ class _MemberRegistrationScreenState
     }
     if (fieldId == 43) {
       return (_panFocusNode, controller.panNumberController);
+    }
+    const nameIds = {2, 3, 4, 6, 7, 8, 9, 10, 11};
+    if (nameIds.contains(fieldId)) {
+      return (fullNameFocusNode, controller.queryFullNameController);
     }
     return null;
   }
@@ -803,15 +816,29 @@ class _MemberRegistrationScreenState
     if (fieldId >= 5 && fieldId <= 17) return _healthDiseaseChipsKey;
     return switch (fieldId) {
       3 => _healthCurrentIllnessKey,
+      4 || 30 || 31 => _healthCurrentIllnessDetailKey,
       18 || 32 || 33 => _healthHereditaryDetailKey,
       19 => _healthSurgeryKey,
+      20 || 34 || 35 => _healthSurgeryDetailKey,
+      21 => _healthSurgeryDateKey,
       22 => _healthMedicationKey,
+      23 => _healthMedicationDetailKey,
+      24 => _healthAllergyKey,
+      25 || 36 || 37 => _healthAllergyDetailKey,
+      26 => _healthTobaccoKey,
       27 => _healthAlcoholKey,
       28 => _healthDrugsKey,
       29 || 38 || 39 => _healthOtherDetailsKey,
       _ => null,
     };
   }
+
+  /// `true` when any of these Health Declaration field ids has an active
+  /// query — used to keep a detail box visible (even while its yes/no
+  /// answer is "no") so a flagged field can never be hidden and unfixable.
+  bool _healthQueried(List<int> ids) =>
+      controller.queryState.isActive &&
+      ids.any((id) => controller.queryState.hasQueryFor(3, id));
 
   /// Same idea as [_scrollToActiveStep1QueryField], for Health
   /// Declaration (table 3, no itemNumber). Only the 2 triple-language
@@ -835,6 +862,32 @@ class _MemberRegistrationScreenState
         curve: Curves.easeInOut,
         alignment: 0.1,
       );
+
+      // Other detail boxes: focus + cursor at the end, same as below.
+      final detailTargets = <List<int>, (FocusNode, TextEditingController)>{
+        const [4, 30, 31]: (
+          seriousIllnessDetailFocusNode,
+          controller.seriousIllnessDetailController,
+        ),
+        const [20, 34, 35]: (
+          surgeryDetailFocusNode,
+          controller.surgeryDetailController,
+        ),
+        const [25, 36, 37]: (
+          allergyDetailFocusNode,
+          controller.allergyDetailController,
+        ),
+      };
+      for (final entry in detailTargets.entries) {
+        if (entry.key.contains(fieldId)) {
+          final (node, textController) = entry.value;
+          node.requestFocus();
+          textController.selection = TextSelection.collapsed(
+            offset: textController.text.length,
+          );
+          return;
+        }
+      }
 
       if (isHereditary) {
         otherHereditaryDetailFocusNode.requestFocus();
@@ -1060,6 +1113,15 @@ class _MemberRegistrationScreenState
       _languageMirrorWorker = ever(languageController.locale, (_) {
         controller.queryState.localLanguage.value =
             languageController.currentAppLanguage;
+
+        // The saved values (name, address, village, nominee names, health
+        // details...) already exist in all three languages — show the
+        // ones matching the newly selected language, not just new labels.
+        controller.refreshLocalizedDisplay();
+        final fullName = controller.localizedFullNameText();
+        if (fullName != null && fullNameController.text != fullName) {
+          fullNameController.text = fullName;
+        }
       });
     }
 
@@ -2263,6 +2325,8 @@ class _MemberRegistrationScreenState
               height: 16.px(context),
             ),
 
+            _queryFlaggedBanner(1),
+
             Center(
               key: _profileImageKey,
               child: _queryLockableImage(
@@ -2325,16 +2389,7 @@ class _MemberRegistrationScreenState
             // AppValidators.fullName; on unfocus (and again right before
             // Save) the value is split back into parts and each one
             // re-translated — see splitAndTranslateFullName.
-            AppTextField.form(
-              key: _fullNameKey,
-              label: 'full_name'.tr,
-              hintText: 'full_name_hint'.tr,
-              controller: fullNameController,
-              focusNode: fullNameFocusNode,
-              inputFormatters: [_nameInputFormatter],
-              validator: (value) =>
-                  AppValidators.fullName(value, message: 'full_name_format_error'.tr),
-            ),
+            _queryFullNameField(),
 
             SizedBox(
               height: 16.px(context),
@@ -2402,9 +2457,10 @@ class _MemberRegistrationScreenState
             // requirements doc: AppValidators.mobileOptional never shows
             // an error just for being left blank, only if a non-empty
             // value doesn't match the expected 10-digit format.
-            AppTextField.form(
+            _querySimpleField(
+              fieldKey: _mobile2Key,
               label: 'mobile_number_2'.tr,
-              controller:
+              textController:
               controller.mobile2Controller,
               keyboardType:
               TextInputType.phone,
@@ -2414,6 +2470,8 @@ class _MemberRegistrationScreenState
               inputFormatters: [
                 _MobileInputFormatter(),
               ],
+              tableId: 1,
+              fieldId: 37,
             ),
 
             SizedBox(
@@ -2426,22 +2484,25 @@ class _MemberRegistrationScreenState
               children: [
                 Expanded(
                   flex: 2,
-                  child: AppTextField.form(
-                    key: _dobKey,
-                    label: 'date_of_birth'.tr,
-                    controller:
-                    controller.dateOfBirthController,
-                    readOnly: true,
-                    validator:
-                    AppValidators.date,
-                    suffixIcon: const Icon(
-                      Icons.calendar_today_outlined,
+                  child: _queryLockableImage(
+                    fieldId: 18,
+                    child: AppTextField.form(
+                      key: _dobKey,
+                      label: 'date_of_birth'.tr,
+                      controller:
+                      controller.dateOfBirthController,
+                      readOnly: true,
+                      validator:
+                      AppValidators.date,
+                      suffixIcon: const Icon(
+                        Icons.calendar_today_outlined,
+                      ),
+                      onTap: () {
+                        controller.pickDateOfBirth(
+                          context,
+                        );
+                      },
                     ),
-                    onTap: () {
-                      controller.pickDateOfBirth(
-                        context,
-                      );
-                    },
                   ),
                 ),
 
@@ -2502,9 +2563,12 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 10.px(context)),
 
-            Container(
-              key: _genderKey,
-              child: Obx(() => _genderRadioGroup(context)),
+            _queryLockableImage(
+              fieldId: 19,
+              child: Container(
+                key: _genderKey,
+                child: Obx(() => _genderRadioGroup(context)),
+              ),
             ),
 
             _inlineError(
@@ -2516,26 +2580,32 @@ class _MemberRegistrationScreenState
               height: 20.px(context),
             ),
 
-            Container(
-              key: _maritalStatusKey,
-              child: Obx(
-                    () => _enumDropdown(
-                context: context,
-                label: 'marital_status'.tr,
-                value: controller
-                    .selectedMaritalStatusId
-                    .value,
-                items: controller
-                    .maritalStatusOptions
-                    .value,
-                onChanged: (value) {
-                  controller
+            _queryLockableImage(
+              fieldId: 20,
+              child: Container(
+                key: _maritalStatusKey,
+                child: Obx(
+                      () => _enumDropdown(
+                  context: context,
+                  label: 'marital_status'.tr,
+                  value: controller
                       .selectedMaritalStatusId
-                      .value = value;
-                },
-                hasError: _showStep1Errors.value &&
-                    controller.selectedMaritalStatusId.value == null,
-              ),
+                      .value,
+                  items: controller
+                      .maritalStatusOptions
+                      .value,
+                  onChanged: (value) {
+                    controller
+                        .selectedMaritalStatusId
+                        .value = value;
+                    if (controller.queryState.isActive) {
+                      controller.queryState.markTouched(1, 20);
+                    }
+                  },
+                  hasError: _showStep1Errors.value &&
+                      controller.selectedMaritalStatusId.value == null,
+                ),
+                ),
               ),
             ),
 
@@ -3106,6 +3176,8 @@ class _MemberRegistrationScreenState
           SizedBox(
             height: 24.px(context),
           ),
+
+          _queryFlaggedBanner(2),
 
           Obx(() {
             final visibleCount =
@@ -3905,6 +3977,8 @@ class _MemberRegistrationScreenState
 
           SizedBox(height: 22.px(context)),
 
+          _queryFlaggedBanner(3),
+
           // isSeriousIllness -> seriousIllness (translated)
           Obx(() {
             final hasIllness = controller.hasCurrentIllness.value;
@@ -3934,14 +4008,22 @@ class _MemberRegistrationScreenState
                   ),
                 ),
                 ),
-                if (hasIllness == true) ...[
+                if (hasIllness == true ||
+                    _healthQueried(const [4, 30, 31])) ...[
                   SizedBox(height: 12.px(context)),
-                  AppTextField.form(
-                    key: _healthCurrentIllnessDetailKey,
+                  _queryAwareField(
+                    fieldKey: _healthCurrentIllnessDetailKey,
                     label: 'health_q_current_illness_detail'.tr,
-                    controller: controller.seriousIllnessDetailController,
+                    labelKey: 'health_q_current_illness_detail',
+                    textController: controller.seriousIllnessDetailController,
                     focusNode: seriousIllnessDetailFocusNode,
                     maxLines: 2,
+                    baseFieldId: 4,
+                    hFieldId: 30,
+                    gFieldId: 31,
+                    tableId: 3,
+                    onUpdate: (fieldId, text) =>
+                        controller.queryModeUpdateHealthField(fieldId, text),
                   ),
                 ],
               ],
@@ -4037,23 +4119,35 @@ class _MemberRegistrationScreenState
                   ),
                 ),
                 ),
-                if (hadSurgery == true) ...[
+                if (hadSurgery == true ||
+                    _healthQueried(const [20, 34, 35, 21])) ...[
                   SizedBox(height: 12.px(context)),
-                  AppTextField.form(
-                    key: _healthSurgeryDetailKey,
+                  _queryAwareField(
+                    fieldKey: _healthSurgeryDetailKey,
                     label: 'health_q_surgery_detail'.tr,
-                    controller: controller.surgeryDetailController,
+                    labelKey: 'health_q_surgery_detail',
+                    textController: controller.surgeryDetailController,
                     focusNode: surgeryDetailFocusNode,
                     maxLines: 2,
+                    baseFieldId: 20,
+                    hFieldId: 34,
+                    gFieldId: 35,
+                    tableId: 3,
+                    onUpdate: (fieldId, text) =>
+                        controller.queryModeUpdateHealthField(fieldId, text),
                   ),
                   SizedBox(height: 12.px(context)),
-                  AppTextField.form(
-                    key: _healthSurgeryDateKey,
-                    label: 'health_q_surgery_date'.tr,
-                    controller: controller.surgeryDateController,
-                    readOnly: true,
-                    suffixIcon: const Icon(Icons.calendar_today_outlined),
-                    onTap: () => controller.pickSurgeryDate(context),
+                  _queryLockableImage(
+                    tableId: 3,
+                    fieldId: 21,
+                    child: AppTextField.form(
+                      key: _healthSurgeryDateKey,
+                      label: 'health_q_surgery_date'.tr,
+                      controller: controller.surgeryDateController,
+                      readOnly: true,
+                      suffixIcon: const Icon(Icons.calendar_today_outlined),
+                      onTap: () => controller.pickSurgeryDate(context),
+                    ),
                   ),
                 ],
               ],
@@ -4088,13 +4182,21 @@ class _MemberRegistrationScreenState
                   ),
                 ),
                 ),
-                if (onMedication == true) ...[
+                if (onMedication == true || _healthQueried(const [23])) ...[
                   SizedBox(height: 12.px(context)),
-                  AppTextField.form(
-                    key: _healthMedicationDetailKey,
+                  _queryAwareField(
+                    fieldKey: _healthMedicationDetailKey,
                     label: 'health_q_medication_detail'.tr,
-                    controller: controller.medicationDetailController,
+                    labelKey: 'health_q_medication_detail',
+                    textController: controller.medicationDetailController,
                     maxLines: 2,
+                    // No Hindi/Gujarati version of this one — 23 only.
+                    baseFieldId: 23,
+                    hFieldId: -1,
+                    gFieldId: -1,
+                    tableId: 3,
+                    onUpdate: (fieldId, text) => controller
+                        .queryModeTouchSimpleField(3, fieldId, text),
                   ),
                 ],
               ],
@@ -4110,24 +4212,44 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  key: _healthAllergyKey,
-                  child: _yesNoField(
-                    context,
-                    question: 'health_q_allergy'.tr,
-                    value: hasAllergies,
-                    onChanged: (value) =>
-                    controller.setHasAllergies(value),
+                _queryLockableImage(
+                  tableId: 3,
+                  fieldId: 24,
+                  child: Container(
+                    key: _healthAllergyKey,
+                    child: _yesNoField(
+                      context,
+                      question: 'health_q_allergy'.tr,
+                      value: hasAllergies,
+                      onChanged: (value) {
+                        controller.setHasAllergies(value);
+                        if (controller.queryState.isActive) {
+                          controller.queryModeTouchSimpleField(
+                            3,
+                            24,
+                            '$value',
+                          );
+                        }
+                      },
+                    ),
                   ),
                 ),
-                if (hasAllergies == true) ...[
+                if (hasAllergies == true ||
+                    _healthQueried(const [25, 36, 37])) ...[
                   SizedBox(height: 12.px(context)),
-                  AppTextField.form(
-                    key: _healthAllergyDetailKey,
+                  _queryAwareField(
+                    fieldKey: _healthAllergyDetailKey,
                     label: 'health_q_allergy_detail'.tr,
-                    controller: controller.allergyDetailController,
+                    labelKey: 'health_q_allergy_detail',
+                    textController: controller.allergyDetailController,
                     focusNode: allergyDetailFocusNode,
                     maxLines: 2,
+                    baseFieldId: 25,
+                    hFieldId: 36,
+                    gFieldId: 37,
+                    tableId: 3,
+                    onUpdate: (fieldId, text) =>
+                        controller.queryModeUpdateHealthField(fieldId, text),
                   ),
                 ],
               ],
@@ -4136,14 +4258,23 @@ class _MemberRegistrationScreenState
 
           SizedBox(height: 22.px(context)),
 
-          Container(
-            key: _healthTobaccoKey,
-            child: Obx(
-                  () => _yesNoField(
-                context,
-                question: 'health_q_tobacco'.tr,
-                value: controller.usesTobacco.value,
-                onChanged: (value) => controller.usesTobacco.value = value,
+          _queryLockableImage(
+            tableId: 3,
+            fieldId: 26,
+            child: Container(
+              key: _healthTobaccoKey,
+              child: Obx(
+                    () => _yesNoField(
+                  context,
+                  question: 'health_q_tobacco'.tr,
+                  value: controller.usesTobacco.value,
+                  onChanged: (value) {
+                    controller.usesTobacco.value = value;
+                    if (controller.queryState.isActive) {
+                      controller.queryModeTouchSimpleField(3, 26, '$value');
+                    }
+                  },
+                ),
               ),
             ),
           ),
@@ -4629,6 +4760,9 @@ class _MemberRegistrationScreenState
             groupValue: controller.selectedGenderId.value,
             onChanged: (value) {
               controller.selectedGenderId.value = value;
+              if (controller.queryState.isActive) {
+                controller.queryState.markTouched(1, 19);
+              }
             },
             title: Text(
               EnumOptionTranslator.translate(option.name),
@@ -4869,6 +5003,127 @@ class _MemberRegistrationScreenState
                   ToastUtil.error(wrongScriptMessage());
                 }
               },
+      );
+    });
+  }
+
+  /// Short note at the top of a step naming the fields the admin flagged
+  /// there (and not yet fixed) — only in query mode, and only while some
+  /// are still pending. A safety net: whatever gets flagged in future is at
+  /// least listed here, even if it ever had no highlighted box of its own.
+  Widget _queryFlaggedBanner(int tableId) {
+    if (!controller.queryState.isActive ||
+        !controller.queryState.hasQueriesForTable(tableId)) {
+      return const SizedBox.shrink();
+    }
+
+    return Obx(() {
+      final queryState = controller.queryState;
+      final language = queryState.localLanguage.value;
+      final labels = queryState.flaggedFieldLabels(tableId);
+
+      if (labels.isEmpty) return const SizedBox.shrink();
+
+      return Container(
+        width: double.infinity,
+        margin: EdgeInsets.only(bottom: 16.px(context)),
+        padding: EdgeInsets.all(12.px(context)),
+        decoration: BoxDecoration(
+          color: AppColors.danger.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12.px(context)),
+          border: Border.all(color: AppColors.danger.withOpacity(0.5)),
+        ),
+        child: Text(
+          '${_flowLocalized(language, 'query_flagged_banner')}: '
+          '${labels.join(', ')}',
+          style: TextStyle(
+            fontSize: 13.px(context),
+            color: AppColors.primaryDark,
+          ),
+        ),
+      );
+    });
+  }
+
+  /// The Full Name box. Outside query mode it is exactly the normal
+  /// editable field. In query mode it is locked unless the admin flagged
+  /// one of the name parts (first / middle / surname, in any language) for
+  /// the language being fixed right now — then it shows that language's
+  /// name, is red until edited, and turns green once edited.
+  Widget _queryFullNameField() {
+    final plainField = AppTextField.form(
+      key: _fullNameKey,
+      label: 'full_name'.tr,
+      hintText: 'full_name_hint'.tr,
+      controller: fullNameController,
+      focusNode: fullNameFocusNode,
+      inputFormatters: [_nameInputFormatter],
+      validator: (value) =>
+          AppValidators.fullName(value, message: 'full_name_format_error'.tr),
+    );
+
+    if (!controller.queryState.isActive) return plainField;
+
+    return Obx(() {
+      final queryState = controller.queryState;
+      // Real observable read on every build (see _queryAwareField).
+      final language = queryState.localLanguage.value;
+
+      final script = controller.queryModeNameScript();
+
+      if (script == null) {
+        // Nothing to fix in the name right now — same box, locked.
+        return AppTextField.form(
+          key: _fullNameKey,
+          label: 'full_name'.tr,
+          controller: fullNameController,
+          enabled: false,
+          readOnly: true,
+        );
+      }
+
+      final ids = controller.queryModeQueriedNameIds(script);
+      final resolved = ids.every(
+        (id) => queryState.isFieldResolved(1, id).value,
+      );
+      final mismatch = ids.any(
+        (id) => queryState.scriptMismatch(1, id).value,
+      );
+
+      String wrongScriptMessage() {
+        final languageName = switch (script) {
+          ScriptType.gujarati => AppLanguage.gujarati.displayName,
+          ScriptType.devanagari => AppLanguage.hindi.displayName,
+          ScriptType.latin => AppLanguage.english.displayName,
+        };
+        return _flowLocalized(
+          language,
+          'query_field_wrong_script',
+          params: {'language': languageName},
+        );
+      }
+
+      return AppTextField.form(
+        key: _fullNameKey,
+        label: _flowLocalized(language, 'full_name'),
+        hintText: 'full_name_hint'.tr,
+        controller: controller.queryFullNameController,
+        focusNode: fullNameFocusNode,
+        inputFormatters: [_nameInputFormatter],
+        validator: (value) =>
+            AppValidators.fullName(value, message: 'full_name_format_error'.tr),
+        errorText: (mismatch || !resolved) ? wrongScriptMessage() : null,
+        enabledBorderColor: resolved ? AppColors.success : AppColors.danger,
+        focusedBorderColor: resolved ? AppColors.success : AppColors.danger,
+        onChanged: (text) {
+          controller.queryModeUpdateFullName(text);
+          final firstQueried = ids.first;
+          final isMismatched =
+              queryState.scriptMismatch(1, firstQueried).value;
+          if (queryState.shouldToastMismatch(1, firstQueried, isMismatched)) {
+            ToastUtil.error(wrongScriptMessage());
+          }
+        },
       );
     });
   }
