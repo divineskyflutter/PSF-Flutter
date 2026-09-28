@@ -36,15 +36,63 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
 
+  /// Letters keyboard first; flips to a number keyboard once exactly 4
+  /// letters have been typed (passwords look like "NIKH9601"). Only
+  /// transitions are handled, never "current state", so a member who
+  /// manually switches to numbers earlier (e.g. "NK" then 1234) is left
+  /// alone: no digit-less 4-letter moment ever happens for that password.
+  TextInputType _passwordKeyboardType = TextInputType.visiblePassword;
+
   @override
   void initState() {
     super.initState();
     _mobileFocusNode = FocusNode();
     _passwordFocusNode = FocusNode();
+    _passwordController.addListener(_handlePasswordKeyboardSwitch);
+  }
+
+  /// Same unfocus -> refocus-next-frame trick as the PAN field on the
+  /// registration screen: just changing `keyboardType` on a focused field
+  /// doesn't reliably make Android redraw an already-open keyboard.
+  void _handlePasswordKeyboardSwitch() {
+    final value = _passwordController.value;
+    final text = value.text;
+
+    // Once a digit exists the member is past the letters part (or has
+    // switched keyboards themselves) — never touch the keyboard again.
+    if (RegExp(r'[0-9]').hasMatch(text)) return;
+
+    final letters = RegExp(r'[A-Za-z]').allMatches(text).length;
+
+    TextInputType? target;
+    if (letters == 4 && _passwordKeyboardType == TextInputType.visiblePassword) {
+      // .phone (not .number) — reliably ASCII 0-9 even on Hindi/Gujarati
+      // keyboards, same reasoning as the PAN field's digit zone.
+      target = TextInputType.phone;
+    } else if (letters < 4 && _passwordKeyboardType == TextInputType.phone) {
+      target = TextInputType.visiblePassword;
+    }
+
+    if (target == null) return;
+
+    final selectionToRestore = value.selection;
+    final wasFocused = _passwordFocusNode.hasFocus;
+
+    setState(() => _passwordKeyboardType = target!);
+
+    if (!wasFocused) return;
+
+    _passwordFocusNode.unfocus();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _passwordFocusNode.requestFocus();
+      _passwordController.selection = selectionToRestore;
+    });
   }
 
   @override
   void dispose() {
+    _passwordController.removeListener(_handlePasswordKeyboardSwitch);
     _mobileFocusNode.dispose();
     _passwordFocusNode.dispose();
     _mobileController.dispose();
@@ -72,7 +120,43 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (success) {
       // LoginController already showed the success toast.
-      if (_loginController.loggedInUser.value?.isInEditMode == true) {
+      final loggedInUser = _loginController.loggedInUser.value;
+
+      if (loggedInUser?.isInEditMode == true) {
+        // Prefill every Step 1 field from this member's already-saved
+        // data — the exact same call RegisterScreen makes before
+        // resuming (RegistrationController.getMemberStatus) — so both
+        // the query-resolution flow below and the full open-edit flow
+        // show existing values instead of blank fields. Without this,
+        // RegistrationController.member stays null and Step 1's own
+        // later re-check (_loadMember, gated on member already being
+        // set) silently no-ops. LoginModel doesn't expose first/middle/
+        // surname itself, so they come from the raw login payload.
+        final raw = loggedInUser!.raw;
+        await Get.find<RegistrationController>().getMemberStatus(
+          isRegistered: true,
+          firstName: raw['firstName']?.toString() ?? '',
+          middleName: raw['lastName']?.toString() ?? '',
+          surname: raw['surname']?.toString() ?? '',
+          mobile: loggedInUser.mobile ?? '',
+        );
+      }
+
+      if (loggedInUser?.hasUnresolvedQueries == true) {
+        // Specific fields were flagged by an admin and need correcting —
+        // a narrower flow than the full open-everything edit wizard below:
+        // only those exact fields unlock, everything else stays locked.
+        // Always starts at Step 1 — the wizard's own forward-skip logic
+        // (see RegistrationController.queryState) jumps past any step with
+        // nothing to resolve.
+        final regController = Get.find<RegistrationController>();
+        regController.isEditingAfterLogin = true;
+        regController.startQueryResolutionMode(loggedInUser!.queries);
+        Get.toNamed(AppRoutes.memberRegistrationStep1);
+        return;
+      }
+
+      if (loggedInUser?.isInEditMode == true) {
         // Login succeeded, but this member's registration is still open
         // for correction — go straight to the wizard's form screens
         // instead of Home. Pushed (not offAll) so Back returns here to
@@ -348,7 +432,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         obscureText: _obscurePassword,
 
-                        keyboardType: TextInputType.visiblePassword,
+                        keyboardType: _passwordKeyboardType,
 
                         textInputAction: TextInputAction.done,
 
