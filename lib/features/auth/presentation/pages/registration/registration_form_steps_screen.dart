@@ -6,16 +6,21 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
+import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
+import 'package:psf_application/core/localization/registration_strings.dart';
 import 'package:psf_application/features/auth/data/models/member_model.dart';
 import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
 import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
+import 'package:psf_application/features/profile/presentation/widgets/language_settings_sheet.dart';
+import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/signature/app_signature_bottom_sheet.dart';
 import 'package:psf_application/shared/utils/app_date_picker.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
 import 'package:psf_application/shared/utils/enum_option_translator.dart';
+import 'package:psf_application/shared/utils/script_detector.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 import 'package:psf_application/shared/widgets/images/common_image_view.dart';
 import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
@@ -358,6 +363,14 @@ class _MemberRegistrationScreenState
     RegistrationController.maxNominees,
     (_) => GlobalKey(),
   );
+  final List<GlobalKey> _nomineeNameKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
+  final List<GlobalKey> _nomineeDobKeys = List.generate(
+    RegistrationController.maxNominees,
+    (_) => GlobalKey(),
+  );
   final List<GlobalKey> _nomineeRelationKeys = List.generate(
     RegistrationController.maxNominees,
     (_) => GlobalKey(),
@@ -394,6 +407,8 @@ class _MemberRegistrationScreenState
   final GlobalKey _healthTobaccoKey = GlobalKey();
   final GlobalKey _healthAlcoholKey = GlobalKey();
   final GlobalKey _healthDrugsKey = GlobalKey();
+  final GlobalKey _healthOtherDetailsKey = GlobalKey();
+  final GlobalKey _healthDiseaseChipsKey = GlobalKey();
 
   /// Ordered top-to-bottom checkpoint list for Step 0 (Member) — each
   /// entry pairs a field's GlobalKey with a fresh re-check of the exact
@@ -619,6 +634,224 @@ class _MemberRegistrationScreenState
   /// or if the failing one's key has no attached context yet (shouldn't
   /// normally happen — every checkpoint's widget is already on screen by
   /// the time Next can be tapped).
+  /// Maps a `tblMemberField` id (any of a field's base/H/G variants) to
+  /// the one physical widget's `GlobalKey` — used by
+  /// [_scrollToActiveStep1QueryField] to jump straight to whichever field
+  /// the current pass just unlocked, instead of leaving the member to
+  /// hunt for it down a long form.
+  GlobalKey? _step1KeyForFieldId(int fieldId) {
+    const fatherIds = {12, 13, 14};
+    const addressIds = {21, 22, 23};
+    const villageIds = {24, 25, 26};
+    const talukaIds = {27, 28, 29};
+    const districtIds = {30, 31, 32};
+    const stateIds = {33, 34, 35};
+    const occupationIds = {38, 39, 40};
+    if (fatherIds.contains(fieldId)) return _fatherNameKey;
+    if (addressIds.contains(fieldId)) return _addressKey;
+    if (villageIds.contains(fieldId)) return _villageKey;
+    if (talukaIds.contains(fieldId)) return _talukaKey;
+    if (districtIds.contains(fieldId)) return _districtKey;
+    if (stateIds.contains(fieldId)) return _stateKey;
+    if (occupationIds.contains(fieldId)) return _occupationKey;
+    if (fieldId == 41) return _aadharNumberKey;
+    if (fieldId == 43) return _panNumberKey;
+    return null;
+  }
+
+  /// Same mapping as [_step1KeyForFieldId], but to the field's own
+  /// (FocusNode, TextEditingController) pair instead of its GlobalKey —
+  /// used by [_scrollToActiveStep1QueryField] to actually focus the field
+  /// and place the cursor, not just scroll it into view.
+  (FocusNode, TextEditingController)? _step1FocusTargetForFieldId(
+    int fieldId,
+  ) {
+    const fatherIds = {12, 13, 14};
+    const addressIds = {21, 22, 23};
+    const villageIds = {24, 25, 26};
+    const talukaIds = {27, 28, 29};
+    const districtIds = {30, 31, 32};
+    const stateIds = {33, 34, 35};
+    const occupationIds = {38, 39, 40};
+    if (fatherIds.contains(fieldId)) {
+      return (fatherNameFocusNode, controller.fatherNameController);
+    }
+    if (addressIds.contains(fieldId)) {
+      return (addressFocusNode, controller.addressController);
+    }
+    if (villageIds.contains(fieldId)) {
+      return (villageFocusNode, controller.villageController);
+    }
+    if (talukaIds.contains(fieldId)) {
+      return (talukaFocusNode, controller.talukaController);
+    }
+    if (districtIds.contains(fieldId)) {
+      return (districtFocusNode, controller.districtController);
+    }
+    if (stateIds.contains(fieldId)) {
+      return (stateFocusNode, controller.stateController);
+    }
+    if (occupationIds.contains(fieldId)) {
+      return (occupationFocusNode, controller.occupationController);
+    }
+    if (fieldId == 41) {
+      return (_aadharNumberFocusNode, controller.aadharNumberController);
+    }
+    if (fieldId == 43) {
+      return (_panFocusNode, controller.panNumberController);
+    }
+    return null;
+  }
+
+  /// Scrolls to the first currently-unlocked query field on Step 1 — call
+  /// whenever the screen first opens in query-resolution mode, and again
+  /// each time a pass advances (so the member isn't left staring at a
+  /// field that just got locked again with no idea where the next one
+  /// is). Scrolling alone leaves the member to tap the field themselves
+  /// before they can type — this also requests focus and places the
+  /// cursor at the end of whatever's already there (these are prefilled
+  /// values being corrected, not started from blank), so they can start
+  /// typing immediately.
+  void _scrollToActiveStep1QueryField() {
+    final fieldId = controller.queryState.firstEditableFieldId(1);
+    if (fieldId == null) return;
+    final key = _step1KeyForFieldId(fieldId);
+    if (key == null) return;
+    final focusTarget = _step1FocusTargetForFieldId(fieldId);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final targetContext = key.currentContext;
+      if (targetContext == null) return;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+
+      if (focusTarget == null) return;
+      final (focusNode, textController) = focusTarget;
+      focusNode.requestFocus();
+      textController.selection = TextSelection.collapsed(
+        offset: textController.text.length,
+      );
+    });
+  }
+
+  /// Maps a `tblNomineeField` id to nominee [itemNumber]'s own GlobalKey —
+  /// mirrors [_step1KeyForFieldId] for the Nominee table.
+  GlobalKey? _nomineeKeyForFieldId(int itemNumber, int fieldId) {
+    final index = itemNumber - 1;
+    if (index < 0 || index >= _nomineePhotoKeys.length) return null;
+    return switch (fieldId) {
+      6 => _nomineePhotoKeys[index],
+      2 || 8 || 9 => _nomineeNameKeys[index],
+      4 => _nomineeRelationKeys[index],
+      3 => _nomineeDobKeys[index],
+      5 => _nomineeShareKeys[index],
+      10 => _nomineeAadharFrontKeys[index],
+      11 => _nomineeAadharBackKeys[index],
+      12 => _nomineePassbookKeys[index],
+      _ => null,
+    };
+  }
+
+  /// Same idea as [_scrollToActiveStep1QueryField], for the Nominee
+  /// table's currently-active nominee [itemNumber] — call whenever this
+  /// nominee's slot first becomes the "current" one and again each time
+  /// its own pass advances or Next is blocked mid-pass. Only Name has a
+  /// FocusNode worth requesting (Relation/DateOfBirth/photos aren't typed
+  /// into directly — DateOfBirth opens a picker, Aadhaar/Share still
+  /// scroll into view but don't get an artificial focus request).
+  void _scrollToActiveNomineeQueryField(int itemNumber) {
+    final fieldId = controller.queryState.firstEditableFieldId(
+      2,
+      itemNumber: itemNumber,
+    );
+    if (fieldId == null) return;
+    final key = _nomineeKeyForFieldId(itemNumber, fieldId);
+    if (key == null) return;
+    final slotIndex = itemNumber - 1;
+    final isNameField = fieldId == 2 || fieldId == 8 || fieldId == 9;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final targetContext = key.currentContext;
+      if (targetContext == null) return;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+
+      if (!isNameField) return;
+      final slot = controller.nomineeSlots[slotIndex];
+      slot.nameFocusNode.requestFocus();
+      slot.nameController.selection = TextSelection.collapsed(
+        offset: slot.nameController.text.length,
+      );
+    });
+  }
+
+  /// Maps a `tblHealthDeclarationFields` id to its own GlobalKey — mirrors
+  /// [_step1KeyForFieldId]/[_nomineeKeyForFieldId] for Health Declaration.
+  /// Only the fields this flow can actually unlock are listed (see
+  /// RegistrationController's Health Declaration doc comment for why the
+  /// other ~33 fields aren't wired) — a query against anything else has
+  /// nowhere on screen to scroll to.
+  GlobalKey? _healthKeyForFieldId(int fieldId) {
+    if (fieldId >= 5 && fieldId <= 17) return _healthDiseaseChipsKey;
+    return switch (fieldId) {
+      3 => _healthCurrentIllnessKey,
+      18 || 32 || 33 => _healthHereditaryDetailKey,
+      19 => _healthSurgeryKey,
+      22 => _healthMedicationKey,
+      27 => _healthAlcoholKey,
+      28 => _healthDrugsKey,
+      29 || 38 || 39 => _healthOtherDetailsKey,
+      _ => null,
+    };
+  }
+
+  /// Same idea as [_scrollToActiveStep1QueryField], for Health
+  /// Declaration (table 3, no itemNumber). Only the 2 triple-language
+  /// text fields (Other/otherDetails) get an actual focus request — the
+  /// yes/no toggles just scroll into view, same as Nominee's
+  /// non-Name fields.
+  void _scrollToActiveHealthQueryField() {
+    final fieldId = controller.queryState.firstEditableFieldId(3);
+    if (fieldId == null) return;
+    final key = _healthKeyForFieldId(fieldId);
+    if (key == null) return;
+    final isHereditary = fieldId == 18 || fieldId == 32 || fieldId == 33;
+    final isOtherDetails = fieldId == 29 || fieldId == 38 || fieldId == 39;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final targetContext = key.currentContext;
+      if (targetContext == null) return;
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        alignment: 0.1,
+      );
+
+      if (isHereditary) {
+        otherHereditaryDetailFocusNode.requestFocus();
+        controller.otherHereditaryDetailController.selection =
+            TextSelection.collapsed(
+          offset: controller.otherHereditaryDetailController.text.length,
+        );
+      } else if (isOtherDetails) {
+        otherHealthDetailFocusNode.requestFocus();
+        controller.otherHealthDetailController.selection =
+            TextSelection.collapsed(
+          offset: controller.otherHealthDetailController.text.length,
+        );
+      }
+    });
+  }
+
   void _scrollToFirstError(
     List<MapEntry<GlobalKey, bool Function()>> checkpoints,
   ) {
@@ -659,6 +892,12 @@ class _MemberRegistrationScreenState
   late final FocusNode districtFocusNode;
   late final FocusNode stateFocusNode;
   late final FocusNode occupationFocusNode;
+
+  /// Query-resolution mode's Aadhaar number field has no FocusNode of its
+  /// own elsewhere (unlike the 7 triple-language fields above, or PAN's
+  /// `_panFocusNode`) — added so [_scrollToActiveStep1QueryField] can
+  /// focus it too.
+  final FocusNode _aadharNumberFocusNode = FocusNode();
 
   // Health step's own translated free-text detail fields — same
   // translate-on-blur pattern as the focus nodes above.
@@ -805,9 +1044,24 @@ class _MemberRegistrationScreenState
     });
   }
 
+  Worker? _languageMirrorWorker;
+
   @override
   void initState() {
     super.initState();
+
+    // Query-resolution mode: the top-right language icon opens the same
+    // sheet as the drawer and really changes the app language, so this
+    // flow's own labels/toasts simply mirror whatever that currently is.
+    if (controller.queryState.isActive) {
+      final languageController = Get.find<LanguageController>();
+      controller.queryState.localLanguage.value =
+          languageController.currentAppLanguage;
+      _languageMirrorWorker = ever(languageController.locale, (_) {
+        controller.queryState.localLanguage.value =
+            languageController.currentAppLanguage;
+      });
+    }
 
     // localizedFullName (not the plain fullName getter) so a resumed
     // member who picked Hindi/Gujarati sees their own already-saved
@@ -877,6 +1131,38 @@ class _MemberRegistrationScreenState
       // RegistrationNavigator.navigateToScreen, which is the only caller
       // that ever sets this argument.
       _applyResumeStepFromArguments();
+
+      // Query-resolution mode: jump straight to the correct STEP first —
+      // login always opens this screen on Step 1 regardless of which
+      // table actually has queries, so a member whose only flagged
+      // fields are on Nominee/Health used to have to look at a fully
+      // locked Personal Details screen and tap Next once before landing
+      // anywhere useful. queryModeNextPage(-1) is the same "skip any
+      // table with nothing queried" walk Next already does, just started
+      // one step before the beginning. Then jump straight to whichever
+      // field actually needs fixing — query state (unlike the prefilled
+      // values above) is already set by the time this screen opens, so
+      // this doesn't need to wait on _loadMember's own async work.
+      if (controller.queryState.isActive) {
+        final initialStep = controller.queryModeNextPage(-1);
+        if (initialStep != controller.currentStep.value) {
+          controller.currentStep.value = initialStep;
+          pageController.jumpToPage(initialStep);
+        }
+
+        switch (initialStep) {
+          case 0:
+            _scrollToActiveStep1QueryField();
+          case 1:
+            final currentNominee =
+                controller.queryModeCurrentNomineeItemNumber();
+            if (currentNominee != null) {
+              _scrollToActiveNomineeQueryField(currentNominee);
+            }
+          case 2:
+            _scrollToActiveHealthQueryField();
+        }
+      }
     });
   }
 
@@ -932,12 +1218,23 @@ class _MemberRegistrationScreenState
   // ============================================================
 
   void _onFullNameFocusChange() {
-    if (fullNameFocusNode.hasFocus) return;
+    if (fullNameFocusNode.hasFocus || controller.queryState.isActive) return;
     controller.splitAndTranslateFullName(fullNameController.text);
   }
 
+  // Query-resolution mode never calls the transliteration API — the
+  // member types each queried field's required script themselves (see
+  // QueryResolutionState's doc comment) — so every one of these on-unfocus
+  // handlers below skips its translate call while that mode is active,
+  // the same way _next() already skips splitAndTranslateFullName/
+  // translateAllStep1Fields for the same reason. Gated on
+  // `queryState.isActive` (the whole flow, not just Step 1) so a Health
+  // Declaration field queried in the future is covered too, without
+  // needing a second fix when that table gets wired up.
+  bool get _skipTranslateOnUnfocus => controller.queryState.isActive;
+
   void _onFatherNameFocusChange() {
-    if (fatherNameFocusNode.hasFocus) return;
+    if (fatherNameFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.fatherNameController.text,
       targetModel: controller.fatherNameLanguages,
@@ -946,7 +1243,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onAddressFocusChange() {
-    if (addressFocusNode.hasFocus) return;
+    if (addressFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.addressController.text,
       targetModel: controller.addressLanguages,
@@ -955,7 +1252,9 @@ class _MemberRegistrationScreenState
   }
 
   void _onSeriousIllnessDetailFocusChange() {
-    if (seriousIllnessDetailFocusNode.hasFocus) return;
+    if (seriousIllnessDetailFocusNode.hasFocus || _skipTranslateOnUnfocus) {
+      return;
+    }
     controller.translateNameFieldOnUnfocus(
       text: controller.seriousIllnessDetailController.text,
       targetModel: controller.seriousIllnessLanguages,
@@ -964,7 +1263,9 @@ class _MemberRegistrationScreenState
   }
 
   void _onOtherHereditaryDetailFocusChange() {
-    if (otherHereditaryDetailFocusNode.hasFocus) return;
+    if (otherHereditaryDetailFocusNode.hasFocus || _skipTranslateOnUnfocus) {
+      return;
+    }
     controller.translateNameFieldOnUnfocus(
       text: controller.otherHereditaryDetailController.text,
       targetModel: controller.otherHereditaryLanguages,
@@ -973,7 +1274,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onSurgeryDetailFocusChange() {
-    if (surgeryDetailFocusNode.hasFocus) return;
+    if (surgeryDetailFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.surgeryDetailController.text,
       targetModel: controller.surgeryLanguages,
@@ -982,7 +1283,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onAllergyDetailFocusChange() {
-    if (allergyDetailFocusNode.hasFocus) return;
+    if (allergyDetailFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.allergyDetailController.text,
       targetModel: controller.allergyLanguages,
@@ -991,7 +1292,9 @@ class _MemberRegistrationScreenState
   }
 
   void _onOtherHealthDetailFocusChange() {
-    if (otherHealthDetailFocusNode.hasFocus) return;
+    if (otherHealthDetailFocusNode.hasFocus || _skipTranslateOnUnfocus) {
+      return;
+    }
     controller.translateNameFieldOnUnfocus(
       text: controller.otherHealthDetailController.text,
       targetModel: controller.otherHealthDetailLanguages,
@@ -1000,7 +1303,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onVillageFocusChange() {
-    if (villageFocusNode.hasFocus) return;
+    if (villageFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.villageController.text,
       targetModel: controller.villageLanguages,
@@ -1009,7 +1312,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onTalukaFocusChange() {
-    if (talukaFocusNode.hasFocus) return;
+    if (talukaFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.talukaController.text,
       targetModel: controller.talukaLanguages,
@@ -1018,7 +1321,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onDistrictFocusChange() {
-    if (districtFocusNode.hasFocus) return;
+    if (districtFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.districtController.text,
       targetModel: controller.districtLanguages,
@@ -1027,7 +1330,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onStateFocusChange() {
-    if (stateFocusNode.hasFocus) return;
+    if (stateFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.stateController.text,
       targetModel: controller.stateLanguages,
@@ -1036,7 +1339,7 @@ class _MemberRegistrationScreenState
   }
 
   void _onOccupationFocusChange() {
-    if (occupationFocusNode.hasFocus) return;
+    if (occupationFocusNode.hasFocus || _skipTranslateOnUnfocus) return;
     controller.translateNameFieldOnUnfocus(
       text: controller.occupationController.text,
       targetModel: controller.occupationLanguages,
@@ -1080,28 +1383,53 @@ class _MemberRegistrationScreenState
         return;
       }
 
+      final inQueryMode = controller.queryState.isActive;
+
+      if (inQueryMode && !controller.queryModeStep1Resolved()) {
+        ToastUtil.error(
+          _flowLocalized(
+            controller.queryState.localLanguage.value,
+            'query_resolve_all_fields_error',
+          ),
+        );
+        // More than one field can share the same pass (e.g. two Gujarati
+        // fields queried together) — fixing one and tapping Next without
+        // fixing the other used to just toast with no way to tell WHICH
+        // field still needed attention. Jump straight to it, same as the
+        // pass-advance and initial-open cases already do.
+        _scrollToActiveStep1QueryField();
+        return;
+      }
+
       // Dismiss keyboard so no focus events fire during the async work.
       FocusScope.of(context).unfocus();
 
-      // Safety net for the full-name split/translate: normally already
-      // done by _onFullNameFocusChange when the field loses focus, this
-      // just guarantees it's finished (and re-attempts it if the previous
-      // attempt failed) even if that never fired in time — same reasoning
-      // as translateAllStep1Fields below. The Form validation above has
-      // already confirmed the text is a validly-formatted full name.
-      await controller.splitAndTranslateFullName(fullNameController.text);
+      // Query-resolution mode never calls the transliteration API — the
+      // member types the required script themselves (see
+      // QueryResolutionState's doc comment) — so both the full-name
+      // split/translate safety net and the dirty-field sweep below are
+      // skipped entirely in that mode.
+      if (!inQueryMode) {
+        // Safety net for the full-name split/translate: normally already
+        // done by _onFullNameFocusChange when the field loses focus, this
+        // just guarantees it's finished (and re-attempts it if the previous
+        // attempt failed) even if that never fired in time — same reasoning
+        // as translateAllStep1Fields below. The Form validation above has
+        // already confirmed the text is a validly-formatted full name.
+        await controller.splitAndTranslateFullName(fullNameController.text);
 
-      // Translate every dirty/incomplete field before saving.
-      await controller.translateAllStep1Fields();
+        // Translate every dirty/incomplete field before saving.
+        await controller.translateAllStep1Fields();
 
-      final incompleteField =
-          controller.firstIncompleteStep1Field();
+        final incompleteField =
+            controller.firstIncompleteStep1Field();
 
-      if (incompleteField != null) {
-        ToastUtil.error(
-          'field_translation_failed'.trParams({'label': incompleteField.tr}),
-        );
-        return;
+        if (incompleteField != null) {
+          ToastUtil.error(
+            'field_translation_failed'.trParams({'label': incompleteField.tr}),
+          );
+          return;
+        }
       }
 
       // Upload documents, then save the personal-detail step. The loader
@@ -1112,21 +1440,73 @@ class _MemberRegistrationScreenState
         return;
       }
 
+      if (inQueryMode) {
+        await controller.resolveStep1Queries();
+
+        // More passes remain on this same screen (e.g. Gujarati fields
+        // just resolved, Hindi fields still pending) — stay put, switch
+        // the screen's local language to the next pass, tell the member
+        // why via toast, and scroll to the newly-unlocked field, instead
+        // of advancing to the next step.
+        if (!controller.queryModeStep1FullyResolved()) {
+          final prevLanguage = controller.queryState.passLanguageFor(1);
+          controller.queryState.primeLocalLanguageForScreen(1);
+          // Show the saved value of the language now being fixed, instead
+          // of the previous pass's leftover text in the shared box.
+          controller.seedQueryModeStep1Fields();
+          controller.recheckStep1ScriptMismatches();
+          _toastPassAdvanced(
+            prevLanguage,
+            controller.queryState.passLanguageFor(1),
+          );
+
+          _scrollToActiveStep1QueryField();
+          return;
+        }
+      }
+
       ToastUtil.success('information_saved_successfully'.tr);
 
-      controller.nextStep();
+      final nextPage = inQueryMode ? controller.queryModeNextPage(0) : 1;
+
+      // Query mode never shows the Rules step (registration-only) — once
+      // nothing else is left to fix, go straight to Preview.
+      if (inQueryMode && nextPage >= 3) {
+        Get.toNamed(AppRoutes.registrationPreview);
+        return;
+      }
+
+      controller.currentStep.value = nextPage;
 
       await pageController.animateToPage(
-        1,
+        nextPage,
         duration:
         const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
 
+      // Landed on Nominee with queries of its own waiting — jump straight
+      // to the first one, same as Step 1's own initial auto-scroll.
+      if (inQueryMode && nextPage == 1) {
+        final currentNominee = controller.queryModeCurrentNomineeItemNumber();
+        if (currentNominee != null) {
+          _scrollToActiveNomineeQueryField(currentNominee);
+        }
+      } else if (inQueryMode && nextPage == 2) {
+        // Nominee had nothing queried — queryModeNextPage skipped straight
+        // to Health Declaration.
+        _scrollToActiveHealthQueryField();
+      }
+
       return;
     }
 
     if (step == 1) {
+      if (controller.queryState.isActive) {
+        await _nextQueryModeNominee();
+        return;
+      }
+
       // Only the currently-last-visible nominee slot can still be
       // unsaved here — every earlier slot was already validated + saved
       // via SaveNominee the moment "Add another nominee" revealed the
@@ -1251,6 +1631,19 @@ class _MemberRegistrationScreenState
       // so the just-typed value's translated languages are always what
       // gets saved, never a stale/empty one — and only then is the save
       // API itself called, also awaited.
+      final inHealthQueryMode = controller.queryState.isActive;
+
+      if (inHealthQueryMode && !controller.queryModeHealthResolved()) {
+        ToastUtil.error(
+          _flowLocalized(
+            controller.queryState.localLanguage.value,
+            'query_resolve_all_fields_error',
+          ),
+        );
+        _scrollToActiveHealthQueryField();
+        return;
+      }
+
       FocusScope.of(context).unfocus();
 
       final healthDeclarationSaved =
@@ -1262,9 +1655,33 @@ class _MemberRegistrationScreenState
         // itself checked first. A null here means the false came from a
         // real save/API error instead (see saveHealthDeclaration), which
         // has nothing on screen to scroll to.
-        if (controller.firstMissingHealthDetail() != null) {
+        if (!inHealthQueryMode && controller.firstMissingHealthDetail() != null) {
           _scrollToFirstError(_healthCheckpoints());
         }
+        return;
+      }
+
+      if (inHealthQueryMode) {
+        await controller.resolveHealthQueries();
+
+        if (!controller.queryModeHealthFullyResolved()) {
+          final prevLanguage = controller.queryState.passLanguageFor(3);
+          controller.queryState.primeLocalLanguageForScreen(3);
+          controller.seedQueryModeHealthFields();
+          controller.recheckHealthScriptMismatches();
+          _toastPassAdvanced(
+            prevLanguage,
+            controller.queryState.passLanguageFor(3),
+          );
+          _scrollToActiveHealthQueryField();
+          return;
+        }
+      }
+
+      // Query mode skips the Rules step (registration-only) — straight to
+      // Preview once Health is saved and resolved.
+      if (inHealthQueryMode) {
+        Get.toNamed(AppRoutes.registrationPreview);
         return;
       }
 
@@ -1281,6 +1698,130 @@ class _MemberRegistrationScreenState
     }
 
     await _finishRegistration();
+  }
+
+  /// Toast shown when a pass finishes but the same screen still has
+  /// another language to fill: names the language JUST completed and the
+  /// one that comes next (Gujarati > Hindi > English), written in the
+  /// member's selected app language.
+  void _toastPassAdvanced(AppLanguage completed, AppLanguage next) {
+    ToastUtil.info(
+      _flowLocalized(
+        controller.queryState.localLanguage.value,
+        'query_pass_advanced_toast',
+        params: {
+          'prevLanguage': completed.displayName,
+          'nextLanguage': next.displayName,
+        },
+      ),
+    );
+  }
+
+  /// Query-resolution mode's Next handling for the Nominee step. Every
+  /// nominee with a pending query is editable at once; on Next, in order:
+  /// validate that each one's current pass is fixed, SAVE each queried
+  /// nominee with its new data (SaveNominee, one nominee at a time), then
+  /// call QueryResolve for each nominee's resolved query ids one by one.
+  /// If some nominee still has another language pass left, stay on this
+  /// screen for it; otherwise finalize the screen and move on.
+  Future<void> _nextQueryModeNominee() async {
+    final queriedNominees = controller.queryModeUnresolvedNominees();
+
+    if (queriedNominees.isEmpty) {
+      // Nothing queried on this table (or everything already resolved) —
+      // just move on to wherever query mode's forward-skip logic sends us.
+      final nextPage = controller.queryModeNextPage(1);
+      if (nextPage >= 3) {
+        Get.toNamed(AppRoutes.registrationPreview);
+        return;
+      }
+      controller.currentStep.value = nextPage;
+      await pageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      if (nextPage == 2) _scrollToActiveHealthQueryField();
+      return;
+    }
+
+    for (final itemNumber in queriedNominees) {
+      if (!controller.queryModeNomineeCurrentPassResolved(itemNumber)) {
+        ToastUtil.error(
+          _flowLocalized(
+            controller.queryState.localLanguage.value,
+            'query_resolve_all_fields_error',
+          ),
+        );
+        _scrollToActiveNomineeQueryField(itemNumber);
+        return;
+      }
+    }
+
+    FocusScope.of(context).unfocus();
+
+    // 1. Save every queried nominee with the new data, one by one.
+    for (final itemNumber in queriedNominees) {
+      final saved = await controller.saveNomineeSlot(itemNumber - 1);
+      if (!saved) {
+        _scrollToActiveNomineeQueryField(itemNumber);
+        return;
+      }
+    }
+
+    // 2. Then resolve each nominee's queries, one query id at a time.
+    for (final itemNumber in queriedNominees) {
+      await controller.resolveNomineeQueries(itemNumber);
+    }
+
+    // 3. Another language pass left on some nominee — stay for it.
+    final remaining = controller.queryModeUnresolvedNominees();
+    if (remaining.isNotEmpty) {
+      final firstRemaining = remaining.first;
+      final prevLanguage = controller.queryState.passLanguageFor(
+        2,
+        itemNumber: firstRemaining,
+      );
+      controller.primeAllQueriedNominees();
+      _toastPassAdvanced(
+        prevLanguage,
+        controller.queryState.passLanguageFor(2, itemNumber: firstRemaining),
+      );
+      _scrollToActiveNomineeQueryField(firstRemaining);
+      return;
+    }
+
+    // 4. Every queried nominee is saved + resolved — the one "finalize
+    // this screen" call the normal flow also makes, then move on.
+    final nomineeScreenSaved = await controller.saveNomineeScreen();
+    if (!nomineeScreenSaved) {
+      return;
+    }
+
+    ToastUtil.success(
+      _flowLocalized(
+        controller.queryState.localLanguage.value,
+        'information_saved_successfully',
+      ),
+    );
+
+    final nextPage = controller.queryModeNextPage(1);
+
+    if (nextPage >= 3) {
+      Get.toNamed(AppRoutes.registrationPreview);
+      return;
+    }
+
+    controller.currentStep.value = nextPage;
+    await pageController.animateToPage(
+      nextPage,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+
+    if (nextPage == 2) {
+      _scrollToActiveHealthQueryField();
+    }
   }
 
   // ============================================================
@@ -1358,9 +1899,11 @@ class _MemberRegistrationScreenState
 
   @override
   void dispose() {
+    _languageMirrorWorker?.dispose();
     controller.mobileController.removeListener(_formatMobileDisplay);
     controller.panNumberController.removeListener(_handlePanKeyboardSwitch);
     _panFocusNode.dispose();
+    _aadharNumberFocusNode.dispose();
     fatherNameFocusNode
       ..removeListener(_onFatherNameFocusChange)
       ..dispose();
@@ -1460,6 +2003,28 @@ class _MemberRegistrationScreenState
           )
               : const SizedBox.shrink(),
         ),
+        // Query-resolution mode's OWN language toggle — manually
+        // previewing labels/toasts in a different language than the
+        // active pass, never the app's real locale (see
+        // QueryResolutionState.localLanguage's doc comment). Hidden
+        // entirely outside this flow. NOT wrapped in Obx: `isActive` is
+        // a plain (non-Rx) getter that's decided once at login and never
+        // changes for the rest of this screen's lifetime — wrapping it
+        // in Obx anyway is exactly the "never reads a real observable"
+        // case that throws GetX's own "improper use of Obx" check (same
+        // bug already fixed on _queryAwareField/_querySimpleField/
+        // _queryLockableImage — this one just needs no Obx at all rather
+        // than an unconditional Rx read, since it truly never changes).
+        actions: [
+          if (controller.queryState.isActive)
+            IconButton(
+              icon: const Icon(
+                Icons.translate,
+                color: AppColors.primary,
+              ),
+              onPressed: LanguageSettingsSheet.show,
+            ),
+        ],
       ),
 
       body: SafeArea(
@@ -1600,6 +2165,77 @@ class _MemberRegistrationScreenState
     );
   }
 
+  /// Query-resolution mode's lock/unlock treatment for an already-built
+  /// widget that isn't a plain text field — a photo/signature tile, a
+  /// dropdown, a date-picker trigger — same "every non-queried field is
+  /// fully locked, a queried one starts red and turns green once touched"
+  /// idea as [_queryAwareField]/[_querySimpleField]. [tableId] defaults to
+  /// 1 (Step 1's 5 image/signature fields: Image=17, AadharImage=42,
+  /// AadharBackImage=61, PanImage=44, DigitalSign=45); pass `tableId: 2`
+  /// with [itemNumber] for a Nominee-table field (e.g. Relation=4,
+  /// ProfilePhoto=6, the 3 document photos) on a specific nominee slot.
+  /// Checked outside any Obx first for the same reason as those two: Obx
+  /// requires a branch to always read a real observable, so "not in this
+  /// flow" is handled before ever entering one. "Touched" is set by the
+  /// picker/setSignature methods themselves (registration_controller.dart)
+  /// the moment a new file is actually chosen, or by the dropdown/date
+  /// field's own onChanged — not on tap alone, since tapping a photo just
+  /// opens the source-picker sheet and the member may cancel it.
+  Widget _queryLockableImage({
+    required int fieldId,
+    required Widget child,
+    bool isCircle = false,
+    int tableId = 1,
+    int? itemNumber,
+  }) {
+    if (!controller.queryState.isActive) return child;
+
+    return Obx(() {
+      final queryState = controller.queryState;
+      // Always read a real observable up front, regardless of which
+      // branch this build takes below — Obx requires an actual `.value`
+      // read on every build, and `isFieldEditable` returns early WITHOUT
+      // touching any Rx at all when this field has no active query (the
+      // common case: an account's queries usually target text fields
+      // only, not every photo/signature slot), which throws GetX's
+      // "improper use of Obx" check otherwise.
+      final resolvedValue = queryState
+          .isFieldResolved(tableId, fieldId, itemNumber: itemNumber)
+          .value;
+      final editable = queryState.isFieldEditable(
+        tableId,
+        fieldId,
+        itemNumber: itemNumber,
+      );
+      final resolved = editable && resolvedValue;
+
+      final locked = IgnorePointer(
+        ignoring: !editable,
+        child: Opacity(
+          opacity: editable ? 1 : 0.45,
+          child: child,
+        ),
+      );
+
+      if (!editable) return locked;
+
+      return Container(
+        padding: EdgeInsets.all(3.px(context)),
+        decoration: BoxDecoration(
+          shape: isCircle ? BoxShape.circle : BoxShape.rectangle,
+          borderRadius: isCircle
+              ? null
+              : BorderRadius.circular(18.px(context)),
+          border: Border.all(
+            color: resolved ? AppColors.success : AppColors.danger,
+            width: 2,
+          ),
+        ),
+        child: locked,
+      );
+    });
+  }
+
   // ============================================================
   // STEP 1
   // ============================================================
@@ -1629,39 +2265,43 @@ class _MemberRegistrationScreenState
 
             Center(
               key: _profileImageKey,
-              child: Obx(
-                    () => _uploadOrNetworkImage(
-                  context: context,
-                  title: 'profile_photo'.tr,
-                  subtitle:
-                  'tap_to_upload'.tr,
-                  isCircle: true,
-                  width:
-                  130.px(context),
-                  height:
-                  130.px(context),
-                  file: controller
-                      .profileImage.value,
-                  networkUrl: controller
-                      .profileImageUrl.value,
-                  onTap: () {
-                    controller
-                        .showImageSourceSheet(
-                      onSelected:
+              child: _queryLockableImage(
+                fieldId: 17,
+                isCircle: true,
+                child: Obx(
+                      () => _uploadOrNetworkImage(
+                    context: context,
+                    title: 'profile_photo'.tr,
+                    subtitle:
+                    'tap_to_upload'.tr,
+                    isCircle: true,
+                    width:
+                    130.px(context),
+                    height:
+                    130.px(context),
+                    file: controller
+                        .profileImage.value,
+                    networkUrl: controller
+                        .profileImageUrl.value,
+                    onTap: () {
                       controller
-                          .pickProfileImage,
-                    );
-                  },
-                  onRemove: controller
-                      .profileImage
-                      .value !=
-                      null
-                      ? () {
-                    controller
+                          .showImageSourceSheet(
+                        onSelected:
+                        controller
+                            .pickProfileImage,
+                      );
+                    },
+                    onRemove: controller
                         .profileImage
-                        .value = null;
-                  }
-                      : null,
+                        .value !=
+                        null
+                        ? () {
+                      controller
+                          .profileImage
+                          .value = null;
+                    }
+                        : null,
+                  ),
                 ),
               ),
             ),
@@ -1700,8 +2340,8 @@ class _MemberRegistrationScreenState
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _fatherNameKey,
+            _queryAwareField(
+              fieldKey: _fatherNameKey,
               // "Father's / Husband's Name" — same field either way (a
               // married woman may fill in her husband's name here), see
               // the printed scheme-benefit form's "પિતા / પતિનું નામ" /
@@ -1709,9 +2349,9 @@ class _MemberRegistrationScreenState
               // already shows it this way; this is the one other place
               // ('father_name' alone) that hadn't caught up.
               label: 'father_husband_name'.tr,
+              labelKey: 'father_husband_name',
               hintText: 'father_name_hint'.tr,
-              controller:
-              controller.fatherNameController,
+              textController: controller.fatherNameController,
               focusNode: fatherNameFocusNode,
               validator: (value) => AppValidators.fatherName(
                 value,
@@ -1720,6 +2360,9 @@ class _MemberRegistrationScreenState
               inputFormatters: [
                 _nameInputFormatter,
               ],
+              baseFieldId: 12,
+              hFieldId: 13,
+              gFieldId: 14,
             ),
 
             SizedBox(
@@ -1914,75 +2557,85 @@ class _MemberRegistrationScreenState
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _addressKey,
+            _queryAwareField(
+              fieldKey: _addressKey,
               label: 'address'.tr,
-              controller:
-              controller.addressController,
+              labelKey: 'address',
+              textController: controller.addressController,
               focusNode: addressFocusNode,
               maxLines: 3,
-              validator:
-              AppValidators.requiredField,
+              validator: AppValidators.requiredField,
+              baseFieldId: 21,
+              hFieldId: 22,
+              gFieldId: 23,
             ),
 
             SizedBox(
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _villageKey,
+            _queryAwareField(
+              fieldKey: _villageKey,
               label: 'village'.tr,
-              controller:
-              controller.villageController,
+              labelKey: 'village',
+              textController: controller.villageController,
               focusNode: villageFocusNode,
-              validator:
-              AppValidators.placeName,
+              validator: AppValidators.placeName,
               inputFormatters: [_placeNameInputFormatter],
+              baseFieldId: 24,
+              hFieldId: 25,
+              gFieldId: 26,
             ),
 
             SizedBox(
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _talukaKey,
+            _queryAwareField(
+              fieldKey: _talukaKey,
               label: 'taluka'.tr,
-              controller:
-              controller.talukaController,
+              labelKey: 'taluka',
+              textController: controller.talukaController,
               focusNode: talukaFocusNode,
-              validator:
-              AppValidators.placeName,
+              validator: AppValidators.placeName,
               inputFormatters: [_placeNameInputFormatter],
+              baseFieldId: 27,
+              hFieldId: 28,
+              gFieldId: 29,
             ),
 
             SizedBox(
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _districtKey,
+            _queryAwareField(
+              fieldKey: _districtKey,
               label: 'district'.tr,
-              controller:
-              controller.districtController,
+              labelKey: 'district',
+              textController: controller.districtController,
               focusNode: districtFocusNode,
-              validator:
-              AppValidators.placeName,
+              validator: AppValidators.placeName,
               inputFormatters: [_placeNameInputFormatter],
+              baseFieldId: 30,
+              hFieldId: 31,
+              gFieldId: 32,
             ),
 
             SizedBox(
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _stateKey,
+            _queryAwareField(
+              fieldKey: _stateKey,
               label: 'state'.tr,
-              controller:
-              controller.stateController,
+              labelKey: 'state',
+              textController: controller.stateController,
               focusNode: stateFocusNode,
-              validator:
-              AppValidators.placeName,
+              validator: AppValidators.placeName,
               inputFormatters: [_placeNameInputFormatter],
+              baseFieldId: 33,
+              hFieldId: 34,
+              gFieldId: 35,
             ),
 
             SizedBox(
@@ -1998,22 +2651,22 @@ class _MemberRegistrationScreenState
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _aadharNumberKey,
+            _querySimpleField(
+              fieldKey: _aadharNumberKey,
               label: 'aadhaar_number'.tr,
-              controller:
-              controller
-                  .aadharNumberController,
-              keyboardType:
-              TextInputType.number,
+              labelKey: 'aadhaar_number',
+              textController: controller.aadharNumberController,
+              focusNode: _aadharNumberFocusNode,
+              keyboardType: TextInputType.number,
               // 12 digits + 2 grouping spaces ("1234 5678 9012") — see
               // _AadharInputFormatter.
               maxLength: 14,
-              validator:
-              AppValidators.aadhar,
+              validator: AppValidators.aadhar,
               inputFormatters: [
                 _AadharInputFormatter(),
               ],
+              tableId: 1,
+              fieldId: 41,
             ),
 
             SizedBox(
@@ -2022,38 +2675,41 @@ class _MemberRegistrationScreenState
 
             Container(
               key: _aadharFrontKey,
-              child: Obx(
-                    () => _uploadOrNetworkImage(
-                context: context,
-                title:
-                'aadhaar_photo'.tr,
-                subtitle:
-                'tap_to_upload_image'.tr,
-                height:
-                180.px(context),
-                file: controller
-                    .aadharImage.value,
-                networkUrl: controller
-                    .aadharImageUrl.value,
-                onTap: () {
-                  controller
-                      .showImageSourceSheet(
-                    onSelected:
+              child: _queryLockableImage(
+                fieldId: 42,
+                child: Obx(
+                      () => _uploadOrNetworkImage(
+                  context: context,
+                  title:
+                  'aadhaar_photo'.tr,
+                  subtitle:
+                  'tap_to_upload_image'.tr,
+                  height:
+                  180.px(context),
+                  file: controller
+                      .aadharImage.value,
+                  networkUrl: controller
+                      .aadharImageUrl.value,
+                  onTap: () {
                     controller
-                        .pickAadharImage,
-                  );
-                },
-                onRemove: controller
-                    .aadharImage
-                    .value !=
-                    null
-                    ? () {
-                  controller
+                        .showImageSourceSheet(
+                      onSelected:
+                      controller
+                          .pickAadharImage,
+                    );
+                  },
+                  onRemove: controller
                       .aadharImage
-                      .value = null;
-                }
-                    : null,
-              ),
+                      .value !=
+                      null
+                      ? () {
+                    controller
+                        .aadharImage
+                        .value = null;
+                  }
+                      : null,
+                ),
+                ),
               ),
             ),
 
@@ -2069,38 +2725,41 @@ class _MemberRegistrationScreenState
 
             Container(
               key: _aadharBackKey,
-              child: Obx(
-                    () => _uploadOrNetworkImage(
-                context: context,
-                title:
-                'aadhaar_back_photo'.tr,
-                subtitle:
-                'tap_to_upload_image'.tr,
-                height:
-                180.px(context),
-                file: controller
-                    .aadharBackImage.value,
-                networkUrl: controller
-                    .aadharBackImageUrl.value,
-                onTap: () {
-                  controller
-                      .showImageSourceSheet(
-                    onSelected:
+              child: _queryLockableImage(
+                fieldId: 61,
+                child: Obx(
+                      () => _uploadOrNetworkImage(
+                  context: context,
+                  title:
+                  'aadhaar_back_photo'.tr,
+                  subtitle:
+                  'tap_to_upload_image'.tr,
+                  height:
+                  180.px(context),
+                  file: controller
+                      .aadharBackImage.value,
+                  networkUrl: controller
+                      .aadharBackImageUrl.value,
+                  onTap: () {
                     controller
-                        .pickAadharBackImage,
-                  );
-                },
-                onRemove: controller
-                    .aadharBackImage
-                    .value !=
-                    null
-                    ? () {
-                  controller
+                        .showImageSourceSheet(
+                      onSelected:
+                      controller
+                          .pickAadharBackImage,
+                    );
+                  },
+                  onRemove: controller
                       .aadharBackImage
-                      .value = null;
-                }
-                    : null,
-              ),
+                      .value !=
+                      null
+                      ? () {
+                    controller
+                        .aadharBackImage
+                        .value = null;
+                  }
+                      : null,
+                ),
+                ),
               ),
             ),
 
@@ -2141,37 +2800,144 @@ class _MemberRegistrationScreenState
             // handled entirely by that listener now.
             Container(
               key: _panNumberKey,
-              child: ValueListenableBuilder<TextEditingValue>(
-                valueListenable: controller.panNumberController,
-                builder: (context, value, _) {
-                  final cursorOffset = value.selection.end < 0
-                      ? value.text.length
-                      : value.selection.end.clamp(0, value.text.length);
+              // Query-resolution mode wraps the same cursor-tracking
+              // ValueListenableBuilder in an outer Obx for the lock/
+              // resolved/mismatch state — checked outside any Obx first,
+              // same reasoning as _queryAwareField/_querySimpleField
+              // above (Obx requires a branch to always read a real
+              // observable, so the "not in this flow" case is handled
+              // before ever entering one).
+              child: !controller.queryState.isActive
+                  ? ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: controller.panNumberController,
+                      builder: (context, value, _) {
+                        final cursorOffset = value.selection.end < 0
+                            ? value.text.length
+                            : value.selection.end.clamp(0, value.text.length);
 
-                  return AppTextField.form(
-                    focusNode: _panFocusNode,
-                    label: 'pan_number'.tr,
-                    controller:
-                    controller.panNumberController,
-                    keyboardType: _panKeyboardTypeFor(cursorOffset),
-                    textCapitalization:
-                    TextCapitalization.characters,
-                    validator:
-                    AppValidators.pan,
-                    inputFormatters: [
-                      _PanInputFormatter(),
-                    ],
-                    onChanged: (text) {
-                      // "Close the keyboard after completion" — PAN is
-                      // always exactly 10 characters, so once the last one
-                      // is entered there's nothing left to type.
-                      if (text.length == 10) {
-                        FocusScope.of(context).unfocus();
-                      }
-                    },
-                  );
-                },
-              ),
+                        return AppTextField.form(
+                          focusNode: _panFocusNode,
+                          label: 'pan_number'.tr,
+                          controller:
+                          controller.panNumberController,
+                          keyboardType: _panKeyboardTypeFor(cursorOffset),
+                          textCapitalization:
+                          TextCapitalization.characters,
+                          validator:
+                          AppValidators.pan,
+                          inputFormatters: [
+                            _PanInputFormatter(),
+                          ],
+                          onChanged: (text) {
+                            // "Close the keyboard after completion" — PAN
+                            // is always exactly 10 characters, so once the
+                            // last one is entered there's nothing left to
+                            // type.
+                            if (text.length == 10) {
+                              FocusScope.of(context).unfocus();
+                            }
+                          },
+                        );
+                      },
+                    )
+                  : Obx(() {
+                      final queryState = controller.queryState;
+                      // Always read real observables up front, regardless
+                      // of which branch this build takes below — same fix
+                      // as _queryAwareField/_querySimpleField/
+                      // _queryLockableImage: isFieldEditable returns early
+                      // WITHOUT touching any Rx at all when PAN has no
+                      // active query this session, which would otherwise
+                      // throw GetX's "improper use of Obx" check.
+                      final resolvedValue =
+                          queryState.isFieldResolved(1, 43).value;
+                      final mismatchValue =
+                          queryState.scriptMismatch(1, 43).value;
+                      final editable = queryState.isFieldEditable(1, 43);
+                      final resolved = editable && resolvedValue;
+                      final mismatch = editable && mismatchValue;
+
+                      String wrongScriptMessage() => _flowLocalized(
+                            queryState.localLanguage.value,
+                            'query_field_wrong_script',
+                            params: {
+                              'language': AppLanguage.english.displayName,
+                            },
+                          );
+
+                      return ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: controller.panNumberController,
+                        builder: (context, value, _) {
+                          final cursorOffset = value.selection.end < 0
+                              ? value.text.length
+                              : value.selection.end
+                              .clamp(0, value.text.length);
+
+                          return AppTextField.form(
+                            focusNode: editable ? _panFocusNode : null,
+                            label: _flowLocalized(
+                              queryState.localLanguage.value,
+                              'pan_number',
+                            ),
+                            controller: controller.panNumberController,
+                            keyboardType: _panKeyboardTypeFor(cursorOffset),
+                            textCapitalization:
+                            TextCapitalization.characters,
+                            validator: editable ? AppValidators.pan : null,
+                            inputFormatters:
+                            editable ? [_PanInputFormatter()] : null,
+                            enabled: editable,
+                            readOnly: !editable,
+                            errorText: (mismatch || (editable && !resolved))
+                ? wrongScriptMessage()
+                : null,
+                            enabledBorderColor: !editable
+                                ? null
+                                : (resolved
+                                ? AppColors.success
+                                : AppColors.danger),
+                            // Without this, the red/green above is only
+                            // ever visible while the field is NOT focused
+                            // — auto-scroll immediately focuses a newly
+                            // unlocked field, and AppTextField.form's
+                            // focused border defaults to the app's plain
+                            // teal theme color when this isn't set,
+                            // masking the red/green entirely the instant
+                            // focus lands (errorText's OWN built-in red
+                            // still shows through regardless, which is
+                            // why an ACTIVE mismatch was visible but a
+                            // simply-unresolved-and-not-yet-touched field
+                            // wasn't).
+                            focusedBorderColor: !editable
+                                ? null
+                                : (resolved
+                                ? AppColors.success
+                                : AppColors.danger),
+                            onChanged: !editable
+                                ? null
+                                : (text) {
+                              if (text.length == 10) {
+                                FocusScope.of(context).unfocus();
+                              }
+                              controller.queryModeTouchSimpleField(
+                                1,
+                                43,
+                                text,
+                              );
+                              final isMismatched =
+                                  queryState.scriptMismatch(1, 43).value;
+                              if (queryState.shouldToastMismatch(
+                                1,
+                                43,
+                                isMismatched,
+                              )) {
+                                ToastUtil.error(wrongScriptMessage());
+                              }
+                            },
+                          );
+                        },
+                      );
+                    }),
             ),
 
             SizedBox(
@@ -2180,37 +2946,40 @@ class _MemberRegistrationScreenState
 
             Container(
               key: _panImageKey,
-              child: Obx(
-                    () => _uploadOrNetworkImage(
-                context: context,
-                title: 'upload_pan_card'.tr,
-                subtitle:
-                'tap_to_upload_image'.tr,
-                height:
-                180.px(context),
-                file: controller
-                    .panImage.value,
-                networkUrl: controller
-                    .panImageUrl.value,
-                onTap: () {
-                  controller
-                      .showImageSourceSheet(
-                    onSelected:
+              child: _queryLockableImage(
+                fieldId: 44,
+                child: Obx(
+                      () => _uploadOrNetworkImage(
+                  context: context,
+                  title: 'upload_pan_card'.tr,
+                  subtitle:
+                  'tap_to_upload_image'.tr,
+                  height:
+                  180.px(context),
+                  file: controller
+                      .panImage.value,
+                  networkUrl: controller
+                      .panImageUrl.value,
+                  onTap: () {
                     controller
-                        .pickPanImage,
-                  );
-                },
-                onRemove: controller
-                    .panImage
-                    .value !=
-                    null
-                    ? () {
-                  controller
+                        .showImageSourceSheet(
+                      onSelected:
+                      controller
+                          .pickPanImage,
+                    );
+                  },
+                  onRemove: controller
                       .panImage
-                      .value = null;
-                }
-                    : null,
-              ),
+                      .value !=
+                      null
+                      ? () {
+                    controller
+                        .panImage
+                        .value = null;
+                  }
+                      : null,
+                ),
+                ),
               ),
             ),
 
@@ -2233,14 +3002,16 @@ class _MemberRegistrationScreenState
               height: 16.px(context),
             ),
 
-            AppTextField.form(
-              key: _occupationKey,
+            _queryAwareField(
+              fieldKey: _occupationKey,
               label: 'occupation'.tr,
-              controller:
-              controller.occupationController,
+              labelKey: 'occupation',
+              textController: controller.occupationController,
               focusNode: occupationFocusNode,
-              validator:
-              AppValidators.name,
+              validator: AppValidators.name,
+              baseFieldId: 38,
+              hFieldId: 39,
+              gFieldId: 40,
             ),
 
             SizedBox(
@@ -2258,25 +3029,28 @@ class _MemberRegistrationScreenState
 
             Container(
               key: _signatureKey,
-              child: Obx(
-                    () => _uploadOrNetworkImage(
-                context: context,
-                title: 'your_signature'.tr,
-                subtitle:
-                'tap_to_enter_signature'.tr,
-                height:
-                160.px(context),
-                file: controller
-                    .signatureFile.value,
-                networkUrl: controller
-                    .signatureFileUrl.value,
-                onTap: _openSignature,
-                onRemove: controller
-                    .signatureFile.value !=
-                    null
-                    ? controller.clearSignature
-                    : null,
-              ),
+              child: _queryLockableImage(
+                fieldId: 45,
+                child: Obx(
+                      () => _uploadOrNetworkImage(
+                  context: context,
+                  title: 'your_signature'.tr,
+                  subtitle:
+                  'tap_to_enter_signature'.tr,
+                  height:
+                  160.px(context),
+                  file: controller
+                      .signatureFile.value,
+                  networkUrl: controller
+                      .signatureFileUrl.value,
+                  onTap: _openSignature,
+                  onRemove: controller
+                      .signatureFile.value !=
+                      null
+                      ? controller.clearSignature
+                      : null,
+                ),
+                ),
               ),
             ),
 
@@ -2461,7 +3235,40 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 16.px(context)),
 
-            Center(
+            _nomineeSlotBody(context, index),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Everything in a nominee card except its header row (number/saved-
+  /// check/remove button, always shown regardless of query mode) — split
+  /// out so query-resolution mode can wrap the WHOLE thing in one blanket
+  /// lock when this slot isn't the "current" nominee (see
+  /// RegistrationController.queryModeCurrentNomineeItemNumber: only the
+  /// lowest itemNumber with any unresolved query is ever unlocked at a
+  /// time — "Complete Nominee 1's relevant queries before moving to
+  /// Nominee 2", never mixing fields from different nominee items).
+  /// Outside query mode, or for the one current nominee, renders exactly
+  /// as before; per-field lock/pass/resolve treatment (mirroring Step 1's
+  /// _queryAwareField/_querySimpleField/_queryLockableImage) only matters
+  /// for that one slot, since every other slot is already fully
+  /// non-interactive here regardless of what any individual field's own
+  /// query state says.
+  Widget _nomineeSlotBody(BuildContext context, int index) {
+    final slot = controller.nomineeSlots[index];
+    final itemNumber = index + 1;
+
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+            _queryLockableImage(
+              tableId: 2,
+              fieldId: 6,
+              itemNumber: itemNumber,
+              isCircle: true,
+              child: Center(
               key: _nomineePhotoKeys[index],
               child: Obx(() {
                 final pickPhoto = () => controller.showImageSourceSheet(
@@ -2543,6 +3350,7 @@ class _MemberRegistrationScreenState
                 );
               }),
             ),
+            ),
 
             Center(
               child: _inlineError(
@@ -2558,10 +3366,12 @@ class _MemberRegistrationScreenState
             // Same EXACTLY-3-words format as the member's own Full Name
             // field (First Middle Surname) — see AppValidators.fullName —
             // instead of the old letters-only-with-no-word-count check.
-            AppTextField.form(
+            _queryAwareField(
+              fieldKey: _nomineeNameKeys[index],
               label: 'nominee_name'.tr,
+              labelKey: 'nominee_name',
               hintText: 'full_name_hint'.tr,
-              controller: slot.nameController,
+              textController: slot.nameController,
               // Leaving this field is what fires the same background
               // Hindi/Gujarati transliteration every other name field on
               // this wizard uses (see RegistrationController.onInit,
@@ -2575,11 +3385,22 @@ class _MemberRegistrationScreenState
               inputFormatters: [
                 _nameInputFormatter,
               ],
+              baseFieldId: 2,
+              hFieldId: 8,
+              gFieldId: 9,
+              tableId: 2,
+              itemNumber: itemNumber,
+              onUpdate: (fieldId, text) => controller
+                  .queryModeUpdateNomineeNameField(itemNumber, fieldId, text),
             ),
 
             SizedBox(height: 16.px(context)),
 
-            Container(
+            _queryLockableImage(
+              tableId: 2,
+              fieldId: 4,
+              itemNumber: itemNumber,
+              child: Container(
               key: _nomineeRelationKeys[index],
               child: Obx(
                     () => _enumDropdown(
@@ -2589,11 +3410,19 @@ class _MemberRegistrationScreenState
                 items: controller.relationOptions.value,
                 onChanged: (value) {
                   slot.relationId.value = value;
+                  if (controller.queryState.isActive) {
+                    controller.queryState.markTouched(
+                      2,
+                      4,
+                      itemNumber: itemNumber,
+                    );
+                  }
                 },
                 hasError:
                     slot.showErrors.value && slot.relationId.value == null,
               ),
               ),
+            ),
             ),
 
             _inlineError(
@@ -2608,7 +3437,12 @@ class _MemberRegistrationScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: AppTextField.form(
+                  key: _nomineeDobKeys[index],
+                  child: _queryLockableImage(
+                    tableId: 2,
+                    fieldId: 3,
+                    itemNumber: itemNumber,
+                    child: AppTextField.form(
                     label: 'date_of_birth'.tr,
                     controller: slot.dateOfBirthController,
                     readOnly: true,
@@ -2623,6 +3457,7 @@ class _MemberRegistrationScreenState
                       );
                     },
                   ),
+                  ),
                 ),
 
                 SizedBox(width: 12.px(context)),
@@ -2636,7 +3471,11 @@ class _MemberRegistrationScreenState
                 // across all visible nominees can't exceed 100%.
                 Expanded(
                   key: _nomineeShareKeys[index],
-                  child: Obx(() {
+                  child: _queryLockableImage(
+                    tableId: 2,
+                    fieldId: 5,
+                    itemNumber: itemNumber,
+                    child: Obx(() {
                     // Once the running total across all visible nominees
                     // goes over 100%, every share field's border turns
                     // red — not just the one the member is currently
@@ -2657,12 +3496,21 @@ class _MemberRegistrationScreenState
                       inputFormatters: [
                         _ShareInputFormatter(),
                       ],
+                      onChanged: controller.queryState.isActive
+                          ? (text) => controller.queryModeTouchSimpleField(
+                                2,
+                                5,
+                                text,
+                                itemNumber: itemNumber,
+                              )
+                          : null,
                       enabledBorderColor:
                           exceeds ? AppColors.danger : null,
                       focusedBorderColor:
                           exceeds ? AppColors.danger : null,
                     );
                   }),
+                  ),
                 ),
               ],
             ),
@@ -2707,9 +3555,10 @@ class _MemberRegistrationScreenState
             // nominee field required on this screen, so this is validated
             // with AppValidators.aadhar (required) instead of the
             // aadharOptional variant used before.
-            AppTextField.form(
+            _querySimpleField(
               label: 'nominee_aadhaar_number'.tr,
-              controller: slot.aadharNoController,
+              labelKey: 'nominee_aadhaar_number',
+              textController: slot.aadharNoController,
               keyboardType: TextInputType.number,
               // 12 digits + 2 grouping spaces ("1234 5678 9012") — see
               // _AadharInputFormatter.
@@ -2718,11 +3567,18 @@ class _MemberRegistrationScreenState
               inputFormatters: [
                 _AadharInputFormatter(),
               ],
+              tableId: 2,
+              fieldId: 13,
+              itemNumber: itemNumber,
             ),
 
             SizedBox(height: 12.px(context)),
 
-            Container(
+            _queryLockableImage(
+              tableId: 2,
+              fieldId: 10,
+              itemNumber: itemNumber,
+              child: Container(
               key: _nomineeAadharFrontKeys[index],
               child: Obx(
                     () => _uploadOrNetworkImage(
@@ -2744,6 +3600,7 @@ class _MemberRegistrationScreenState
               ),
               ),
             ),
+            ),
 
             _inlineError(
               () => slot.aadharFrontImage.value == null &&
@@ -2754,7 +3611,11 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 12.px(context)),
 
-            Container(
+            _queryLockableImage(
+              tableId: 2,
+              fieldId: 11,
+              itemNumber: itemNumber,
+              child: Container(
               key: _nomineeAadharBackKeys[index],
               child: Obx(
                     () => _uploadOrNetworkImage(
@@ -2776,6 +3637,7 @@ class _MemberRegistrationScreenState
               ),
               ),
             ),
+            ),
 
             _inlineError(
               () => slot.aadharBackImage.value == null &&
@@ -2786,7 +3648,11 @@ class _MemberRegistrationScreenState
 
             SizedBox(height: 12.px(context)),
 
-            Container(
+            _queryLockableImage(
+              tableId: 2,
+              fieldId: 12,
+              itemNumber: itemNumber,
+              child: Container(
               key: _nomineePassbookKeys[index],
               child: Obx(
                     () => _uploadOrNetworkImage(
@@ -2808,6 +3674,7 @@ class _MemberRegistrationScreenState
               ),
               ),
             ),
+            ),
 
             _inlineError(
               () => slot.passbookChequeImage.value == null &&
@@ -2815,10 +3682,29 @@ class _MemberRegistrationScreenState
               'please_upload_nominee_passbook_cheque_photo'.tr,
               showFlag: slot.showErrors,
             ),
-          ],
-        ),
-      ),
+      ],
     );
+
+    if (!controller.queryState.isActive) return body;
+
+    return Obx(() {
+      // Always read a real observable (GetX throws otherwise when no
+      // nominee has any query, so nothing below would read one).
+      controller.queryState.localLanguage.value;
+
+      // Every nominee with something still to fix is editable at once —
+      // one Next saves each of them in turn, then resolves its queries.
+      // Nominees with no (or only already-resolved) queries stay fully
+      // locked.
+      final isActive =
+          controller.queryModeUnresolvedNominees().contains(itemNumber);
+
+      if (isActive) return body;
+
+      return IgnorePointer(
+        child: Opacity(opacity: 0.45, child: body),
+      );
+    });
   }
 
   /// "Add another nominee" — validates + saves [lastVisibleIndex] (via
@@ -3026,15 +3912,27 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
+                _queryLockableImage(
+                  tableId: 3,
+                  fieldId: 3,
+                  child: Container(
                   key: _healthCurrentIllnessKey,
                   child: _yesNoField(
                     context,
                     question: 'health_q_current_illness'.tr,
                     value: hasIllness,
-                    onChanged: (value) =>
-                    controller.setHasCurrentIllness(value),
+                    onChanged: (value) {
+                      controller.setHasCurrentIllness(value);
+                      if (controller.queryState.isActive) {
+                        controller.queryModeTouchSimpleField(
+                          3,
+                          3,
+                          '$value',
+                        );
+                      }
+                    },
                   ),
+                ),
                 ),
                 if (hasIllness == true) ...[
                   SizedBox(height: 12.px(context)),
@@ -3063,7 +3961,9 @@ class _MemberRegistrationScreenState
 
           SizedBox(height: 10.px(context)),
 
-          Obx(
+          Container(
+            key: _healthDiseaseChipsKey,
+            child: Obx(
                 () => Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -3072,24 +3972,40 @@ class _MemberRegistrationScreenState
                   _diseaseChip(context, key),
               ],
             ),
+            ),
           ),
 
           // anyHerediatry -> other (translated) — the 'disease_hereditary'
-          // chip's own "please specify" detail.
+          // chip's own "please specify" detail. Also forced visible
+          // whenever THIS field itself (base/H/G, id 18/32/33) has an
+          // active query — otherwise a query targeting it could never be
+          // reached at all on an account where the hereditary checkbox
+          // isn't ticked, permanently blocking Next with no way to even
+          // see the field that needs fixing.
           Obx(() {
             final isHereditary =
                 controller.selectedDiseaseKeys.contains('disease_hereditary');
+            final isQueried = controller.queryState.hasQueryFor(3, 18) ||
+                controller.queryState.hasQueryFor(3, 32) ||
+                controller.queryState.hasQueryFor(3, 33);
 
-            if (!isHereditary) return const SizedBox.shrink();
+            if (!isHereditary && !isQueried) return const SizedBox.shrink();
 
             return Padding(
               padding: EdgeInsets.only(top: 12.px(context)),
-              child: AppTextField.form(
-                key: _healthHereditaryDetailKey,
+              child: _queryAwareField(
+                fieldKey: _healthHereditaryDetailKey,
                 label: 'health_hereditary_detail'.tr,
-                controller: controller.otherHereditaryDetailController,
+                labelKey: 'health_hereditary_detail',
+                textController: controller.otherHereditaryDetailController,
                 focusNode: otherHereditaryDetailFocusNode,
                 maxLines: 2,
+                baseFieldId: 18,
+                hFieldId: 32,
+                gFieldId: 33,
+                tableId: 3,
+                onUpdate: (fieldId, text) =>
+                    controller.queryModeUpdateHealthField(fieldId, text),
               ),
             );
           }),
@@ -3103,14 +4019,23 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
+                _queryLockableImage(
+                  tableId: 3,
+                  fieldId: 19,
+                  child: Container(
                   key: _healthSurgeryKey,
                   child: _yesNoField(
                     context,
                     question: 'health_q_surgery'.tr,
                     value: hadSurgery,
-                    onChanged: (value) => controller.setHadSurgery(value),
+                    onChanged: (value) {
+                      controller.setHadSurgery(value);
+                      if (controller.queryState.isActive) {
+                        controller.queryModeTouchSimpleField(3, 19, '$value');
+                      }
+                    },
                   ),
+                ),
                 ),
                 if (hadSurgery == true) ...[
                   SizedBox(height: 12.px(context)),
@@ -3145,15 +4070,23 @@ class _MemberRegistrationScreenState
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
+                _queryLockableImage(
+                  tableId: 3,
+                  fieldId: 22,
+                  child: Container(
                   key: _healthMedicationKey,
                   child: _yesNoField(
                     context,
                     question: 'health_q_medication'.tr,
                     value: onMedication,
-                    onChanged: (value) =>
-                    controller.setOnRegularMedication(value),
+                    onChanged: (value) {
+                      controller.setOnRegularMedication(value);
+                      if (controller.queryState.isActive) {
+                        controller.queryModeTouchSimpleField(3, 22, '$value');
+                      }
+                    },
                   ),
+                ),
                 ),
                 if (onMedication == true) ...[
                   SizedBox(height: 12.px(context)),
@@ -3217,29 +4150,47 @@ class _MemberRegistrationScreenState
 
           SizedBox(height: 16.px(context)),
 
-          Container(
+          _queryLockableImage(
+            tableId: 3,
+            fieldId: 27,
+            child: Container(
             key: _healthAlcoholKey,
             child: Obx(
                   () => _yesNoField(
                 context,
                 question: 'health_q_alcohol'.tr,
                 value: controller.consumesAlcohol.value,
-                onChanged: (value) => controller.consumesAlcohol.value = value,
+                onChanged: (value) {
+                  controller.consumesAlcohol.value = value;
+                  if (controller.queryState.isActive) {
+                    controller.queryModeTouchSimpleField(3, 27, '$value');
+                  }
+                },
               ),
+            ),
             ),
           ),
 
           SizedBox(height: 16.px(context)),
 
-          Container(
+          _queryLockableImage(
+            tableId: 3,
+            fieldId: 28,
+            child: Container(
             key: _healthDrugsKey,
             child: Obx(
                   () => _yesNoField(
                 context,
                 question: 'health_q_drugs'.tr,
                 value: controller.usesDrugs.value,
-                onChanged: (value) => controller.usesDrugs.value = value,
+                onChanged: (value) {
+                  controller.usesDrugs.value = value;
+                  if (controller.queryState.isActive) {
+                    controller.queryModeTouchSimpleField(3, 28, '$value');
+                  }
+                },
               ),
+            ),
             ),
           ),
 
@@ -3247,11 +4198,19 @@ class _MemberRegistrationScreenState
 
           // otherDetails (translated) — standalone, always optional, no
           // yes/no gate (the swagger schema has no boolean flag for it).
-          AppTextField.form(
+          _queryAwareField(
+            fieldKey: _healthOtherDetailsKey,
             label: 'health_q_other'.tr,
-            controller: controller.otherHealthDetailController,
+            labelKey: 'health_q_other',
+            textController: controller.otherHealthDetailController,
             focusNode: otherHealthDetailFocusNode,
             maxLines: 2,
+            baseFieldId: 29,
+            hFieldId: 38,
+            gFieldId: 39,
+            tableId: 3,
+            onUpdate: (fieldId, text) =>
+                controller.queryModeUpdateHealthField(fieldId, text),
           ),
 
           SizedBox(height: 30.px(context)),
@@ -3330,9 +4289,21 @@ class _MemberRegistrationScreenState
 
   Widget _diseaseChip(BuildContext context, String key) {
     final selected = controller.selectedDiseaseKeys.contains(key);
+    // tblHealthDeclarationFields ids 5-17 map 1:1 onto diseaseKeys' own
+    // order (HeartDisease=5 ... anyHerediatry=17) — see
+    // RegistrationController.diseaseKeys' declaration order.
+    final fieldId = RegistrationController.diseaseKeys.indexOf(key) + 5;
 
-    return InkWell(
-      onTap: () => controller.toggleDiseaseKey(key),
+    return _queryLockableImage(
+      tableId: 3,
+      fieldId: fieldId,
+      child: InkWell(
+      onTap: () {
+        controller.toggleDiseaseKey(key);
+        if (controller.queryState.isActive) {
+          controller.queryModeTouchSimpleField(3, fieldId, '${!selected}');
+        }
+      },
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: EdgeInsets.symmetric(
@@ -3366,6 +4337,7 @@ class _MemberRegistrationScreenState
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -3751,6 +4723,284 @@ class _MemberRegistrationScreenState
   // ============================================================
   // SECTION TITLE
   // ============================================================
+
+  /// Wraps a Step 1 free-text field (father's name, address, village,
+  /// taluka, district, state, occupation) with query-resolution-mode
+  /// behavior: outside that mode, behaves exactly like a plain
+  /// `AppTextField.form` (all the existing params pass straight through,
+  /// unchanged). While query-resolution mode is active, this same field
+  /// is locked unless one of its base/H/G variants ([baseFieldId]/
+  /// [hFieldId]/[gFieldId], from `tblMemberField`) is queried — when it
+  /// is, the field shows/edits that specific language slot directly (see
+  /// `RegistrationController.queryModeUpdateStep1Field`), turns green once
+  /// edited, and rejects (red + toast) text not written in the script
+  /// that slot requires.
+  Widget _queryAwareField({
+    Key? fieldKey,
+    required String label,
+    String? hintText,
+    required TextEditingController textController,
+    FocusNode? focusNode,
+    String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
+    int maxLines = 1,
+    required int baseFieldId,
+    required int hFieldId,
+    required int gFieldId,
+    int tableId = 1,
+    int? itemNumber,
+    // Step 1's 7 triple fields write through queryModeUpdateStep1Field by
+    // default; Nominee's one triple field (Name/HName/GName) passes this
+    // to route the write into the right nominee slot instead.
+    void Function(int fieldId, String text)? onUpdate,
+    // The raw registration_strings.dart key `label` was already run
+    // through .tr() with (the real app locale) — passing the key too
+    // lets this field re-render its own label in the flow's own local
+    // language while editable, instead of showing the label in whatever
+    // language the rest of the app happens to be in.
+    String? labelKey,
+  }) {
+    // Checked OUTSIDE any Obx on purpose: this never changes once the
+    // screen is showing (the flow either started before Step 1 opened or
+    // didn't), and Obx requires reading an actual observable on every
+    // build — a branch that returns without touching one throws GetX's
+    // own "improper use of Obx" check.
+    if (!controller.queryState.isActive) {
+      return AppTextField.form(
+        key: fieldKey,
+        label: label,
+        hintText: hintText,
+        controller: textController,
+        focusNode: focusNode,
+        validator: validator,
+        inputFormatters: inputFormatters,
+        maxLines: maxLines,
+      );
+    }
+
+    return Obx(() {
+      final queryState = controller.queryState;
+
+      final variantId = controller.queryModeVariantFor(
+        baseFieldId,
+        hFieldId,
+        gFieldId,
+        tableId: tableId,
+        itemNumber: itemNumber,
+      );
+      final editable = variantId != null;
+      // Always read a real RxBool's .value below, even when this field
+      // isn't editable (falling back to baseFieldId's, whose value is
+      // simply unused then) — same Obx-tracking reason as above: a build
+      // that never reads an observable is invalid, and `editable && ...`
+      // would short-circuit past the read entirely whenever `editable` is
+      // false, which is most fields most of the time.
+      final trackedId = variantId ?? baseFieldId;
+      final resolvedValue = queryState
+          .isFieldResolved(tableId, trackedId, itemNumber: itemNumber)
+          .value;
+      final mismatchValue = queryState
+          .scriptMismatch(tableId, trackedId, itemNumber: itemNumber)
+          .value;
+      final resolved = editable && resolvedValue;
+      final mismatch = editable && mismatchValue;
+
+      String wrongScriptMessage() {
+        final requiredScript = ScriptDetector.requiredScriptFor(
+          queryState.fieldNameFor(tableId, variantId!),
+        );
+        final languageName = switch (requiredScript) {
+          ScriptType.gujarati => AppLanguage.gujarati.displayName,
+          ScriptType.devanagari => AppLanguage.hindi.displayName,
+          ScriptType.latin => AppLanguage.english.displayName,
+        };
+        return _flowLocalized(
+          queryState.localLanguage.value,
+          'query_field_wrong_script',
+          params: {'language': languageName},
+        );
+      }
+
+      return AppTextField.form(
+        key: fieldKey,
+        label: labelKey != null
+            ? _flowLocalized(queryState.localLanguage.value, labelKey)
+            : label,
+        hintText: hintText,
+        controller: textController,
+        focusNode: editable ? focusNode : null,
+        // Locked fields keep whatever value they already have — no reason
+        // to re-validate a field the member can't touch here.
+        validator: editable ? validator : null,
+        inputFormatters: editable ? inputFormatters : null,
+        maxLines: maxLines,
+        enabled: editable,
+        readOnly: !editable,
+        errorText: (mismatch || (editable && !resolved))
+                ? wrongScriptMessage()
+                : null,
+        enabledBorderColor:
+            !editable ? null : (resolved ? AppColors.success : AppColors.danger),
+        // Without this, red/green is only visible while NOT focused —
+        // auto-scroll focuses the field immediately, and the focused
+        // border otherwise defaults to the app's plain teal theme color,
+        // masking it (errorText's own built-in red still overrides
+        // regardless, which is why an ACTIVE mismatch stayed visible but
+        // a simply-unresolved-not-yet-touched field didn't).
+        focusedBorderColor:
+            !editable ? null : (resolved ? AppColors.success : AppColors.danger),
+        onChanged: !editable
+            ? null
+            : (text) {
+                if (onUpdate != null) {
+                  onUpdate(variantId, text);
+                } else {
+                  controller.queryModeUpdateStep1Field(variantId, text);
+                }
+                final isMismatched = queryState
+                    .scriptMismatch(tableId, variantId, itemNumber: itemNumber)
+                    .value;
+                if (queryState.shouldToastMismatch(
+                  tableId,
+                  variantId,
+                  isMismatched,
+                  itemNumber: itemNumber,
+                )) {
+                  ToastUtil.error(wrongScriptMessage());
+                }
+              },
+      );
+    });
+  }
+
+  /// Same idea as [_queryAwareField], for a plain field with no language
+  /// variants at all (Aadhaar/PAN numbers) — [tableId]/[fieldId] name the
+  /// one query that can unlock it, no base/H/G priority needed.
+  Widget _querySimpleField({
+    Key? fieldKey,
+    required String label,
+    required TextEditingController textController,
+    FocusNode? focusNode,
+    String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
+    TextInputType? keyboardType,
+    int? maxLength,
+    required int tableId,
+    required int fieldId,
+    int? itemNumber,
+    // See _queryAwareField's identical param for why this is separate
+    // from the already-.tr()'d `label`.
+    String? labelKey,
+  }) {
+    if (!controller.queryState.isActive) {
+      return AppTextField.form(
+        key: fieldKey,
+        label: label,
+        controller: textController,
+        focusNode: focusNode,
+        validator: validator,
+        inputFormatters: inputFormatters,
+        keyboardType: keyboardType,
+        maxLength: maxLength,
+      );
+    }
+
+    return Obx(() {
+      final queryState = controller.queryState;
+      final editable = queryState.isFieldEditable(
+        tableId,
+        fieldId,
+        itemNumber: itemNumber,
+      );
+      final resolvedValue = queryState
+          .isFieldResolved(tableId, fieldId, itemNumber: itemNumber)
+          .value;
+      final mismatchValue = queryState
+          .scriptMismatch(tableId, fieldId, itemNumber: itemNumber)
+          .value;
+      final resolved = editable && resolvedValue;
+      final mismatch = editable && mismatchValue;
+
+      String wrongScriptMessage() {
+        final requiredScript =
+            ScriptDetector.requiredScriptFor(queryState.fieldNameFor(tableId, fieldId));
+        final languageName = switch (requiredScript) {
+          ScriptType.gujarati => AppLanguage.gujarati.displayName,
+          ScriptType.devanagari => AppLanguage.hindi.displayName,
+          ScriptType.latin => AppLanguage.english.displayName,
+        };
+        return _flowLocalized(
+          queryState.localLanguage.value,
+          'query_field_wrong_script',
+          params: {'language': languageName},
+        );
+      }
+
+      return AppTextField.form(
+        key: fieldKey,
+        label: labelKey != null
+            ? _flowLocalized(queryState.localLanguage.value, labelKey)
+            : label,
+        controller: textController,
+        focusNode: editable ? focusNode : null,
+        validator: editable ? validator : null,
+        inputFormatters: editable ? inputFormatters : null,
+        keyboardType: keyboardType,
+        maxLength: maxLength,
+        enabled: editable,
+        readOnly: !editable,
+        errorText: (mismatch || (editable && !resolved))
+                ? wrongScriptMessage()
+                : null,
+        enabledBorderColor:
+            !editable ? null : (resolved ? AppColors.success : AppColors.danger),
+        focusedBorderColor:
+            !editable ? null : (resolved ? AppColors.success : AppColors.danger),
+        onChanged: !editable
+            ? null
+            : (text) {
+                controller.queryModeTouchSimpleField(
+                  tableId,
+                  fieldId,
+                  text,
+                  itemNumber: itemNumber,
+                );
+                final isMismatched = queryState
+                    .scriptMismatch(tableId, fieldId, itemNumber: itemNumber)
+                    .value;
+                if (queryState.shouldToastMismatch(
+                  tableId,
+                  fieldId,
+                  isMismatched,
+                  itemNumber: itemNumber,
+                )) {
+                  ToastUtil.error(wrongScriptMessage());
+                }
+              },
+      );
+    });
+  }
+
+  /// Looks up [key] in the raw translation maps directly for [language].
+  /// The flow keeps `queryState.localLanguage` mirroring the app's real
+  /// language (see initState), so this matches what `.tr` shows — it just
+  /// stays reactive inside Obx and lets callers name any language.
+  String _flowLocalized(
+    AppLanguage language,
+    String key, {
+    Map<String, String>? params,
+  }) {
+    final map = switch (language) {
+      AppLanguage.english => registrationEn,
+      AppLanguage.hindi => registrationHi,
+      AppLanguage.gujarati => registrationGu,
+    };
+    var text = map[key] ?? key;
+    params?.forEach((paramKey, value) {
+      text = text.replaceAll('@$paramKey', value);
+    });
+    return text;
+  }
 
   Widget _sectionTitle(
       BuildContext context,

@@ -21,6 +21,7 @@ import 'package:psf_application/shared/repo/document_repository.dart';
 import 'package:psf_application/shared/repo/language_translation_repository.dart';
 import 'package:psf_application/shared/utils/app_date_picker.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
+import 'package:psf_application/shared/utils/script_detector.dart';
 import 'package:psf_application/shared/utils/image_picker_util.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 import 'package:psf_application/shared/widgets/loaders/app_loader_controller.dart';
@@ -32,9 +33,11 @@ import '../../data/models/member_model.dart';
 import '../../data/models/nominee_model.dart';
 import '../../data/models/save_member_personal_detail_request_model.dart';
 import '../../data/models/save_member_step1_request_model.dart';
+import '../../data/models/query_item_model.dart';
 import '../../domain/repositories/health_declaration_repository.dart';
 import '../../domain/repositories/member_repository.dart';
 import '../../domain/repositories/nominee_repository.dart';
+import 'query_resolution_state.dart';
 
 class RegistrationController extends GetxController {
   RegistrationController(
@@ -65,6 +68,104 @@ class RegistrationController extends GetxController {
   /// "just submitted, awaiting approval" pending screen. Reset once
   /// consumed so a later, genuinely fresh registration isn't affected.
   bool isEditingAfterLogin = false;
+
+  /// Drives the narrower "fix these specific fields" flow — see its own
+  /// doc comment. Inactive (`isActive == false`) for every normal
+  /// registration/full-edit session, so nothing here changes existing
+  /// behavior unless a login actually came back with unresolved queries.
+  final QueryResolutionState queryState = QueryResolutionState();
+
+  /// Called from LoginScreen once a login comes back with
+  /// `hasUnresolvedQueries == true`, before navigating to Step 1. Seeds
+  /// every queried Step 1 field's shared input with the specific
+  /// language-slot value that needs fixing (see `_step1TripleFields`),
+  /// since otherwise it would still show whatever it displayed before —
+  /// normally the English/original slot, even if it's the Gujarati slot
+  /// that's actually queried.
+  void startQueryResolutionMode(List<QueryItem> queries) {
+    queryState.start(queries);
+    seedQueryModeStep1Fields();
+    queryState.primeLocalLanguageForScreen(1);
+    recheckStep1ScriptMismatches();
+
+    // Nominee data itself loads separately (loadExistingNominees, called
+    // from the screen's initState) and may not have arrived yet — seeding
+    // here is a no-op until it has (nomineeItemNumbersWithQueries has
+    // nothing to seed against without prefilled nominee names), so
+    // loadExistingNominees calls this again once it actually has data,
+    // the same reseed-after-load pattern Step 1 uses.
+    primeAllQueriedNominees();
+
+    // Health Declaration data also loads separately (loadExistingHealth
+    // Declaration, from the screen's initState) — same reseed-after-load
+    // pattern as Nominee above.
+    if (queryState.hasQueriesForTable(3)) {
+      seedQueryModeHealthFields();
+      queryState.primeLocalLanguageForScreen(3);
+      recheckHealthScriptMismatches();
+    }
+  }
+
+  /// Flags (or clears) each currently-unlocked Step 1 field's script
+  /// mismatch against its own prefilled/leftover text, right now — instead
+  /// of waiting for the member's first edit. A field a pass just opened
+  /// almost always still holds whatever the PREVIOUS pass left there
+  /// (e.g. Gujarati text sitting in a box that now requires Hindi), which
+  /// essentially never already satisfies its own new requirement, so
+  /// without this the red border + explanatory error text wouldn't appear
+  /// until the member touched the field themselves. Call this every time
+  /// a pass is (re)primed: from [startQueryResolutionMode] and again after
+  /// every `queryState.primeLocalLanguageForScreen` call in the Next
+  /// handler.
+  void recheckStep1ScriptMismatches() {
+    for (final fieldId in queryState.editableFieldIds(1)) {
+      final text = queryModeStep1FieldText(fieldId);
+      final fieldName = queryState.fieldNameFor(1, fieldId);
+      queryState.setScriptMismatch(
+        1,
+        fieldId,
+        !ScriptDetector.matchesRequiredScript(text, fieldName),
+      );
+    }
+  }
+
+  /// Overwrites each queried Step 1 field's shared input with the specific
+  /// language-slot value that needs fixing. Called from
+  /// [startQueryResolutionMode] and again from [getMemberStatus] (see its
+  /// own doc comment) — safe to call repeatedly, it always reflects
+  /// whatever `_step1TripleFields`' models currently hold.
+  void seedQueryModeStep1Fields() {
+    _ensureStep1TripleFields();
+
+    for (final spec in _step1TripleFields) {
+      final variantId = queryModeVariantFor(spec.baseId, spec.hId, spec.gId);
+      if (variantId != null) {
+        spec.controller.text = queryModeStep1FieldText(variantId);
+      }
+    }
+  }
+
+  /// Whichever of [baseId]/[hId]/[gId] is currently queried and in the
+  /// active pass, on [tableId] (+ nominee [itemNumber]) — Gujarati > Hindi
+  /// > base priority, in the rare case more than one somehow got queried
+  /// together. `null` when none are (or none match the current pass),
+  /// meaning this field stays fully locked right now. Defaults to table 1
+  /// with no itemNumber for Step 1's own triple fields; Nominee's Name/
+  /// HName/GName group passes `tableId: 2, itemNumber: <slot>`.
+  int? queryModeVariantFor(
+    int baseId,
+    int hId,
+    int gId, {
+    int tableId = 1,
+    int? itemNumber,
+  }) {
+    for (final id in [gId, hId, baseId]) {
+      if (queryState.isFieldEditable(tableId, id, itemNumber: itemNumber)) {
+        return id;
+      }
+    }
+    return null;
+  }
 
   StreamSubscription<void>? _reconnectSubscription;
 
@@ -710,6 +811,16 @@ class RegistrationController extends GetxController {
       isOtherHealthDetailDirty.value = declaration.otherDetails.isNotEmpty &&
           (declaration.hotherDetails.isEmpty ||
               declaration.gotherDetails.isEmpty);
+
+      // Re-seed AFTER this prefill lands — this method runs asynchronously
+      // from the screen's initState and usually finishes after
+      // startQueryResolutionMode's own attempt (which found no health data
+      // yet to seed against), same reseed-after-load fix as Nominee/Step 1.
+      if (queryState.isActive && queryState.hasQueriesForTable(3)) {
+        seedQueryModeHealthFields();
+        queryState.primeLocalLanguageForScreen(3);
+        recheckHealthScriptMismatches();
+      }
     } catch (e) {
       debugPrint('Failed to load existing health declaration: $e');
     }
@@ -750,47 +861,54 @@ class RegistrationController extends GetxController {
       // before the request is built even if that never fired. Only
       // translates fields that are actually gated "on" right now — a
       // hidden field's stale translation is never sent (see toJson).
-      await Future.wait([
-        if (hasCurrentIllness.value == true &&
-            (isSeriousIllnessDirty.value ||
-                needsTranslation(seriousIllnessLanguages.value)))
-          translateNameFieldOnUnfocus(
-            text: seriousIllnessDetailController.text,
-            targetModel: seriousIllnessLanguages,
-            isDirty: isSeriousIllnessDirty,
-          ),
-        if (isHereditary &&
-            (isOtherHereditaryDirty.value ||
-                needsTranslation(otherHereditaryLanguages.value)))
-          translateNameFieldOnUnfocus(
-            text: otherHereditaryDetailController.text,
-            targetModel: otherHereditaryLanguages,
-            isDirty: isOtherHereditaryDirty,
-          ),
-        if (hadSurgery.value == true &&
-            (isSurgeryDirty.value ||
-                needsTranslation(surgeryLanguages.value)))
-          translateNameFieldOnUnfocus(
-            text: surgeryDetailController.text,
-            targetModel: surgeryLanguages,
-            isDirty: isSurgeryDirty,
-          ),
-        if (hasAllergies.value == true &&
-            (isAllergyDirty.value ||
-                needsTranslation(allergyLanguages.value)))
-          translateNameFieldOnUnfocus(
-            text: allergyDetailController.text,
-            targetModel: allergyLanguages,
-            isDirty: isAllergyDirty,
-          ),
-        if (isOtherHealthDetailDirty.value ||
-            needsTranslation(otherHealthDetailLanguages.value))
-          translateNameFieldOnUnfocus(
-            text: otherHealthDetailController.text,
-            targetModel: otherHealthDetailLanguages,
-            isDirty: isOtherHealthDetailDirty,
-          ),
-      ]);
+      // Query-resolution mode never calls the transliteration API — the
+      // member types each queried field's required script themselves
+      // (see QueryResolutionState's doc comment) — so this whole safety
+      // net is skipped entirely in that mode, same as Step 1/Nominee's
+      // saves.
+      if (!queryState.isActive) {
+        await Future.wait([
+          if (hasCurrentIllness.value == true &&
+              (isSeriousIllnessDirty.value ||
+                  needsTranslation(seriousIllnessLanguages.value)))
+            translateNameFieldOnUnfocus(
+              text: seriousIllnessDetailController.text,
+              targetModel: seriousIllnessLanguages,
+              isDirty: isSeriousIllnessDirty,
+            ),
+          if (isHereditary &&
+              (isOtherHereditaryDirty.value ||
+                  needsTranslation(otherHereditaryLanguages.value)))
+            translateNameFieldOnUnfocus(
+              text: otherHereditaryDetailController.text,
+              targetModel: otherHereditaryLanguages,
+              isDirty: isOtherHereditaryDirty,
+            ),
+          if (hadSurgery.value == true &&
+              (isSurgeryDirty.value ||
+                  needsTranslation(surgeryLanguages.value)))
+            translateNameFieldOnUnfocus(
+              text: surgeryDetailController.text,
+              targetModel: surgeryLanguages,
+              isDirty: isSurgeryDirty,
+            ),
+          if (hasAllergies.value == true &&
+              (isAllergyDirty.value ||
+                  needsTranslation(allergyLanguages.value)))
+            translateNameFieldOnUnfocus(
+              text: allergyDetailController.text,
+              targetModel: allergyLanguages,
+              isDirty: isAllergyDirty,
+            ),
+          if (isOtherHealthDetailDirty.value ||
+              needsTranslation(otherHealthDetailLanguages.value))
+            translateNameFieldOnUnfocus(
+              text: otherHealthDetailController.text,
+              targetModel: otherHealthDetailLanguages,
+              isDirty: isOtherHealthDetailDirty,
+            ),
+        ]);
+      }
 
       // Every detail field below is read ONLY when its yes/no gate is
       // currently true — otherwise an empty string (null for the surgery
@@ -799,6 +917,24 @@ class RegistrationController extends GetxController {
       // those on toggle-to-"no", but gating here too means a stale value
       // can never reach the API even if some other path changed the
       // gate's Rxn<bool> directly without clearing its detail field.
+      // In query-resolution mode a detail box may currently show the
+      // Hindi/Gujarati text being fixed (or a value localized to the app
+      // language on load), so the plain/English value always comes from
+      // the per-language model instead of whatever the box displays.
+      String plainOf(TextEditingController c, LocalizedTextModel m) =>
+          queryState.isActive && m.original.trim().isNotEmpty
+              ? m.original.trim()
+              : c.text.trim();
+
+      // A hereditary-detail query unlocks its field even when the
+      // hereditary checkbox itself is unticked (see the screen), so its
+      // value must still be sent then.
+      final sendHereditary = isHereditary ||
+          (queryState.isActive &&
+              (queryState.hasQueryFor(3, 18) ||
+                  queryState.hasQueryFor(3, 32) ||
+                  queryState.hasQueryFor(3, 33)));
+
       final hasIllness = hasCurrentIllness.value == true;
       final hasSurgery = hadSurgery.value == true;
       final hasMedication = onRegularMedication.value == true;
@@ -808,8 +944,9 @@ class RegistrationController extends GetxController {
         healthDeclarationId: healthDeclarationId.value ?? 0,
         memberId: memberId,
         isSeriousIllness: hasCurrentIllness.value ?? false,
-        seriousIllness:
-            hasIllness ? seriousIllnessDetailController.text.trim() : '',
+        seriousIllness: hasIllness
+            ? plainOf(seriousIllnessDetailController, seriousIllnessLanguages.value)
+            : '',
         hSeriousIllness: hasIllness ? seriousIllnessLanguages.value.hindi : '',
         gSeriousIllness:
             hasIllness ? seriousIllnessLanguages.value.gujarati : '',
@@ -827,11 +964,15 @@ class RegistrationController extends GetxController {
         stroke: selectedDiseaseKeys.contains('disease_stroke'),
         anxiety: selectedDiseaseKeys.contains('disease_mental'),
         anyHerediatry: isHereditary,
-        other: isHereditary ? otherHereditaryDetailController.text.trim() : '',
-        hOther: isHereditary ? otherHereditaryLanguages.value.hindi : '',
-        gOther: isHereditary ? otherHereditaryLanguages.value.gujarati : '',
+        other: sendHereditary
+            ? plainOf(otherHereditaryDetailController, otherHereditaryLanguages.value)
+            : '',
+        hOther: sendHereditary ? otherHereditaryLanguages.value.hindi : '',
+        gOther: sendHereditary ? otherHereditaryLanguages.value.gujarati : '',
         isSurgery: hadSurgery.value ?? false,
-        surgery: hasSurgery ? surgeryDetailController.text.trim() : '',
+        surgery: hasSurgery
+            ? plainOf(surgeryDetailController, surgeryLanguages.value)
+            : '',
         hSurgery: hasSurgery ? surgeryLanguages.value.hindi : '',
         gSurgery: hasSurgery ? surgeryLanguages.value.gujarati : '',
         surgeryDate: hasSurgery ? surgeryDate.value : null,
@@ -839,13 +980,16 @@ class RegistrationController extends GetxController {
         medicationRegularly:
             hasMedication ? medicationDetailController.text.trim() : '',
         anyAllergies: hasAllergies.value ?? false,
-        allergies: hasAllergy ? allergyDetailController.text.trim() : '',
+        allergies: hasAllergy
+            ? plainOf(allergyDetailController, allergyLanguages.value)
+            : '',
         hAllergies: hasAllergy ? allergyLanguages.value.hindi : '',
         gAllergies: hasAllergy ? allergyLanguages.value.gujarati : '',
         tabaccoBidiCigarates: usesTobacco.value ?? false,
         addictionToAlcohol: consumesAlcohol.value ?? false,
         drugs: usesDrugs.value ?? false,
-        otherDetails: otherHealthDetailController.text.trim(),
+        otherDetails:
+            plainOf(otherHealthDetailController, otherHealthDetailLanguages.value),
         hotherDetails: otherHealthDetailLanguages.value.hindi,
         gotherDetails: otherHealthDetailLanguages.value.gujarati,
       );
@@ -953,6 +1097,7 @@ class RegistrationController extends GetxController {
       genderOptions.value = bundle.gender;
       maritalStatusOptions.value = bundle.maritalStatus;
       relationOptions.value = bundle.relation;
+      queryState.setFieldEnums(bundle);
     } catch (e) {
       debugPrint('Failed to load enum bundle: $e');
 
@@ -1167,6 +1312,419 @@ class RegistrationController extends GetxController {
           isDirty: isOccupationDirty,
         ),
     ]);
+  }
+
+  // ============================================================
+  // QUERY-RESOLUTION MODE — STEP 1 FIELD MAPPING
+  //
+  // Every free-text Step 1 field the member can edit today has ONE input
+  // (this controller) feeding a single Rx<LocalizedTextModel> with THREE
+  // language slots (original/hindi/gujarati) — the H/G slots are normally
+  // filled automatically by translateAllStep1Fields, never typed directly.
+  // In query-resolution mode there's no separate Gujarati/Hindi box to
+  // unlock for e.g. a queried `GAddress`, so the SAME Address field is
+  // reused: it displays/edits that specific language slot directly, no
+  // auto-translation involved. See QueryResolutionState's doc comment.
+  // ============================================================
+
+  /// One field's base/H/G enum ids (see `tblMemberField`) plus how to
+  /// read/write its one shared `Rx<LocalizedTextModel>`.
+  final List<_TripleFieldSpec> _step1TripleFields = [];
+
+  void _ensureStep1TripleFields() {
+    if (_step1TripleFields.isNotEmpty) return;
+    _step1TripleFields.addAll([
+      _TripleFieldSpec(
+        baseId: 12, hId: 13, gId: 14,
+        controller: fatherNameController,
+        model: fatherNameLanguages,
+      ),
+      _TripleFieldSpec(
+        baseId: 21, hId: 22, gId: 23,
+        controller: addressController,
+        model: addressLanguages,
+      ),
+      _TripleFieldSpec(
+        baseId: 24, hId: 25, gId: 26,
+        controller: villageController,
+        model: villageLanguages,
+      ),
+      _TripleFieldSpec(
+        baseId: 27, hId: 28, gId: 29,
+        controller: talukaController,
+        model: talukaLanguages,
+      ),
+      _TripleFieldSpec(
+        baseId: 30, hId: 31, gId: 32,
+        controller: districtController,
+        model: districtLanguages,
+      ),
+      _TripleFieldSpec(
+        baseId: 33, hId: 34, gId: 35,
+        controller: stateController,
+        model: stateLanguages,
+      ),
+      _TripleFieldSpec(
+        baseId: 38, hId: 39, gId: 40,
+        controller: occupationController,
+        model: occupationLanguages,
+      ),
+    ]);
+  }
+
+  /// Finds which triple-field [fieldId] belongs to and which of its 3
+  /// language slots it names — `null` if [fieldId] isn't one of the Step 1
+  /// free-text triple fields (e.g. it's Gender/DOB/Aadhaar, or an unknown
+  /// id).
+  (_TripleFieldSpec, ScriptType)? _step1FieldSpecFor(int fieldId) {
+    _ensureStep1TripleFields();
+    for (final spec in _step1TripleFields) {
+      if (spec.baseId == fieldId) return (spec, ScriptType.latin);
+      if (spec.hId == fieldId) return (spec, ScriptType.devanagari);
+      if (spec.gId == fieldId) return (spec, ScriptType.gujarati);
+    }
+    return null;
+  }
+
+  /// The current value of the specific language slot [fieldId] names —
+  /// used to seed the shared input field's displayed text when it's
+  /// unlocked for that slot in query-resolution mode.
+  String queryModeStep1FieldText(int fieldId) {
+    final match = _step1FieldSpecFor(fieldId);
+    if (match != null) {
+      final (spec, script) = match;
+      return switch (script) {
+        ScriptType.gujarati => spec.model.value.gujarati,
+        ScriptType.devanagari => spec.model.value.hindi,
+        ScriptType.latin => spec.model.value.original,
+      };
+    }
+    // The 2 plain (no language variant) Step 1 fields query mode can
+    // unlock — Aadhaar/PAN numbers — aren't triple-fields, so they fall
+    // through _step1FieldSpecFor above.
+    if (fieldId == 41) return aadharNumberController.text;
+    if (fieldId == 43) return panNumberController.text;
+    return '';
+  }
+
+  /// Writes [text] into exactly the language slot [fieldId] names (leaving
+  /// the field's other slots untouched — they aren't being resolved, so
+  /// whatever was already saved for them keeps being sent as-is), marks
+  /// the query touched, and updates its script-mismatch state.
+  ///
+  /// When more than one variant of this SAME field is queried together
+  /// (e.g. both plain `Occupation` and `GOccupation` flagged at once),
+  /// they are NOT resolved together — only [fieldId]'s own query is
+  /// marked. `QueryResolutionState`'s pass system unlocks the sibling
+  /// variant afterward (same screen, language switched), one at a time.
+  void queryModeUpdateStep1Field(int fieldId, String text) {
+    final match = _step1FieldSpecFor(fieldId);
+    if (match == null) return;
+    final (spec, script) = match;
+
+    spec.model.value = switch (script) {
+      ScriptType.gujarati => spec.model.value.copyWith(gujarati: text),
+      ScriptType.devanagari => spec.model.value.copyWith(hindi: text),
+      ScriptType.latin => spec.model.value.copyWith(original: text, english: text),
+    };
+
+    queryState.markTouched(1, fieldId);
+
+    final fieldName = queryState.fieldNameFor(1, fieldId);
+    queryState.setScriptMismatch(
+      1,
+      fieldId,
+      !ScriptDetector.matchesRequiredScript(text, fieldName),
+    );
+  }
+
+  /// Same idea as [queryModeUpdateStep1Field], for a plain field with no
+  /// language variants at all (e.g. Aadhaar/PAN numbers) — just marks the
+  /// query touched and checks its script (trivially "latin" for numeric
+  /// fields, but reused for consistency since a name-like plain field
+  /// could theoretically be queried too). No `_step1TripleFields`/model
+  /// lookup needed since there's only ever the one slot to begin with.
+  void queryModeTouchSimpleField(
+    int tableId,
+    int fieldId,
+    String text, {
+    int? itemNumber,
+  }) {
+    queryState.markTouched(tableId, fieldId, itemNumber: itemNumber);
+    final fieldName = queryState.fieldNameFor(tableId, fieldId);
+    queryState.setScriptMismatch(
+      tableId,
+      fieldId,
+      !ScriptDetector.matchesRequiredScript(text, fieldName),
+      itemNumber: itemNumber,
+    );
+  }
+
+  /// `true` once every query belonging to table 1's CURRENT pass (see
+  /// `QueryResolutionState`'s doc comment) is resolved — gates Next,
+  /// additive to the existing Form validation. There may still be a
+  /// later pass pending even when this is true; see
+  /// [queryModeStep1FullyResolved] for "every query on this table, done".
+  bool queryModeStep1Resolved() => queryState.isCurrentPassResolved(1);
+
+  /// `true` once every query on table 1 is resolved, across all passes —
+  /// only then does Next actually leave Step 1.
+  bool queryModeStep1FullyResolved() => queryState.isTableFullyResolved(1);
+
+  /// Resolves every table-1 query the member just fixed **in this pass**
+  /// (not already sent to the API by an earlier pass) — call right after
+  /// `saveMemberPersonalDetail()` succeeds, only in query-resolution mode.
+  Future<void> resolveStep1Queries() async {
+    final ids = queryState.newlyResolvedQueryIdsFor(1);
+    for (final queryId in ids) {
+      await _repository.queryResolve(queryId: queryId);
+    }
+    queryState.markApiResolved(ids);
+  }
+
+  // ============================================================
+  // QUERY-RESOLUTION MODE — NOMINEE (table 2)
+  //
+  // Only one nominee slot is ever "current" at a time — the lowest
+  // itemNumber (ascending nomineeId ordinal) that still has an unresolved
+  // query. Every other slot, and every non-queried field within the
+  // current slot, stays fully locked. Name/HName/GName(2/8/9) is the one
+  // triple-language field here, same base>H>G priority as Step 1's 7;
+  // every other nominee field (Relation/Share/DateOfBirth/AadharNo, and
+  // the 4 photos) is plain/single-slot, handled the same way Step 1's
+  // Aadhaar/PAN and images are.
+  // ============================================================
+
+  /// The lowest nominee itemNumber that still has ANY unresolved query —
+  /// `null` once every queried nominee is fully done. Drives which single
+  /// slot's fields the Nominee screen unlocks at a time — "Complete
+  /// Nominee 1's relevant queries before moving to Nominee 2" (see
+  /// QueryResolutionState's own class doc comment on passes).
+  int? queryModeCurrentNomineeItemNumber() {
+    for (final itemNumber in queryState.nomineeItemNumbersWithQueries()) {
+      if (!queryState.isTableApiResolved(2, itemNumber: itemNumber)) {
+        return itemNumber;
+      }
+    }
+    return null;
+  }
+
+  /// Every nominee with at least one still-unresolved query, ascending —
+  /// all of them are editable at once on the Nominee screen (one Next
+  /// saves each in turn, then resolves its queries).
+  List<int> queryModeUnresolvedNominees() => [
+        for (final itemNumber in queryState.nomineeItemNumbersWithQueries())
+          if (!queryState.isTableApiResolved(2, itemNumber: itemNumber))
+            itemNumber,
+      ];
+
+  /// Seeds + primes the current pass for every queried nominee.
+  void primeAllQueriedNominees() {
+    final unresolved = queryModeUnresolvedNominees();
+    for (final itemNumber in unresolved) {
+      queryState.primeLocalLanguageForScreen(2, itemNumber: itemNumber);
+    }
+    // Seed AFTER priming — which variant (Name/HName/GName) is editable
+    // depends on each nominee's current pass.
+    seedQueryModeNomineeFields();
+    for (final itemNumber in unresolved) {
+      recheckNomineeScriptMismatches(itemNumber);
+    }
+  }
+
+  /// The current text of nominee [itemNumber]'s Name/HName/GName slot
+  /// named by [fieldId] — `''` for any other field id (this only covers
+  /// the one triple-language nominee field; see [_nomineeSimpleFieldText]
+  /// for the plain ones).
+  String queryModeNomineeFieldText(int itemNumber, int fieldId) {
+    final slotIndex = itemNumber - 1;
+    if (slotIndex < 0 || slotIndex >= nomineeSlots.length) return '';
+    final slot = nomineeSlots[slotIndex];
+    return switch (fieldId) {
+      9 => slot.nameLanguages.value.gujarati,
+      8 => slot.nameLanguages.value.hindi,
+      2 => slot.nameLanguages.value.original,
+      _ => '',
+    };
+  }
+
+  String _nomineeSimpleFieldText(int itemNumber, int fieldId) {
+    final slotIndex = itemNumber - 1;
+    if (slotIndex < 0 || slotIndex >= nomineeSlots.length) return '';
+    final slot = nomineeSlots[slotIndex];
+    return switch (fieldId) {
+      13 => slot.aadharNoController.text,
+      5 => slot.shareController.text,
+      3 => slot.dateOfBirthController.text,
+      _ => '',
+    };
+  }
+
+  /// Overwrites the current nominee's shared Name box with whichever
+  /// language slot needs fixing — same idea as [seedQueryModeStep1Fields],
+  /// just for the one nominee field that has base/H/G variants. Called
+  /// from [startQueryResolutionMode] and again from [loadExistingNominees]
+  /// (see its own doc comment), safe to call repeatedly.
+  void seedQueryModeNomineeFields() {
+    for (final itemNumber in queryState.nomineeItemNumbersWithQueries()) {
+      final slotIndex = itemNumber - 1;
+      if (slotIndex < 0 || slotIndex >= nomineeSlots.length) continue;
+      final variantId =
+          queryModeVariantFor(2, 8, 9, tableId: 2, itemNumber: itemNumber);
+      if (variantId != null) {
+        nomineeSlots[slotIndex].nameController.text =
+            queryModeNomineeFieldText(itemNumber, variantId);
+      }
+    }
+  }
+
+  /// Same idea as [recheckStep1ScriptMismatches], for the currently-active
+  /// nominee slot — call once from [startQueryResolutionMode] (via
+  /// [seedQueryModeNomineeFields]'s caller) and again after every
+  /// `queryState.primeLocalLanguageForScreen(2, itemNumber: ...)` call.
+  void recheckNomineeScriptMismatches(int itemNumber) {
+    for (final fieldId in queryState.editableFieldIds(2, itemNumber: itemNumber)) {
+      final text = fieldId == 2 || fieldId == 8 || fieldId == 9
+          ? queryModeNomineeFieldText(itemNumber, fieldId)
+          : _nomineeSimpleFieldText(itemNumber, fieldId);
+      final fieldName = queryState.fieldNameFor(2, fieldId);
+      queryState.setScriptMismatch(
+        2,
+        fieldId,
+        !ScriptDetector.matchesRequiredScript(text, fieldName),
+        itemNumber: itemNumber,
+      );
+    }
+  }
+
+  /// Writes [text] into nominee [itemNumber]'s Name/HName/GName slot named
+  /// by [fieldId] — mirrors [queryModeUpdateStep1Field] for the one
+  /// nominee field with language variants.
+  void queryModeUpdateNomineeNameField(
+    int itemNumber,
+    int fieldId,
+    String text,
+  ) {
+    final slotIndex = itemNumber - 1;
+    if (slotIndex < 0 || slotIndex >= nomineeSlots.length) return;
+    final slot = nomineeSlots[slotIndex];
+
+    slot.nameLanguages.value = switch (fieldId) {
+      9 => slot.nameLanguages.value.copyWith(gujarati: text),
+      8 => slot.nameLanguages.value.copyWith(hindi: text),
+      2 => slot.nameLanguages.value.copyWith(original: text, english: text),
+      _ => slot.nameLanguages.value,
+    };
+
+    queryModeTouchSimpleField(2, fieldId, text, itemNumber: itemNumber);
+  }
+
+  /// `true` once every query belonging to nominee [itemNumber]'s CURRENT
+  /// pass is resolved — gates Next the same way [queryModeStep1Resolved]
+  /// does for Step 1.
+  bool queryModeNomineeCurrentPassResolved(int itemNumber) =>
+      queryState.isCurrentPassResolved(2, itemNumber: itemNumber);
+
+  /// `true` once every query on nominee [itemNumber] is resolved, across
+  /// all passes.
+  bool queryModeNomineeFullyResolved(int itemNumber) =>
+      queryState.isTableFullyResolved(2, itemNumber: itemNumber);
+
+  /// Resolves every nominee-[itemNumber] query the member just fixed in
+  /// this pass — mirrors [resolveStep1Queries].
+  Future<void> resolveNomineeQueries(int itemNumber) async {
+    final ids = queryState.newlyResolvedQueryIdsFor(2, itemNumber: itemNumber);
+    for (final queryId in ids) {
+      await _repository.queryResolve(queryId: queryId);
+    }
+    queryState.markApiResolved(ids);
+  }
+
+  // ============================================================
+  // QUERY-RESOLUTION MODE — HEALTH DECLARATION (table 3)
+  //
+  // Same single-pass mechanics as Step 1 (no itemNumber here — Health
+  // Declaration is one record per member, not per-nominee). Only 2 of its
+  // fields have base/H/G language variants (Other=18/32/33,
+  // otherDetails=29/38/39); the rest this flow can unlock are plain
+  // yes/no toggles (IsSeriousIllness=3, IsSurgery=19,
+  // AddictionToAlcohol=27, drugs=28) with no script of their own to
+  // check, touched directly via queryModeTouchSimpleField (their
+  // "true"/"false" text is plain Latin either way, so the existing
+  // generic mismatch check is a safe no-op for them).
+  // ============================================================
+
+  (TextEditingController, Rx<LocalizedTextModel>, ScriptType)?
+      _healthFieldSpecFor(int fieldId) {
+    return switch (fieldId) {
+      18 => (otherHereditaryDetailController, otherHereditaryLanguages, ScriptType.latin),
+      32 => (otherHereditaryDetailController, otherHereditaryLanguages, ScriptType.devanagari),
+      33 => (otherHereditaryDetailController, otherHereditaryLanguages, ScriptType.gujarati),
+      29 => (otherHealthDetailController, otherHealthDetailLanguages, ScriptType.latin),
+      38 => (otherHealthDetailController, otherHealthDetailLanguages, ScriptType.devanagari),
+      39 => (otherHealthDetailController, otherHealthDetailLanguages, ScriptType.gujarati),
+      _ => null,
+    };
+  }
+
+  String queryModeHealthFieldText(int fieldId) {
+    final match = _healthFieldSpecFor(fieldId);
+    if (match == null) return '';
+    final (_, model, script) = match;
+    return switch (script) {
+      ScriptType.gujarati => model.value.gujarati,
+      ScriptType.devanagari => model.value.hindi,
+      ScriptType.latin => model.value.original,
+    };
+  }
+
+  void seedQueryModeHealthFields() {
+    for (final (baseId, hId, gId) in const [(18, 32, 33), (29, 38, 39)]) {
+      final variantId = queryModeVariantFor(baseId, hId, gId, tableId: 3);
+      if (variantId == null) continue;
+      final match = _healthFieldSpecFor(variantId);
+      if (match == null) continue;
+      final (textController, _, _) = match;
+      textController.text = queryModeHealthFieldText(variantId);
+    }
+  }
+
+  void recheckHealthScriptMismatches() {
+    for (final fieldId in queryState.editableFieldIds(3)) {
+      final text = queryModeHealthFieldText(fieldId);
+      final fieldName = queryState.fieldNameFor(3, fieldId);
+      queryState.setScriptMismatch(
+        3,
+        fieldId,
+        !ScriptDetector.matchesRequiredScript(text, fieldName),
+      );
+    }
+  }
+
+  void queryModeUpdateHealthField(int fieldId, String text) {
+    final match = _healthFieldSpecFor(fieldId);
+    if (match == null) return;
+    final (_, model, script) = match;
+
+    model.value = switch (script) {
+      ScriptType.gujarati => model.value.copyWith(gujarati: text),
+      ScriptType.devanagari => model.value.copyWith(hindi: text),
+      ScriptType.latin => model.value.copyWith(original: text, english: text),
+    };
+
+    queryModeTouchSimpleField(3, fieldId, text);
+  }
+
+  bool queryModeHealthResolved() => queryState.isCurrentPassResolved(3);
+
+  bool queryModeHealthFullyResolved() => queryState.isTableFullyResolved(3);
+
+  Future<void> resolveHealthQueries() async {
+    final ids = queryState.newlyResolvedQueryIdsFor(3);
+    for (final queryId in ids) {
+      await _repository.queryResolve(queryId: queryId);
+    }
+    queryState.markApiResolved(ids);
   }
 
   // ============================================================
@@ -1797,6 +2355,23 @@ class RegistrationController extends GetxController {
         return false;
       }
 
+      // Each nominee's Aadhaar must be unique among the OTHER currently
+      // visible slots — checked here (not just as a format validator)
+      // since it depends on every other slot's own value, not just this
+      // one field in isolation.
+      final thisAadhar =
+          AppValidators.stripAadharFormatting(slot.aadharNoController.text);
+      for (var i = 0; i < visibleNomineeSlots.value; i++) {
+        if (i == slotIndex) continue;
+        final otherAadhar = AppValidators.stripAadharFormatting(
+          nomineeSlots[i].aadharNoController.text,
+        );
+        if (otherAadhar.isNotEmpty && otherAadhar == thisAadhar) {
+          ToastUtil.error('nominee_duplicate_aadhaar_error'.tr);
+          return false;
+        }
+      }
+
       final resolvedDateOfBirth = _resolvedNomineeDateOfBirth(slot);
 
       if (resolvedDateOfBirth == null) {
@@ -1885,8 +2460,11 @@ class RegistrationController extends GetxController {
       // before the request is built even if that never fired (e.g. the
       // user picked a photo and tapped Save without ever leaving the name
       // field with a keyboard "next"/tab).
-      if (slot.isNameDirty.value ||
-          needsTranslation(slot.nameLanguages.value)) {
+      // Query-resolution mode never calls the transliteration API — the
+      // member types each queried language's text themselves.
+      if (!queryState.isActive &&
+          (slot.isNameDirty.value ||
+              needsTranslation(slot.nameLanguages.value))) {
         await translateNameFieldOnUnfocus(
           text: slot.nameController.text,
           targetModel: slot.nameLanguages,
@@ -1899,7 +2477,13 @@ class RegistrationController extends GetxController {
 
       final request = NomineeModel(
         nomineeId: slot.nomineeId.value ?? 0,
-        name: slot.nameController.text.trim(),
+        // In query mode the shared Name box may currently hold the Hindi/
+        // Gujarati text being fixed (see seedQueryModeNomineeFields), so
+        // the plain name always comes from the per-language model instead.
+        name: queryState.isActive &&
+                slot.nameLanguages.value.original.trim().isNotEmpty
+            ? slot.nameLanguages.value.original.trim()
+            : slot.nameController.text.trim(),
         hName: slot.nameLanguages.value.hindi,
         gName: slot.nameLanguages.value.gujarati,
         dateOfBirth: resolvedDateOfBirth.toIso8601String(),
@@ -2045,6 +2629,15 @@ class RegistrationController extends GetxController {
 
       visibleNomineeSlots.value = count < 1 ? 1 : count;
       recomputeTotalShare();
+
+      // Re-seed AFTER this prefill lands, not just once from
+      // startQueryResolutionMode — this method runs asynchronously from
+      // the screen's initState and usually finishes after that initial
+      // seed attempt (which found no nominee data yet to seed against),
+      // same reseed-after-load fix as Step 1's getMemberStatus.
+      if (queryState.isActive) {
+        primeAllQueriedNominees();
+      }
     } catch (e) {
       debugPrint('Failed to load existing nominees: $e');
 
@@ -2575,6 +3168,17 @@ class RegistrationController extends GetxController {
         );
       }
 
+      // Step 1's own initState re-confirms this same prefill after
+      // navigating in (see _loadMember), which would otherwise clobber
+      // query-resolution mode's field seeding (a queried field showing
+      // its plain/English value again instead of the specific language
+      // slot that actually needs fixing) — reapply it every time this
+      // method runs, not just from startQueryResolutionMode, so whichever
+      // call happens to run last still leaves the right text showing.
+      if (queryState.isActive) {
+        seedQueryModeStep1Fields();
+      }
+
       return result;
     } catch (e) {
       if (isNetworkInterruption(e)) {
@@ -2695,6 +3299,15 @@ class RegistrationController extends GetxController {
         AppDatePicker.format(
           selectedDate,
         );
+
+    if (queryState.isActive) {
+      queryModeTouchSimpleField(
+        2,
+        3,
+        slot.dateOfBirthController.text,
+        itemNumber: slotIndex + 1,
+      );
+    }
   }
 
   // ============================================================
@@ -2712,6 +3325,7 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       profileImage.value = image;
+      if (queryState.isActive) queryState.markTouched(1, 17);
     }
   }
 
@@ -2731,6 +3345,7 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       aadharImage.value = image;
+      if (queryState.isActive) queryState.markTouched(1, 42);
     }
   }
 
@@ -2746,6 +3361,7 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       aadharBackImage.value = image;
+      if (queryState.isActive) queryState.markTouched(1, 61);
     }
   }
 
@@ -2761,6 +3377,7 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       panImage.value = image;
+      if (queryState.isActive) queryState.markTouched(1, 44);
     }
   }
 
@@ -2783,6 +3400,9 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       nomineeSlots[slotIndex].photo.value = image;
+      if (queryState.isActive) {
+        queryState.markTouched(2, 6, itemNumber: slotIndex + 1);
+      }
     }
   }
 
@@ -2803,6 +3423,9 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       nomineeSlots[slotIndex].aadharFrontImage.value = image;
+      if (queryState.isActive) {
+        queryState.markTouched(2, 10, itemNumber: slotIndex + 1);
+      }
     }
   }
 
@@ -2819,6 +3442,9 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       nomineeSlots[slotIndex].aadharBackImage.value = image;
+      if (queryState.isActive) {
+        queryState.markTouched(2, 11, itemNumber: slotIndex + 1);
+      }
     }
   }
 
@@ -2835,6 +3461,9 @@ class RegistrationController extends GetxController {
 
     if (image != null) {
       nomineeSlots[slotIndex].passbookChequeImage.value = image;
+      if (queryState.isActive) {
+        queryState.markTouched(2, 12, itemNumber: slotIndex + 1);
+      }
     }
   }
 
@@ -2844,6 +3473,7 @@ class RegistrationController extends GetxController {
 
   void setSignature(File file) {
     signatureFile.value = file;
+    if (queryState.isActive) queryState.markTouched(1, 45);
   }
 
   void clearSignature() {
@@ -2923,6 +3553,21 @@ class RegistrationController extends GetxController {
     }
   }
 
+  /// In query-resolution mode, the next wizard page to land on from
+  /// [fromStep] — skips any page (0/1/2, whose `tableId` is `page+1`)
+  /// with no queries at all, since there's nothing to fix there. Page 3
+  /// (Rules accept) is outside the table scope and always reached
+  /// normally, same as the non-query flow. Backward navigation needs no
+  /// matching logic — `previousStep()` already only ever moves one step
+  /// at a time, so every step stays reachable going back.
+  int queryModeNextPage(int fromStep) {
+    var target = fromStep + 1;
+    while (target < 3 && !queryState.hasQueriesForTable(target + 1)) {
+      target++;
+    }
+    return target;
+  }
+
   void previousStep() {
     if (currentStep.value > 0) {
       currentStep.value--;
@@ -2960,6 +3605,25 @@ class RegistrationController extends GetxController {
 
     super.onClose();
   }
+}
+
+/// One Step 1 free-text field's base/H/G enum ids plus how to read/write
+/// its one shared `Rx<LocalizedTextModel>` — see
+/// RegistrationController._step1TripleFields.
+class _TripleFieldSpec {
+  const _TripleFieldSpec({
+    required this.baseId,
+    required this.hId,
+    required this.gId,
+    required this.controller,
+    required this.model,
+  });
+
+  final int baseId;
+  final int hId;
+  final int gId;
+  final TextEditingController controller;
+  final Rx<LocalizedTextModel> model;
 }
 
 /// One nominee's worth of editable state on the Nominee step — see

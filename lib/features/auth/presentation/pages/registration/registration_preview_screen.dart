@@ -327,6 +327,15 @@ class _RegistrationPreviewScreenState
     // for real wherever an actual "approved" signal is wired up.
     ToastUtil.success('registration_completed_successfully'.tr);
 
+    // Query-resolution mode: everything the admin flagged is fixed and
+    // submitted — show the review (awaiting approval) screen.
+    if (controller.queryState.isActive) {
+      controller.queryState.reset();
+      controller.isEditingAfterLogin = false;
+      Get.offAllNamed(AppRoutes.registrationPending);
+      return;
+    }
+
     // An existing member correcting their application (see
     // RegistrationController.isEditingAfterLogin's doc comment) goes
     // straight to Home instead of the "awaiting approval" pending screen —
