@@ -123,15 +123,12 @@ class MemberCardController extends GetxController {
         ? member.localizedFullName(language)
         : (profile?.fullName ?? '');
 
-    final addressParts = member == null
-        ? <String>[]
-        : [
-            pick(member.address, member.hAddress, member.gAddress),
-            pick(member.village, member.hVillage, member.gVillage),
-            pick(member.taluka, member.hTaluka, member.gTaluka),
-            pick(member.district, member.hDistrict, member.gDistrict),
-            pick(member.state, member.hState, member.gState),
-          ].where((part) => part.trim().isNotEmpty).toList();
+    // Card shows the address line alone — village/taluka/district/state
+    // used to be appended here too, but that made this one field far
+    // longer than the card's layout was designed for.
+    final address = member == null
+        ? ''
+        : pick(member.address, member.hAddress, member.gAddress);
 
     return MemberCardData(
       name: name,
@@ -151,7 +148,7 @@ class MemberCardController extends GetxController {
       fatherName: member == null
           ? ''
           : pick(member.fatherName, member.hFatherName, member.gFatherName),
-      address: addressParts.join(', '),
+      address: address,
       occupation: member == null
           ? ''
           : pick(member.occupation, member.hOccupation, member.gOccupation),

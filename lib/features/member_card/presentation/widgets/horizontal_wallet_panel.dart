@@ -206,8 +206,16 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
 
   /// One cover piece (back panel or front pocket). Both get the SAME pixel
   /// travel so the wallet moves as a single solid object. Slides in from
-  /// the left on appear, out to the left on open; removed from the tree
-  /// once fully open.
+  /// the left on appear, out to the left on open.
+  ///
+  /// Stays mounted (transformed off-screen, not removed from the tree) even
+  /// once fully open — tearing it down and rebuilding it on every open/close
+  /// forced Skia to reallocate its layer's GPU resources from scratch each
+  /// time, which measured as a 100ms+ single-frame stall on this device
+  /// (`dumpsys gfxinfo` / the performance overlay's raster graph both showed
+  /// it) and made the transition look like it snapped instead of sliding.
+  /// Keeping the widget alive lets its RepaintBoundary keep the same layer
+  /// and just re-transform it, which is cheap.
   Widget _coverPiece({required Widget child, required double travel}) {
     return AnimatedBuilder(
       animation: Listenable.merge([_intro, _open]),
@@ -216,19 +224,21 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
         child: FadeTransition(opacity: _coverFadeOut, child: child),
       ),
       builder: (context, cached) {
-        if (_open.isCompleted) return const SizedBox.shrink();
         final shift = _coverShift.value;
         final dx = -(1 - _introSlide.value) * travel - shift * travel;
 
         // The cover peels away: it slides out to the left while swinging
         // open on its left edge, like a flap being lifted.
-        return Transform(
-          alignment: Alignment.centerLeft,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, .0009)
-            ..translate(dx, 0.0)
-            ..rotateY(-shift * .62),
-          child: cached,
+        return IgnorePointer(
+          ignoring: _open.isCompleted,
+          child: Transform(
+            alignment: Alignment.centerLeft,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, .0009)
+              ..translate(dx, 0.0)
+              ..rotateY(-shift * .62),
+            child: cached,
+          ),
         );
       },
     );
