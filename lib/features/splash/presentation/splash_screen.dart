@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 
 import '../../../app/routes/app_routes.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/shared/widgets/common/ornamental_divider.dart';
+
+/// The old splash background was a marble/paper texture image; this is that
+/// same image's own dominant cream tone (matches `cardPaperBase`, the base
+/// color behind the printed member card's paper texture) — richer than the
+/// app's everyday `AppColors.background`, closer to the original look.
+const _splashCream = Color(0xFFE9DFC6);
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -80,10 +85,10 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
-          // A plain fill in the same cream tone the rest of the app uses,
-          // instead of the marble/paper texture image this used to show.
+          // A plain fill in the same cream tone the old marble/paper
+          // texture image was, instead of that image itself.
           const Positioned.fill(
-            child: ColoredBox(color: AppColors.background),
+            child: ColoredBox(color: _splashCream),
           ),
           SafeArea(
             child: Center(
