@@ -11,6 +11,7 @@ import 'package:psf_application/features/auth/presentation/controllers/registrat
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/navigation/registration_navigator.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
+import 'package:psf_application/shared/utils/sim_number_util.dart';
 import 'package:psf_application/shared/widgets/text_fields/app_text_field.dart';
 
 /// Login screen — mobile number + password only, same visual language as
@@ -36,6 +37,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
 
+  /// SIM-associated numbers to offer as tap-to-fill suggestions (see
+  /// SimNumberUtil) — empty on iOS, when nothing is reported, or once the
+  /// member has typed something themselves.
+  List<String> _suggestedNumbers = const [];
+  bool _suggestionsRequested = false;
+
   /// Letters keyboard first; flips to a number keyboard once exactly 4
   /// letters have been typed (passwords look like "NIKH9601"). Only
   /// transitions are handled, never "current state", so a member who
@@ -46,9 +53,34 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _mobileFocusNode = FocusNode();
+    _mobileFocusNode = FocusNode()..addListener(_onMobileFocusChange);
     _passwordFocusNode = FocusNode();
     _passwordController.addListener(_handlePasswordKeyboardSwitch);
+  }
+
+  /// Fires once, the first time the member taps into the (still empty)
+  /// mobile number field — asks Android for any SIM-associated number(s)
+  /// so they can be offered as tap-to-fill suggestions instead of typed.
+  /// Never re-asks after that: a denied/empty result the first time isn't
+  /// worth re-querying on every later focus, and a filled-in field has
+  /// nothing to suggest into anyway.
+  void _onMobileFocusChange() {
+    if (!_mobileFocusNode.hasFocus) return;
+    if (_suggestionsRequested) return;
+    if (_mobileController.text.trim().isNotEmpty) return;
+
+    _suggestionsRequested = true;
+    SimNumberUtil.suggestedNumbers().then((numbers) {
+      if (!mounted) return;
+      setState(() => _suggestedNumbers = numbers);
+    });
+  }
+
+  void _useSuggestedNumber(String number) {
+    _mobileController.text = number;
+    _mobileController.selection = TextSelection.collapsed(offset: number.length);
+    setState(() => _suggestedNumbers = const []);
+    FocusScope.of(context).requestFocus(_passwordFocusNode);
   }
 
   /// Same unfocus -> refocus-next-frame trick as the PAN field on the
@@ -93,6 +125,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void dispose() {
     _passwordController.removeListener(_handlePasswordKeyboardSwitch);
+    _mobileFocusNode.removeListener(_onMobileFocusChange);
     _mobileFocusNode.dispose();
     _passwordFocusNode.dispose();
     _mobileController.dispose();
@@ -395,6 +428,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         validator: AppValidators.mobile,
                       ),
 
+                      if (_suggestedNumbers.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        _suggestedNumbersRow(),
+                      ],
+
                       const SizedBox(
                         height: 18,
                       ),
@@ -414,8 +452,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       AppTextField.form(
                         controller: _passwordController,
                         focusNode: _passwordFocusNode,
-
-                        hintText: 'enter_password'.tr,
 
                         prefixIcon: const Icon(
                           Icons.lock_outline_rounded,
@@ -618,6 +654,51 @@ class _LoginScreenState extends State<LoginScreen> {
   // ==========================================================
   // LABEL
   // ==========================================================
+
+  /// Tap-to-fill chips for whatever SIM-associated number(s) Android
+  /// reported (see SimNumberUtil) — shown right under the mobile field
+  /// while it's still empty. Each chip shows the number the way the member
+  /// is used to seeing it (+91, grouped), and tapping one fills the field
+  /// and moves on to Password, same as if they'd typed it themselves.
+  Widget _suggestedNumbersRow() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _suggestedNumbers.map((number) {
+        final display = number.length == 10
+            ? '${number.substring(0, 5)} ${number.substring(5)}'
+            : number;
+
+        return InkWell(
+          onTap: () => _useSuggestedNumber(number),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.primary.withOpacity(0.35)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.sim_card_outlined, size: 16, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  '+91 $display',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
 
   Widget _buildLabel(String text) {
     return Text(
