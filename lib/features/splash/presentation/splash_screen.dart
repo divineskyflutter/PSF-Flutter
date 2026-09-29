@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:psf_application/app/constants/app_assets.dart';
+import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 
 import '../../../app/routes/app_routes.dart';
@@ -80,8 +80,10 @@ class _SplashScreenState extends State<SplashScreen>
       backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset(AppAssets.paperTexture, fit: BoxFit.cover),
+          // A plain fill in the same cream tone the rest of the app uses,
+          // instead of the marble/paper texture image this used to show.
+          const Positioned.fill(
+            child: ColoredBox(color: AppColors.background),
           ),
           SafeArea(
             child: Center(
