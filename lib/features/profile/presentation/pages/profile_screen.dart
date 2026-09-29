@@ -377,7 +377,7 @@ class _DownloadPdfButton extends StatelessWidget {
                       ),
                     )
                   : Icon(
-                      Icons.download_rounded,
+                      Icons.picture_as_pdf_rounded,
                       color: Colors.white,
                       size: 20.px(context),
                     ),
