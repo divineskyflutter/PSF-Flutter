@@ -19,8 +19,9 @@ import '../controllers/main_navigation_controller.dart';
 /// not full screen width; see [MainNavigationScreen]'s `Drawer`).
 ///
 /// On it: a horizontal profile card (photo on the left, name + mobile on
-/// the right, same look as the old Profile summary card — display only,
-/// not tappable), then a menu: Membership Card, About Us, Contact Us,
+/// the right, same look as the old Profile summary card — tapping it opens
+/// the Profile tab, same as tapping it in the bottom bar), then a menu:
+/// Membership Card, About Us, Contact Us,
 /// Language, Logout. Both fade/slide in one after another each time it
 /// opens.
 class AppSideDrawer extends StatefulWidget {
@@ -85,7 +86,23 @@ class _AppSideDrawerState extends State<AppSideDrawer> with SingleTickerProvider
             SizedBox(height: 12.px(context)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 18.px(context)),
-              child: _reveal(0, _ProfileCard(profile: profile)),
+              child: _reveal(
+                0,
+                _ProfileCard(
+                  profile: profile,
+                  // Same tab switch as the "Membership Card" tile below —
+                  // the Profile tab is already just one tap away in the
+                  // bottom bar, this is the same shortcut from the drawer.
+                  // Back-button-returns-to-Home already applies to every
+                  // non-Home tab regardless of how it was opened (see
+                  // MainNavigationScreen._onBackPressed), so no extra
+                  // handling is needed here for that.
+                  onTap: () {
+                    nav.changeTab(MainNavigationController.profileTab);
+                    nav.closeDrawer();
+                  },
+                ),
+              ),
             ),
             SizedBox(height: 22.px(context)),
             Expanded(
@@ -153,12 +170,13 @@ class _AppSideDrawerState extends State<AppSideDrawer> with SingleTickerProvider
 
 /// The horizontal profile card at the top of the drawer: photo on the left,
 /// name + mobile stacked on the right in the same row — the same layout and
-/// dark card look as the Profile tab's old summary card. Display only, not
-/// tappable (the Profile tab itself is one tap away in the bottom bar).
+/// dark card look as the Profile tab's old summary card. Tapping it calls
+/// [onTap] (opens the Profile tab — see the drawer's own build method).
 class _ProfileCard extends StatelessWidget {
-  const _ProfileCard({required this.profile});
+  const _ProfileCard({required this.profile, required this.onTap});
 
   final ProfileController profile;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -174,20 +192,28 @@ class _ProfileCard extends StatelessWidget {
           ? member!.mobile!
           : (summary?.mobile ?? '');
 
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(16.px(context)),
-        decoration: BoxDecoration(
-          color: AppColors.primaryDark,
+      return Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20.px(context)),
+        child: InkWell(
+          onTap: onTap,
           borderRadius: BorderRadius.circular(20.px(context)),
-          boxShadow: const [
-            BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
-          ],
-        ),
-        child: ProfileAvatarBlock(
-          name: name.isEmpty ? AppStrings.myProfile.tr : name,
-          mobile: mobile.isEmpty ? '-' : mobile,
-          photoUrl: photoUrl,
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(16.px(context)),
+            decoration: BoxDecoration(
+              color: AppColors.primaryDark,
+              borderRadius: BorderRadius.circular(20.px(context)),
+              boxShadow: const [
+                BoxShadow(color: AppColors.shadow, blurRadius: 14, offset: Offset(0, 6)),
+              ],
+            ),
+            child: ProfileAvatarBlock(
+              name: name.isEmpty ? AppStrings.myProfile.tr : name,
+              mobile: mobile.isEmpty ? '-' : mobile,
+              photoUrl: photoUrl,
+            ),
+          ),
         ),
       );
     });
