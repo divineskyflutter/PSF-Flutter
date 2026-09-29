@@ -1316,6 +1316,19 @@ class RegistrationController extends GetxController {
     );
   }
 
+  /// "Middle Surname" from the just-entered full name, in the currently
+  /// selected app language — used to default the Father/Husband's Name
+  /// field for a brand-new member (see [getMemberStatus]'s own doc
+  /// comment for where this is used). `null` when there's no middle name
+  /// or surname to build it from yet.
+  String? defaultFatherNameFromFullName() {
+    final parts = [
+      _localizedOrNull(middleNameLanguages.value),
+      _localizedOrNull(surnameLanguages.value),
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).toList();
+    return parts.isEmpty ? null : parts.join(' ');
+  }
+
   /// "First Middle Surname" in the current app language (see
   /// [_localizedOrNull]); `null` if no name has been loaded yet.
   String? localizedFullNameText() {
@@ -3335,6 +3348,21 @@ class RegistrationController extends GetxController {
       _seedLanguagesIfPresent(stateLanguages, result.state, result.hState, result.gState);
       _seedLanguagesIfPresent(occupationLanguages, result.occupation, result.hOccupation, result.gOccupation);
 
+      // Father/Husband's Name has no saved value of its own yet for a
+      // brand-new member (the fatherNameController.text assignment above
+      // just set it to '' in that case) — default it from the middle
+      // name + surname just entered on Register, since many members share
+      // that with their father. Purely a starting suggestion: still fully
+      // editable, and never runs once a real father's name has been saved
+      // (fatherNameController.text is non-empty then, from the resumed
+      // value above).
+      if (fatherNameController.text.trim().isEmpty) {
+        final defaultFatherName = defaultFatherNameFromFullName();
+        if (defaultFatherName != null) {
+          fatherNameController.text = defaultFatherName;
+        }
+      }
+
       // Already-uploaded document ids + best-effort URLs — lets
       // uploadStep1Documents() skip re-uploading a document the member
       // uploaded in an earlier session, and lets the upload tiles show a
@@ -3753,6 +3781,17 @@ class RegistrationController extends GetxController {
           ),
           child: Wrap(
             children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text(
+                  'image_size_limit_note'.tr,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black54,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
               ListTile(
                 leading: const Icon(
                   Icons.camera_alt_outlined,

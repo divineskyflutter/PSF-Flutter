@@ -15,7 +15,10 @@ const registrationEn = <String, String>{
   'father_name_format_error': 'Enter first name and surname.',
   'mobile_number': 'Mobile Number',
   'mobile_number_2': 'Mobile Number 2',
-  'village': 'Village',
+  // The Gujarati/Hindi labels mean "native place"/hometown, not a literal
+  // village — matching that in English instead of the more literal
+  // "Village" (which read oddly for members whose hometown is a city).
+  'village': 'Native Place',
   'taluka': 'Taluka',
   'district': 'District',
   'state': 'State',
@@ -72,6 +75,9 @@ const registrationEn = <String, String>{
   'step_health': 'Health',
   'camera': 'Camera',
   'gallery': 'Gallery',
+  'image_size_limit_note': 'Photo must be under 200 KB',
+  'image_too_large_error':
+      'This photo is over 200 KB. Please choose a smaller one.',
   'health_step_optional_note':
       'This section is optional for now — you can continue without filling it in.',
 
@@ -83,6 +89,16 @@ const registrationEn = <String, String>{
   'pdf_generation_failed': 'Could not create the PDF. Please try again.',
   'preparing_pdf': 'Preparing your PDF...',
   'swipe_to_view_pages': 'Swipe to turn the page',
+
+  // Card download format picker
+  'choose_download_format': 'Download card as',
+  'download_as_pdf': 'PDF',
+  'download_as_pdf_hint': 'A print-ready document',
+  'download_as_image': 'Image',
+  'download_as_image_hint': 'A picture to share instantly',
+  'image_saved_successfully': 'Image saved successfully',
+  'image_save_cancelled': 'Save cancelled',
+  'image_generation_failed': 'Could not create the image. Please try again.',
 
   // Preview pages redesigned to mirror the printed application form
   'member_form_title': 'Scheme Beneficiary Member Form',
@@ -273,6 +289,9 @@ const registrationHi = <String, String>{
   'step_health': 'स्वास्थ्य',
   'camera': 'कैमरा',
   'gallery': 'गैलरी',
+  'image_size_limit_note': 'फ़ोटो 200 KB से कम होनी चाहिए',
+  'image_too_large_error':
+      'यह फ़ोटो 200 KB से बड़ी है। कृपया छोटी फ़ोटो चुनें।',
   'health_step_optional_note':
       'यह भाग अभी वैकल्पिक है — आप इसे भरे बिना भी आगे बढ़ सकते हैं।',
 
@@ -283,6 +302,15 @@ const registrationHi = <String, String>{
   'pdf_save_cancelled': 'सहेजना रद्द किया गया',
   'pdf_generation_failed': 'पीडीएफ नहीं बन सकी। कृपया पुनः प्रयास करें।',
   'preparing_pdf': 'आपकी पीडीएफ तैयार की जा रही है...',
+
+  'choose_download_format': 'किस रूप में डाउनलोड करें',
+  'download_as_pdf': 'पीडीएफ',
+  'download_as_pdf_hint': 'प्रिंट के लिए तैयार दस्तावेज़',
+  'download_as_image': 'इमेज',
+  'download_as_image_hint': 'तुरंत शेयर करने के लिए एक तस्वीर',
+  'image_saved_successfully': 'इमेज सफलतापूर्वक सहेजी गई',
+  'image_save_cancelled': 'सहेजना रद्द किया गया',
+  'image_generation_failed': 'इमेज नहीं बन सकी। कृपया पुनः प्रयास करें।',
   'swipe_to_view_pages': 'पेज पलटने के लिए स्वाइप करें',
 
   // Preview pages redesigned to mirror the printed application form
@@ -466,6 +494,9 @@ const registrationGu = <String, String>{
   'step_health': 'આરોગ્ય',
   'camera': 'કેમેરા',
   'gallery': 'ગેલેરી',
+  'image_size_limit_note': 'ફોટો 200 KB થી ઓછો હોવો જોઈએ',
+  'image_too_large_error':
+      'આ ફોટો 200 KB થી મોટો છે. કૃપા કરીને નાનો ફોટો પસંદ કરો.',
   'health_step_optional_note':
       'આ વિભાગ હાલ પૂરતો વૈકલ્પિક છે — તમે તેને ભર્યા વગર પણ આગળ વધી શકો છો.',
 
@@ -476,6 +507,15 @@ const registrationGu = <String, String>{
   'pdf_save_cancelled': 'સેવ કરવાનું રદ થયું',
   'pdf_generation_failed': 'PDF બનાવી શકાયું નહીં. કૃપા કરીને ફરી પ્રયાસ કરો.',
   'preparing_pdf': 'તમારું PDF તૈયાર થઈ રહ્યું છે...',
+
+  'choose_download_format': 'કયા સ્વરૂપમાં ડાઉનલોડ કરવું',
+  'download_as_pdf': 'પીડીએફ',
+  'download_as_pdf_hint': 'પ્રિન્ટ માટે તૈયાર દસ્તાવેજ',
+  'download_as_image': 'ઇમેજ',
+  'download_as_image_hint': 'તરત શેર કરવા માટે એક તસવીર',
+  'image_saved_successfully': 'ઇમેજ સફળતાપૂર્વક સેવ થઈ',
+  'image_save_cancelled': 'સેવ કરવાનું રદ થયું',
+  'image_generation_failed': 'ઇમેજ બનાવી શકાયું નહીં. કૃપા કરીને ફરી પ્રયાસ કરો.',
   'swipe_to_view_pages': 'પાનું ફેરવવા સ્વાઇપ કરો',
 
   // Preview pages redesigned to mirror the printed application form
