@@ -39,50 +39,60 @@ class WalletDownloadButton extends StatelessWidget {
             ],
           ),
           child: Center(
-            child: busy
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 20.px(context),
-                        height: 20.px(context),
-                        child: const CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                      ),
-                      SizedBox(width: 12.px(context)),
-                      Flexible(
-                        child: Text(
-                          'card_downloading'.tr,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14.px(context),
-                            fontWeight: FontWeight.w700,
+            // Cross-fades between the two states instead of popping straight
+            // from one Row to the other, which read as the button stuttering
+            // the instant a download started.
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: busy
+                  ? Row(
+                      key: const ValueKey('busy'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 20.px(context),
+                          height: 20.px(context),
+                          child: const CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                        ),
+                        SizedBox(width: 12.px(context)),
+                        Flexible(
+                          child: Text(
+                            'card_downloading'.tr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14.px(context),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.download_rounded, color: AppColors.accentGold, size: 22.px(context)),
-                      SizedBox(width: 10.px(context)),
-                      Flexible(
-                        child: Text(
-                          'download_card'.tr,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15.px(context),
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: .3,
+                      ],
+                    )
+                  : Row(
+                      key: const ValueKey('idle'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.download_rounded, color: Colors.white, size: 22.px(context)),
+                        SizedBox(width: 10.px(context)),
+                        Flexible(
+                          child: Text(
+                            'download_card'.tr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15.px(context),
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: .3,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+            ),
           ),
         ),
       );
