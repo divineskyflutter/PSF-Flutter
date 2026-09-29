@@ -1,57 +1,43 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
 
-/// Reads the phone number(s) Android already associates with this device's
-/// SIM slot(s), via a small platform channel (see MainActivity.kt's
-/// `getSimPhoneNumbers`) — so the login screen can offer the member their
-/// own number to tap instead of typing it in.
+/// Shows Google's own "Phone Number Hint" picker (see MainActivity.kt's
+/// `showPhoneNumberHint`) — a native Google bottom sheet listing phone
+/// number(s) associated with this device, letting the member tap their own
+/// number instead of typing it in. The standard, Play-Store-safe way to do
+/// this: no dangerous runtime permission, no reading the SIM's own number
+/// field directly (unreliable — many carriers never populate it at all),
+/// just Google Play Services.
 ///
-/// Many carriers/devices never actually populate this field at all — an
-/// empty result is the normal, common case here, not a failure to handle
-/// specially. Android-only (iOS has no equivalent API). Never throws:
-/// every failure path (no permission, channel error, nothing reported)
-/// just returns an empty list, so a caller can use this purely as an
-/// optional convenience with no extra handling.
+/// Android-only (iOS has no equivalent). Never throws: returns `null`
+/// whenever there's nothing to offer — Play Services unavailable, no
+/// Google account, or the member dismissed the sheet without picking
+/// anything — so a caller can treat every outcome the same way as "the
+/// member will just type it in instead".
 class SimNumberUtil {
   SimNumberUtil._();
 
   static const MethodChannel _channel =
       MethodChannel('com.example.psf_application/sim');
 
-  /// Requests READ_PHONE_STATE/READ_PHONE_NUMBERS if not already granted —
-  /// silently, no explanatory "why we need this" dialog on denial, unlike
-  /// ImagePickerUtil's photo permissions, since this is a convenience the
-  /// member never explicitly tapped anything to ask for — and returns
-  /// whatever numbers Android reports, as plain 10-digit Indian mobile
-  /// numbers (a leading "91"/"+91" country code some devices/carriers
-  /// include is stripped).
-  static Future<List<String>> suggestedNumbers() async {
-    if (!Platform.isAndroid) return const [];
+  /// Returns the picked number (digits only, e.g. "9601632780" — a
+  /// leading "+91"/"91" country code some devices include is stripped),
+  /// or `null`.
+  static Future<String?> showPhoneNumberHint() async {
+    if (!Platform.isAndroid) return null;
 
     try {
-      var status = await Permission.phone.status;
-      if (!status.isGranted) {
-        status = await Permission.phone.request();
-      }
-      if (!status.isGranted) return const [];
+      final picked =
+          await _channel.invokeMethod<String>('showPhoneNumberHint');
+      if (picked == null) return null;
 
-      final raw =
-          await _channel.invokeMethod<List<Object?>>('getSimPhoneNumbers');
-      if (raw == null) return const [];
+      final digits = picked.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.length < 10) return null;
 
-      final numbers = <String>{};
-      for (final entry in raw) {
-        final digits =
-            (entry as String? ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-        if (digits.length >= 10) {
-          numbers.add(digits.substring(digits.length - 10));
-        }
-      }
-      return numbers.toList();
+      return digits.substring(digits.length - 10);
     } catch (_) {
-      return const [];
+      return null;
     }
   }
 }

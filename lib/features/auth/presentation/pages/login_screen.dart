@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/features/auth/presentation/controllers/login_controller.dart';
 import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
@@ -37,11 +38,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
 
-  /// SIM-associated numbers to offer as tap-to-fill suggestions (see
-  /// SimNumberUtil) — empty on iOS, when nothing is reported, or once the
-  /// member has typed something themselves.
-  List<String> _suggestedNumbers = const [];
-  bool _suggestionsRequested = false;
+  /// Only ever shows Google's phone-number picker once per visit to this
+  /// screen — a member who dismissed it without picking anything (or typed
+  /// their own number) shouldn't have it pop up again every time they tap
+  /// back into the field.
+  bool _phoneNumberHintShown = false;
 
   /// Letters keyboard first; flips to a number keyboard once exactly 4
   /// letters have been typed (passwords look like "NIKH9601"). Only
@@ -59,28 +60,37 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   /// Fires once, the first time the member taps into the (still empty)
-  /// mobile number field — asks Android for any SIM-associated number(s)
-  /// so they can be offered as tap-to-fill suggestions instead of typed.
-  /// Never re-asks after that: a denied/empty result the first time isn't
-  /// worth re-querying on every later focus, and a filled-in field has
-  /// nothing to suggest into anyway.
+  /// mobile number field — shows Google's own phone-number picker so they
+  /// can tap their own number instead of typing it. Never shows it again
+  /// after that first time this screen is open, whether or not they picked
+  /// something: a dismissed sheet popping up again on every later focus
+  /// would just be annoying, and a filled-in field has nothing to fill
+  /// suggestions into anyway.
   void _onMobileFocusChange() {
     if (!_mobileFocusNode.hasFocus) return;
-    if (_suggestionsRequested) return;
+    if (_phoneNumberHintShown) return;
     if (_mobileController.text.trim().isNotEmpty) return;
 
-    _suggestionsRequested = true;
-    SimNumberUtil.suggestedNumbers().then((numbers) {
-      if (!mounted) return;
-      setState(() => _suggestedNumbers = numbers);
-    });
-  }
+    _phoneNumberHintShown = true;
 
-  void _useSuggestedNumber(String number) {
-    _mobileController.text = number;
-    _mobileController.selection = TextSelection.collapsed(offset: number.length);
-    setState(() => _suggestedNumbers = const []);
-    FocusScope.of(context).requestFocus(_passwordFocusNode);
+    // Dismiss the keyboard first so it isn't fighting Google's own bottom
+    // sheet for screen space.
+    _mobileFocusNode.unfocus();
+
+    SimNumberUtil.showPhoneNumberHint().then((number) {
+      if (!mounted) return;
+
+      if (number != null) {
+        _mobileController.text = number;
+        _mobileController.selection =
+            TextSelection.collapsed(offset: number.length);
+        FocusScope.of(context).requestFocus(_passwordFocusNode);
+      } else {
+        // Nothing picked — hand focus straight back so the member can just
+        // type, instead of leaving the field looking inert.
+        FocusScope.of(context).requestFocus(_mobileFocusNode);
+      }
+    });
   }
 
   /// Same unfocus -> refocus-next-frame trick as the PAN field on the
@@ -221,6 +231,16 @@ class _LoginScreenState extends State<LoginScreen> {
           Get.toNamed(AppRoutes.memberRegistrationStep1);
         }
       } else {
+        // A fully-approved member with nothing left to fix — this is the
+        // same "done, Home is where they land from now on" state a brand
+        // new registration reaches via
+        // RegistrationPreviewScreen._completeRegistration. Setting it here
+        // too means SplashScreen._routeNext() sends them straight back to
+        // Home on the next app open instead of through Language/Sign In
+        // again (it only skips those once this flag AND a saved member id
+        // are both true — memberId is already saved by
+        // LoginController.login above).
+        await AppPrefs.setRegistrationCompleted(true);
         Get.offAllNamed(AppRoutes.home);
       }
       return;
@@ -427,11 +447,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         // mobile field enforces — see AppValidators.mobile.
                         validator: AppValidators.mobile,
                       ),
-
-                      if (_suggestedNumbers.isNotEmpty) ...[
-                        const SizedBox(height: 10),
-                        _suggestedNumbersRow(),
-                      ],
 
                       const SizedBox(
                         height: 18,
@@ -656,51 +671,6 @@ class _LoginScreenState extends State<LoginScreen> {
   // ==========================================================
   // LABEL
   // ==========================================================
-
-  /// Tap-to-fill chips for whatever SIM-associated number(s) Android
-  /// reported (see SimNumberUtil) — shown right under the mobile field
-  /// while it's still empty. Each chip shows the number the way the member
-  /// is used to seeing it (+91, grouped), and tapping one fills the field
-  /// and moves on to Password, same as if they'd typed it themselves.
-  Widget _suggestedNumbersRow() {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: _suggestedNumbers.map((number) {
-        final display = number.length == 10
-            ? '${number.substring(0, 5)} ${number.substring(5)}'
-            : number;
-
-        return InkWell(
-          onTap: () => _useSuggestedNumber(number),
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.primary.withOpacity(0.35)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.sim_card_outlined, size: 16, color: AppColors.primary),
-                const SizedBox(width: 6),
-                Text(
-                  '+91 $display',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.primaryDark,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
 
   Widget _buildLabel(String text) {
     return Text(

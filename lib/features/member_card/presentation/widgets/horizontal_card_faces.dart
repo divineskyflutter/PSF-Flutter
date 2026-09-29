@@ -141,6 +141,15 @@ class HorizontalCardFront extends StatelessWidget {
                                 data.photoUrl!,
                                 cacheWidth: 500,
                                 fit: BoxFit.cover,
+                                // The whole card is rebuilt on things
+                                // unrelated to the photo itself (the QR
+                                // loading, the app language...) — without
+                                // this, each of those rebuilds a fresh
+                                // Image widget for the same URL and shows
+                                // a blank frame while it "reloads" (even
+                                // from cache), which read as the photo
+                                // flickering/reloading over and over.
+                                gaplessPlayback: true,
                                 errorBuilder: (_, __, ___) => const SizedBox(),
                               )
                             : const SizedBox(),

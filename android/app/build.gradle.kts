@@ -60,4 +60,9 @@ flutter {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation("androidx.multidex:multidex:2.0.1")
+    // Login screen's mobile-number field: Google's Phone Number Hint
+    // picker (see MainActivity.kt's showPhoneNumberHint) — needs no
+    // dangerous runtime permission and no google-services.json/Firebase
+    // project, just Google Play Services on the device.
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 }

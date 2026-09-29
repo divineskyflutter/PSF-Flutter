@@ -82,6 +82,7 @@ class MemberQrView extends StatelessWidget {
         image!.url!,
         fit: BoxFit.contain,
         filterQuality: FilterQuality.none,
+        gaplessPlayback: true,
         loadingBuilder: (context, imageChild, progress) =>
             progress == null ? imageChild : _spinner(),
         errorBuilder: (_, __, ___) => _unavailable(actual),

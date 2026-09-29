@@ -338,6 +338,12 @@ class ProfileController extends GetxController {
       TokenManager.instance.clear(),
       AppSecureStorage.deleteMemberId(),
       AppSecureStorage.clearLoggedInUser(),
+      // Set alongside the member id on a successful login (see
+      // LoginScreen._onLoginPressed) so SplashScreen._routeNext() skips
+      // straight to Home on the next app open — cleared here too so a
+      // logged-out device never carries that flag with no member id
+      // behind it.
+      AppPrefs.setRegistrationCompleted(false),
     ]);
   }
 

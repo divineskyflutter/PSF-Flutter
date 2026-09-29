@@ -137,6 +137,9 @@ class VerticalCardFront extends StatelessWidget {
                               data.photoUrl!,
                               cacheWidth: 500,
                               fit: BoxFit.cover,
+                              // See HorizontalCardFront's identical photo
+                              // — same reasoning.
+                              gaplessPlayback: true,
                               errorBuilder: (_, __, ___) => const SizedBox(),
                             )
                           : const SizedBox(),
