@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import 'toast_util.dart';
+
 class ImagePickerUtil {
   ImagePickerUtil._();
 
@@ -89,7 +91,7 @@ class ImagePickerUtil {
       final File imageFile = File(pickedFile.path);
 
       if (!crop) {
-        return _compressImage(imageFile);
+        return _finalizeImage(imageFile, source);
       }
 
       // ── 3. Crop (optional) ───────────────────────────────────
@@ -113,7 +115,7 @@ class ImagePickerUtil {
         return null;
       }
 
-      return _compressImage(File(croppedFile.path));
+      return _finalizeImage(File(croppedFile.path), source);
     } catch (e) {
       debugPrint('Image Picker Error: $e');
       return null;
@@ -121,46 +123,46 @@ class ImagePickerUtil {
   }
 
   // ============================================================
-  // COMPRESS (always runs, right before the file is handed back)
+  // SIZE LIMIT (always runs, right before the file is handed back)
   //
-  // `imageQuality`/`compressQuality` above only compress JPEG output —
-  // Android's own ImageResizer ignores that setting for PNG ("compressing
-  // is not supported for type PNG"), and image_cropper can hand back a
-  // PNG. That let an uncompressed, full-resolution photo reach
-  // SaveDocument and get rejected once it was over the API's upload size
-  // limit. Re-encoding here, always to JPEG, fixes it regardless of what
-  // format the picker/cropper produced.
+  // Every photo/document uploaded from the app must be under 200 KB.
+  //   • Gallery: used exactly as picked, never re-encoded — what the
+  //     member chose is what gets uploaded. If it's already over the
+  //     limit, it's rejected outright (with a toast) rather than silently
+  //     shrunk into something they didn't pick.
+  //   • Camera: a fresh capture is essentially always far bigger than
+  //     200 KB, and there's no other version of it to pick instead — so
+  //     this compresses it down to fit, trying the steps below in order
+  //     (highest quality first) and keeping the first one whose *output
+  //     file* actually measures under the limit, so it only loses as much
+  //     quality as it actually needs to. If nothing gets it under the
+  //     limit, the photo is rejected the same way a too-big gallery pick
+  //     is — never silently uploaded oversized.
   //
-  // The API's limit is "under 1 MB", not "1 MB or under" — a single fixed
-  // quality/size setting isn't reliable for that because a busy/detailed
-  // photo can still land over the limit even at quality 85. So this tries
-  // a list of steps, largest/highest-quality first, and stops at the
-  // first one whose *output file* actually measures under the limit.
-  // Every step is re-encoded from the original photo (not from the
-  // previous attempt), so there's no compounding quality loss.
-  //
-  // Dimensions are reduced before quality is, because shrinking the
-  // resolution barely changes how a photo looks on a phone screen, while
-  // dropping JPEG quality does — quality is only lowered as a last resort
-  // for unusually large/detailed photos. For now this keeps quality high;
-  // tune `_compressSteps` / `_maxUploadBytes` below whenever you want a
-  // different balance.
+  // `imageQuality`/`compressQuality` on the picker/cropper above only
+  // compress JPEG output — Android's own ImageResizer ignores that
+  // setting for PNG, and image_cropper can hand back a PNG — so a camera
+  // capture is always re-encoded to JPEG here regardless of what format
+  // the picker/cropper produced.
   // ============================================================
 
-  /// Kept safely under the API's 1 MB cutoff rather than targeting exactly
-  /// 1 MB, since actual on-disk size can vary slightly by device/codec.
-  static const int _maxUploadBytes = 950 * 1024;
+  static const int _maxUploadBytes = 200 * 1024;
 
   static const List<_CompressStep> _compressSteps = [
-    _CompressStep(quality: 85, minWidth: 1920, minHeight: 1080),
-    _CompressStep(quality: 85, minWidth: 1280, minHeight: 720),
-    _CompressStep(quality: 85, minWidth: 1024, minHeight: 768),
-    _CompressStep(quality: 75, minWidth: 800, minHeight: 600),
-    _CompressStep(quality: 65, minWidth: 640, minHeight: 480),
+    _CompressStep(quality: 90, minWidth: 1600, minHeight: 1200),
+    _CompressStep(quality: 85, minWidth: 1280, minHeight: 960),
+    _CompressStep(quality: 80, minWidth: 1024, minHeight: 768),
+    _CompressStep(quality: 70, minWidth: 800, minHeight: 600),
+    _CompressStep(quality: 60, minWidth: 640, minHeight: 480),
+    _CompressStep(quality: 50, minWidth: 480, minHeight: 360),
   ];
 
-  static Future<File> _compressImage(File file) async {
-    File bestAttempt = file;
+  static Future<File?> _finalizeImage(File file, ImageSource source) async {
+    if (source == ImageSource.gallery) {
+      if (await file.length() <= _maxUploadBytes) return file;
+      ToastUtil.error('image_too_large_error'.tr);
+      return null;
+    }
 
     try {
       final targetDir = await getTemporaryDirectory();
@@ -178,26 +180,24 @@ class ImagePickerUtil {
           format: CompressFormat.jpeg,
         );
 
-        if (compressed == null) break;
+        if (compressed == null) continue;
 
         final compressedFile = File(compressed.path);
-        if (!await compressedFile.exists()) break;
+        if (!await compressedFile.exists()) continue;
 
-        bestAttempt = compressedFile;
-
-        if (await bestAttempt.length() <= _maxUploadBytes) {
-          return bestAttempt;
+        if (await compressedFile.length() <= _maxUploadBytes) {
+          return compressedFile;
         }
       }
-
-      // Ran every step and it's still at/over the limit (an extremely
-      // detailed photo) — hand back the smallest version reached rather
-      // than the original, so SaveDocument at least has the best chance.
-      return bestAttempt;
     } catch (e) {
       debugPrint('Image compression error: $e');
-      return bestAttempt;
     }
+
+    // Ran every step (or hit an error) and it's still over the limit —
+    // never hand back an oversized file; the member sees this as a
+    // cancelled pick, with the toast explaining why.
+    ToastUtil.error('image_too_large_error'.tr);
+    return null;
   }
 
   // ============================================================
