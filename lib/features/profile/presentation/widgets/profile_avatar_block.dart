@@ -49,6 +49,14 @@ class ProfileAvatarBlock extends StatelessWidget {
               ? Image.network(
                   photoUrl!,
                   fit: BoxFit.cover,
+                  // Every reactive rebuild of the card (e.g. the profile
+                  // data simply being re-fetched with the same values)
+                  // created a brand-new Image widget for the same URL —
+                  // without this, Flutter shows a blank frame while it
+                  // "reloads" (even straight from cache), which read as
+                  // the photo blinking/flickering. This keeps the current
+                  // frame on screen until the new one is actually ready.
+                  gaplessPlayback: true,
                   errorBuilder: (_, __, ___) => _fallbackIcon(context),
                 )
               : _fallbackIcon(context),
