@@ -453,6 +453,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         controller: _passwordController,
                         focusNode: _passwordFocusNode,
 
+                        hintText: 'enter_password'.tr,
+
                         prefixIcon: const Icon(
                           Icons.lock_outline_rounded,
                         ),
