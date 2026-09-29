@@ -266,36 +266,25 @@ class HorizontalCardBack extends StatelessWidget {
                         child: Column(
                           children: [
                             SizedBox(height: f(28)),
+                            // Just the QR, filling the whole panel — the
+                            // registration numbers (Reg.No./Lic No.) that
+                            // used to sit under it were removed.
                             Expanded(
                               child: Center(
                                 child: SizedBox(
-                                  width: f(230),
-                                  height: f(230),
+                                  width: f(270),
+                                  height: f(270),
                                   child: MemberQrView(
                                     qr: qr,
                                     isLoading: isQrLoading,
                                     hasError: hasQrError,
                                     onRetry: onQrRetry,
-                                    size: f(230),
+                                    size: f(270),
                                   ),
                                 ),
                               ),
                             ),
-                            SizedBox(height: f(14)),
-                            Padding(
-                              padding: EdgeInsets.symmetric(horizontal: f(10)),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  cardCin,
-                                  maxLines: 1,
-                                  style: TextStyle(color: cardInk, fontSize: f(17), fontWeight: FontWeight.w700, height: 1.1),
-                                ),
-                              ),
-                            ),
-                            SizedBox(height: f(4)),
-                            Text(cardLicence, style: TextStyle(color: cardInk, fontSize: f(17), fontWeight: FontWeight.w600, height: 1.1)),
-                            SizedBox(height: f(20)),
+                            SizedBox(height: f(28)),
                           ],
                         ),
                       ),
