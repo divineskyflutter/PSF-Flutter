@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 
 import '../../data/member_card_data.dart';
+import '../../data/member_qr_image.dart';
+import 'member_qr_view.dart';
 import 'printed_card_style.dart';
 
 /// Landscape ID-card proportions of the foundation's printed card
@@ -178,7 +180,22 @@ class HorizontalCardFront extends StatelessWidget {
                       child: Column(
                         children: [
                           CardFieldRow(label: 'card_label_name'.tr, value: MemberCardData.orDash(data.name), s: s),
-                          CardFieldRow(label: 'address'.tr, value: MemberCardData.orDash(data.address), s: s, lines: 2),
+                          // A 2-line address needs more than the default
+                          // single-line row height — without this, a long
+                          // address's wrapped second line painted straight
+                          // over the Contact row below it instead of
+                          // pushing it down (see CardFieldRow's own doc
+                          // comment: each row is a fixed-height box, so a
+                          // taller one has to be asked for explicitly, the
+                          // same way the vertical card's own address row
+                          // already does).
+                          CardFieldRow(
+                            label: 'address'.tr,
+                            value: MemberCardData.orDash(data.address),
+                            s: s,
+                            lines: 2,
+                            rowHeight: 96,
+                          ),
                           CardFieldRow(label: 'card_label_contact'.tr, value: MemberCardData.orDash(data.mobile), s: s),
                           CardFieldRow(
                             label: 'card_label_dob'.tr,
@@ -198,11 +215,23 @@ class HorizontalCardFront extends StatelessWidget {
   }
 }
 
-/// BACK of the printed-style member card: teal background, the emblem on a
-/// cream panel with the registration numbers, the founders' contact details
-/// down a timeline, the registered office and the footer note.
+/// BACK of the printed-style member card: teal background, the member's own
+/// QR code (the same one shown on the wallet's cover) on a cream panel with
+/// the registration numbers, the founders' contact details down a timeline,
+/// the registered office and the footer note.
 class HorizontalCardBack extends StatelessWidget {
-  const HorizontalCardBack({super.key});
+  const HorizontalCardBack({
+    super.key,
+    required this.qr,
+    required this.isQrLoading,
+    required this.hasQrError,
+    required this.onQrRetry,
+  });
+
+  final MemberQrImage? qr;
+  final bool isQrLoading;
+  final bool hasQrError;
+  final VoidCallback onQrRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -238,9 +267,18 @@ class HorizontalCardBack extends StatelessWidget {
                           children: [
                             SizedBox(height: f(28)),
                             Expanded(
-                              child: SizedBox(
-                                width: f(270),
-                                child: SvgPicture.asset(AppAssets.logo, fit: BoxFit.contain),
+                              child: Center(
+                                child: SizedBox(
+                                  width: f(230),
+                                  height: f(230),
+                                  child: MemberQrView(
+                                    qr: qr,
+                                    isLoading: isQrLoading,
+                                    hasError: hasQrError,
+                                    onRetry: onQrRetry,
+                                    size: f(230),
+                                  ),
+                                ),
                               ),
                             ),
                             SizedBox(height: f(14)),

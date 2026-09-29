@@ -1,18 +1,14 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:get/get.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import 'package:psf_application/app/constants/app_assets.dart';
-
 import '../data/member_card_data.dart';
+import '../data/member_qr_image.dart';
+import 'card_face_renderer.dart';
 import 'member_card_layout.dart';
-import 'widgets/horizontal_card_faces.dart';
-import 'widgets/vertical_card_faces.dart';
+import 'widgets/horizontal_card_faces.dart' show horizontalCardAspectRatio;
+import 'widgets/vertical_card_faces.dart' show verticalCardAspectRatio;
 
 /// Builds the downloadable PDF for the printed-style card, in whichever
 /// [MemberCardLayout] the member picked.
@@ -31,9 +27,22 @@ import 'widgets/vertical_card_faces.dart';
 class PrintedCardPdf {
   PrintedCardPdf._();
 
-  static Future<Uint8List> build(MemberCardData data, MemberCardLayout layout) async {
+  static Future<Uint8List> build(
+    MemberCardData data,
+    MemberCardLayout layout, {
+    MemberQrImage? qr,
+    bool hasQrError = false,
+  }) async {
     final spec = _CardSpec.of(layout);
-    final images = await _renderFaces(data, spec);
+    final images = await CardFaceRenderer.render(
+      data: data,
+      layout: layout,
+      qr: qr,
+      hasQrError: hasQrError,
+      logicalWidth: spec.logicalWidth,
+      logicalHeight: spec.logicalHeight,
+      pixelRatio: spec.pixelRatio,
+    );
 
     final doc = pw.Document(
       title: 'PSF Member Card',
@@ -68,94 +77,6 @@ class PrintedCardPdf {
     return doc.save();
   }
 
-  static Future<List<Uint8List>> _renderFaces(MemberCardData data, _CardSpec spec) async {
-    // `Get.overlayContext` is the overlay's own context, so looking the
-    // overlay up *from* it finds nothing — take the state straight from the
-    // root navigator instead.
-    final overlay = Get.key.currentState?.overlay;
-    final overlayContext = overlay?.context;
-
-    if (overlay == null || overlayContext == null) {
-      throw StateError('No overlay available to render the card.');
-    }
-
-    // Make sure everything the faces draw is already decoded, so the
-    // capture doesn't grab half-loaded images.
-    final photoUrl = data.photoUrl;
-    if (photoUrl != null && photoUrl.isNotEmpty) {
-      try {
-        await precacheImage(
-          ResizeImage(NetworkImage(photoUrl), width: 500),
-          overlayContext,
-        );
-      } catch (_) {
-        // A missing photo just leaves the frame empty.
-      }
-    }
-    if (!overlayContext.mounted) throw StateError('Context is gone.');
-    await precacheImage(const AssetImage(AppAssets.cardPaper), overlayContext);
-    if (!overlayContext.mounted) throw StateError('Context is gone.');
-    await precacheImage(const AssetImage(AppAssets.chairmanSignature), overlayContext);
-
-    final frontKey = GlobalKey();
-    final backKey = GlobalKey();
-
-    final entry = OverlayEntry(
-      builder: (context) => Positioned(
-        // Far off-screen: painted (so it can be captured) but never seen.
-        left: -spec.logicalWidth * 3,
-        top: 0,
-        child: Material(
-          type: MaterialType.transparency,
-          child: Column(
-            children: [
-              RepaintBoundary(
-                key: frontKey,
-                child: SizedBox(
-                  width: spec.logicalWidth,
-                  height: spec.logicalHeight,
-                  child: spec.layout == MemberCardLayout.horizontal
-                      ? HorizontalCardFront(data: data)
-                      : VerticalCardFront(data: data),
-                ),
-              ),
-              const SizedBox(height: 16),
-              RepaintBoundary(
-                key: backKey,
-                child: SizedBox(
-                  width: spec.logicalWidth,
-                  height: spec.logicalHeight,
-                  child: spec.layout == MemberCardLayout.horizontal
-                      ? const HorizontalCardBack()
-                      : const VerticalCardBack(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-
-    try {
-      // Let the faces lay out and paint, and the SVG emblem finish loading.
-      await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 900));
-      await WidgetsBinding.instance.endOfFrame;
-
-      Future<Uint8List> grab(GlobalKey key) async {
-        final boundary = key.currentContext!.findRenderObject() as RenderRepaintBoundary;
-        final image = await boundary.toImage(pixelRatio: spec.pixelRatio);
-        final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-        return bytes!.buffer.asUint8List();
-      }
-
-      return [await grab(frontKey), await grab(backKey)];
-    } finally {
-      entry.remove();
-    }
-  }
 }
 
 /// Sizes for one layout: the logical size the faces are laid out at when

@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 
 import '../../data/member_card_data.dart';
+import '../../data/member_qr_image.dart';
+import 'member_qr_view.dart';
 import 'printed_card_style.dart';
 
 /// Portrait proportions of the vertical printed-style card (width / height).
@@ -224,11 +226,23 @@ class VerticalCardFront extends StatelessWidget {
 }
 
 /// BACK of the vertical member card — the printed card's back re-flowed for
-/// a portrait shape: teal background, the emblem on a cream panel with the
-/// registration numbers, the founders' contact details down a timeline, the
-/// registered office and the footer note.
+/// a portrait shape: teal background, the member's own QR code (the same one
+/// shown on the wallet's cover) on a cream panel with the registration
+/// numbers, the founders' contact details down a timeline, the registered
+/// office and the footer note.
 class VerticalCardBack extends StatelessWidget {
-  const VerticalCardBack({super.key});
+  const VerticalCardBack({
+    super.key,
+    required this.qr,
+    required this.isQrLoading,
+    required this.hasQrError,
+    required this.onQrRetry,
+  });
+
+  final MemberQrImage? qr;
+  final bool isQrLoading;
+  final bool hasQrError;
+  final VoidCallback onQrRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -264,9 +278,18 @@ class VerticalCardBack extends StatelessWidget {
                         children: [
                           SizedBox(height: f(26)),
                           Expanded(
-                            child: SizedBox(
-                              width: f(270),
-                              child: SvgPicture.asset(AppAssets.logo, fit: BoxFit.contain),
+                            child: Center(
+                              child: SizedBox(
+                                width: f(230),
+                                height: f(230),
+                                child: MemberQrView(
+                                  qr: qr,
+                                  isLoading: isQrLoading,
+                                  hasError: hasQrError,
+                                  onRetry: onQrRetry,
+                                  size: f(230),
+                                ),
+                              ),
                             ),
                           ),
                           SizedBox(height: f(12)),

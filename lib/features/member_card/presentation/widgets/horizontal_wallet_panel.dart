@@ -253,6 +253,12 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
       _profile.profile.value;
       _profile.enumBundle.value;
       Get.find<LanguageController>().locale.value;
+      // So the card's back face (now showing the QR, not the logo) redraws
+      // once the QR finishes loading or fails, same as the wallet cover's
+      // own QR already does via _qr()'s own Obx.
+      _controller.qr.value;
+      _controller.isQrLoading.value;
+      _controller.hasQrError.value;
 
       final data = _controller.buildData(localized: true);
 
@@ -286,7 +292,12 @@ class _HorizontalWalletPanelState extends State<HorizontalWalletPanel>
           );
 
           final front = HorizontalCardFront(data: data);
-          const back = HorizontalCardBack();
+          final back = HorizontalCardBack(
+            qr: _controller.qr.value,
+            isQrLoading: _controller.isQrLoading.value,
+            hasQrError: _controller.hasQrError.value,
+            onQrRetry: _controller.loadQr,
+          );
 
           return Column(
             mainAxisAlignment: MainAxisAlignment.center,

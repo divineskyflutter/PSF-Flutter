@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:get/get.dart';
 
@@ -10,11 +12,15 @@ import 'package:psf_application/shared/utils/app_date_format.dart';
 import 'package:psf_application/shared/utils/localized_field.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 
+import '../card_image_builder.dart';
 import '../member_card_layout.dart';
 import '../printed_card_pdf.dart';
 import '../../data/member_card_data.dart';
 import '../../data/member_card_repository.dart';
 import '../../data/member_qr_image.dart';
+
+/// Which file format the member picked in the download sheet.
+enum CardDownloadFormat { pdf, image }
 
 /// Drives the wallet-style Card tab: loads the member's QR code, builds the
 /// display-ready [MemberCardData] from the cached login profile, and
@@ -160,33 +166,73 @@ class MemberCardController extends GetxController {
     );
   }
 
-  Future<void> downloadCard() async {
+  /// Downloads the card the member is looking at (their picked shape, their
+  /// selected language) as either a PDF or a PNG image — same card faces,
+  /// same QR, either way.
+  Future<void> downloadCardAs(CardDownloadFormat format) async {
     if (isDownloading.value) return;
 
     isDownloading.value = true;
 
     try {
-      // The PDF is the card the member is looking at, in the shape they
-      // picked and the language they selected.
+      // The QR is normally already loaded by the time the member reaches
+      // Download (it's shown on the wallet cover from the moment this
+      // controller starts), but make sure — a download shouldn't go out
+      // with a blank hole where the QR belongs just because that first
+      // fetch is still in flight or was never retried after failing.
+      if (qr.value == null && !hasQrError.value) {
+        await loadQr();
+      }
+
       final data = buildData(localized: true);
-      final pdfBytes = await PrintedCardPdf.build(data, layout.value);
       final safeNo = data.memberNo.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+      final baseName = 'PSF_Member_Card_${safeNo.isEmpty ? 'card' : safeNo}';
+
+      final Uint8List bytes;
+      final String extension;
+      switch (format) {
+        case CardDownloadFormat.pdf:
+          bytes = await PrintedCardPdf.build(
+            data,
+            layout.value,
+            qr: qr.value,
+            hasQrError: hasQrError.value,
+          );
+          extension = 'pdf';
+        case CardDownloadFormat.image:
+          bytes = await CardImageBuilder.build(
+            data,
+            layout.value,
+            qr: qr.value,
+            hasQrError: hasQrError.value,
+          );
+          extension = 'png';
+      }
 
       final savedPath = await FilePicker.platform.saveFile(
-        fileName: 'PSF_Member_Card_${safeNo.isEmpty ? 'card' : safeNo}.pdf',
-        bytes: pdfBytes,
+        fileName: '$baseName.$extension',
+        bytes: bytes,
         type: FileType.custom,
-        allowedExtensions: ['pdf'],
+        allowedExtensions: [extension],
         dialogTitle: 'download_card'.tr,
       );
 
+      final isPdf = format == CardDownloadFormat.pdf;
       if (savedPath != null) {
-        ToastUtil.success('pdf_saved_successfully'.tr);
+        ToastUtil.success(
+          isPdf ? 'pdf_saved_successfully'.tr : 'image_saved_successfully'.tr,
+        );
       } else {
-        ToastUtil.error('pdf_save_cancelled'.tr);
+        ToastUtil.error(
+          isPdf ? 'pdf_save_cancelled'.tr : 'image_save_cancelled'.tr,
+        );
       }
     } catch (_) {
-      ToastUtil.error('pdf_generation_failed'.tr);
+      ToastUtil.error(
+        format == CardDownloadFormat.pdf
+            ? 'pdf_generation_failed'.tr
+            : 'image_generation_failed'.tr,
+      );
     } finally {
       isDownloading.value = false;
     }

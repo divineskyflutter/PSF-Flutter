@@ -5,6 +5,7 @@ import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 
 import '../controllers/member_card_controller.dart';
+import 'card_download_sheet.dart';
 
 // Small controls shared by every wallet layout (vertical and horizontal):
 // the Download button.
@@ -21,7 +22,7 @@ class WalletDownloadButton extends StatelessWidget {
 
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: busy ? null : controller.downloadCard,
+        onTap: busy ? null : () => CardDownloadSheet.show(controller),
         child: Container(
           width: double.infinity,
           height: 52.px(context),
