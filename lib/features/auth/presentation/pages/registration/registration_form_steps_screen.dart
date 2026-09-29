@@ -2065,27 +2065,19 @@ class _MemberRegistrationScreenState
           )
               : const SizedBox.shrink(),
         ),
-        // Query-resolution mode's OWN language toggle — manually
-        // previewing labels/toasts in a different language than the
-        // active pass, never the app's real locale (see
-        // QueryResolutionState.localLanguage's doc comment). Hidden
-        // entirely outside this flow. NOT wrapped in Obx: `isActive` is
-        // a plain (non-Rx) getter that's decided once at login and never
-        // changes for the rest of this screen's lifetime — wrapping it
-        // in Obx anyway is exactly the "never reads a real observable"
-        // case that throws GetX's own "improper use of Obx" check (same
-        // bug already fixed on _queryAwareField/_querySimpleField/
-        // _queryLockableImage — this one just needs no Obx at all rather
-        // than an unconditional Rx read, since it truly never changes).
+        // Same language icon/sheet as everywhere else in the app (the
+        // drawer's own Language menu item) — shown on every step of the
+        // wizard, in both a normal registration and query-resolution
+        // (edit-after-login) mode, unchanged either way: it always
+        // switches the app's real language via LanguageSettingsSheet.
         actions: [
-          if (controller.queryState.isActive)
-            IconButton(
-              icon: const Icon(
-                Icons.translate,
-                color: AppColors.primary,
-              ),
-              onPressed: LanguageSettingsSheet.show,
+          IconButton(
+            icon: const Icon(
+              Icons.translate,
+              color: AppColors.primary,
             ),
+            onPressed: LanguageSettingsSheet.show,
+          ),
         ],
       ),
 
