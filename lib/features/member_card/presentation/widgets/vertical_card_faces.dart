@@ -162,12 +162,16 @@ class VerticalCardFront extends StatelessWidget {
                     ),
                   ),
 
-                  // Chairman's "Auth. Signature" block, beside the photo.
+                  // Chairman's "Auth. Signature" block — smaller than it
+                  // used to be, and pinned to the card's own bottom-right
+                  // corner (a small margin only, so the rounded corner
+                  // doesn't clip it) instead of floating with a big gap
+                  // on both sides.
                   Positioned(
-                    left: f(266),
-                    top: f(600 - 250 / chairmanSignatureAspectRatio),
-                    width: f(250),
-                    height: f(250 / chairmanSignatureAspectRatio),
+                    right: f(16),
+                    bottom: f(16),
+                    width: f(165),
+                    height: f(165 / chairmanSignatureAspectRatio),
                     child: const ChairmanSignature(),
                   ),
 
@@ -195,7 +199,9 @@ class VerticalCardFront extends StatelessWidget {
                           rowHeight: 76,
                           labelWidth: 128,
                           labelSize: 30,
-                          multiLineValueSize: 25,
+                          // Same size as Name/Contact/DOB below — only the
+                          // allowed line count differs.
+                          valueSize: 29,
                         ),
                         CardFieldRow(
                           label: 'card_label_contact'.tr,

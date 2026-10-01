@@ -95,7 +95,6 @@ class CardFieldRow extends StatelessWidget {
     this.labelWidth = 128,
     this.labelSize = 32,
     this.valueSize = 31,
-    this.multiLineValueSize = 25,
   });
 
   final String label;
@@ -104,6 +103,10 @@ class CardFieldRow extends StatelessWidget {
 
   final double s;
 
+  /// How many lines [value] may wrap to before it's cut off with an
+  /// ellipsis (e.g. 2 for Address) — never changes [valueSize]; every
+  /// field on a card face reads at the same size regardless of how many
+  /// lines its own value happens to need.
   final int lines;
 
   final double rowHeight;
@@ -113,8 +116,6 @@ class CardFieldRow extends StatelessWidget {
   final double labelSize;
 
   final double valueSize;
-
-  final double multiLineValueSize;
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +147,7 @@ class CardFieldRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: cardInk,
-                fontSize: lines > 1 ? f(multiLineValueSize) : f(valueSize),
+                fontSize: f(valueSize),
                 height: lines > 1 ? 1.15 : 1.05,
                 fontWeight: FontWeight.w600,
               ),

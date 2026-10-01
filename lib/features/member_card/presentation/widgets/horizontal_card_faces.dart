@@ -172,12 +172,16 @@ class HorizontalCardFront extends StatelessWidget {
                       ),
                     ),
 
-                    // Chairman's "Auth. Signature" block, as on the printed card.
+                    // Chairman's "Auth. Signature" block — smaller than it
+                    // used to be, and pinned to the card's own bottom-right
+                    // corner (a small margin only, so the rounded corner
+                    // doesn't clip it) instead of floating with a big gap
+                    // on both sides.
                     Positioned(
-                      left: f(750),
-                      top: f(464),
-                      width: f(261),
-                      height: f(261 / chairmanSignatureAspectRatio),
+                      right: f(16),
+                      bottom: f(16),
+                      width: f(185),
+                      height: f(185 / chairmanSignatureAspectRatio),
                       child: const ChairmanSignature(),
                     ),
 
