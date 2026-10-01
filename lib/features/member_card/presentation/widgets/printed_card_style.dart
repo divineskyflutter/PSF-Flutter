@@ -124,7 +124,13 @@ class CardFieldRow extends StatelessWidget {
     return SizedBox(
       height: f(rowHeight),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        // Was `.start` — the label and the value are set in different font
+        // sizes with different explicit line-height factors, so lining up
+        // their top edges actually left the glyphs themselves sitting at
+        // different heights (the value visibly higher than the label it's
+        // next to). Centering both within the row lines up how they
+        // actually look, not just their invisible bounding boxes.
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           SizedBox(
             width: f(labelWidth),
@@ -134,11 +140,11 @@ class CardFieldRow extends StatelessWidget {
               child: Text(
                 label,
                 maxLines: 1,
-                style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900),
+                style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900, height: 1.0),
               ),
             ),
           ),
-          Text(':', style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900)),
+          Text(':', style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900, height: 1.0)),
           SizedBox(width: f(14)),
           Expanded(
             child: Text(
@@ -148,7 +154,7 @@ class CardFieldRow extends StatelessWidget {
               style: TextStyle(
                 color: cardInk,
                 fontSize: f(valueSize),
-                height: lines > 1 ? 1.15 : 1.05,
+                height: lines > 1 ? 1.15 : 1.0,
                 fontWeight: FontWeight.w600,
               ),
             ),
