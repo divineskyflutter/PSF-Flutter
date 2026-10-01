@@ -140,9 +140,9 @@ class VerticalCardFront extends StatelessWidget {
                               // See HorizontalCardFront's identical photo
                               // — same reasoning.
                               gaplessPlayback: true,
-                              errorBuilder: (_, __, ___) => const SizedBox(),
+                              errorBuilder: (_, __, ___) => CardPhotoPlaceholder(size: f(196)),
                             )
-                          : const SizedBox(),
+                          : CardPhotoPlaceholder(size: f(196)),
                     ),
                   ),
 
@@ -180,48 +180,66 @@ class VerticalCardFront extends StatelessWidget {
                     left: f(56),
                     right: f(28),
                     top: f(636),
-                    child: Column(
-                      children: [
-                        CardFieldRow(
-                          label: 'card_label_name'.tr,
-                          value: MemberCardData.orDash(data.name),
-                          s: s,
-                          rowHeight: 56,
-                          labelWidth: 128,
-                          labelSize: 30,
-                          valueSize: 29,
-                        ),
-                        CardFieldRow(
-                          label: 'address'.tr,
-                          value: MemberCardData.orDash(data.address),
-                          s: s,
-                          lines: 2,
-                          rowHeight: 76,
-                          labelWidth: 128,
-                          labelSize: 30,
-                          // Same size as Name/Contact/DOB below — only the
-                          // allowed line count differs.
-                          valueSize: 29,
-                        ),
-                        CardFieldRow(
-                          label: 'card_label_contact'.tr,
-                          value: MemberCardData.orDash(data.mobile),
-                          s: s,
-                          rowHeight: 56,
-                          labelWidth: 128,
-                          labelSize: 30,
-                          valueSize: 29,
-                        ),
-                        CardFieldRow(
-                          label: 'card_label_dob'.tr,
-                          value: MemberCardData.orDash(data.dateOfBirthNumeric),
-                          s: s,
-                          rowHeight: 56,
-                          labelWidth: 128,
-                          labelSize: 30,
-                          valueSize: 29,
-                        ),
-                      ],
+                    child: Builder(
+                      builder: (context) {
+                        final nameLabel = 'card_label_name'.tr;
+                        final addressLabel = 'address'.tr;
+                        final contactLabel = 'card_label_contact'.tr;
+                        final dobLabel = 'card_label_dob'.tr;
+                        // Sized to whichever of these labels is widest in
+                        // the active language — see cardLabelWidth's own
+                        // doc for why a width tuned only for English broke
+                        // in Hindi.
+                        final labelWidth = cardLabelWidth([nameLabel, addressLabel, contactLabel, dobLabel], fontSize: 30);
+
+                        return Column(
+                          children: [
+                            CardFieldRow(
+                              label: nameLabel,
+                              value: MemberCardData.orDash(data.name),
+                              s: s,
+                              rowHeight: 56,
+                              labelWidth: labelWidth,
+                              labelSize: 30,
+                              valueSize: 30,
+                            ),
+                            CardFieldRow(
+                              label: addressLabel,
+                              value: MemberCardData.orDash(data.address),
+                              s: s,
+                              lines: 2,
+                              // Same rowHeight as Name/Contact/DOB below —
+                              // CardFieldRow's own minHeight constraint lets
+                              // it grow taller on its own, only when the
+                              // address actually wraps to its 2nd line.
+                              rowHeight: 56,
+                              labelWidth: labelWidth,
+                              labelSize: 30,
+                              // Same size as Name/Contact/DOB below — only
+                              // the allowed line count differs.
+                              valueSize: 30,
+                            ),
+                            CardFieldRow(
+                              label: contactLabel,
+                              value: MemberCardData.orDash(data.mobile),
+                              s: s,
+                              rowHeight: 56,
+                              labelWidth: labelWidth,
+                              labelSize: 30,
+                              valueSize: 30,
+                            ),
+                            CardFieldRow(
+                              label: dobLabel,
+                              value: MemberCardData.orDash(data.dateOfBirthNumeric),
+                              s: s,
+                              rowHeight: 56,
+                              labelWidth: labelWidth,
+                              labelSize: 30,
+                              valueSize: 30,
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],

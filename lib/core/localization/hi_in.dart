@@ -182,6 +182,33 @@ const Map<String, String> hiIN = {
   'recent_updates':
   'हाल की जानकारी',
 
+  'membership_countdown_title':
+  'सदस्यता सक्रियण',
+
+  'membership_countdown_subtitle':
+  'आपकी सदस्यता इसमें सक्रिय होगी',
+
+  'membership_active_title':
+  'सदस्यता सक्रिय है',
+
+  'membership_active_subtitle':
+  'आपकी परिवार सुरक्षा सदस्यता सक्रिय है।',
+
+  'days_label':
+  'दिन',
+
+  'hours_label':
+  'घंटे',
+
+  'minutes_label':
+  'मिनट',
+
+  'seconds_label':
+  'सेकंड',
+
+  'current_balance':
+  'वर्तमान शेष राशि',
+
   'no_images_available': 'कोई छवि उपलब्ध नहीं है',
 
   // About Us

@@ -18,13 +18,6 @@ class WalletDownloadButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // Still guards against a double tap starting two downloads at once —
-      // just silently, with no visible "preparing..." state. Rendering a
-      // card face takes a couple of seconds either way; a spinner for that
-      // whole stretch read as the button getting stuck, so now the button
-      // stays exactly as it was and the download/save success (or
-      // cancelled) toast alone — same as tapping "save" on a bank app's QR
-      // code — tells the member it's done.
       final busy = controller.isDownloading.value;
 
       return GestureDetector(
@@ -39,32 +32,69 @@ class WalletDownloadButton extends StatelessWidget {
             border: Border.all(color: AppColors.accentGold.withOpacity(.7)),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryDark.withOpacity(.40),
+                color: AppColors.primaryDark.withOpacity(busy ? .15 : .40),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
             ],
           ),
           child: Center(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.download_rounded, color: Colors.white, size: 22.px(context)),
-                SizedBox(width: 10.px(context)),
-                Flexible(
-                  child: Text(
-                    'download_card'.tr,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15.px(context),
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: .3,
+            // Cross-fades between the two states instead of popping straight
+            // from one Row to the other — the render itself (a couple of
+            // seconds) then ends in the native Save dialog appearing with
+            // no transition at all, which read as abrupt/glitchy with no
+            // loader; this keeps a visible "something is happening" cue the
+            // whole way through instead.
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: busy
+                  ? Row(
+                      key: const ValueKey('busy'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: 20.px(context),
+                          height: 20.px(context),
+                          child: const CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
+                        ),
+                        SizedBox(width: 12.px(context)),
+                        Flexible(
+                          child: Text(
+                            'card_downloading'.tr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14.px(context),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      key: const ValueKey('idle'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.download_rounded, color: Colors.white, size: 22.px(context)),
+                        SizedBox(width: 10.px(context)),
+                        Flexible(
+                          child: Text(
+                            'download_card'.tr,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15.px(context),
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: .3,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-              ],
             ),
           ),
         ),

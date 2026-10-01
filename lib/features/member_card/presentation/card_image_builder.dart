@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:image/image.dart' as img;
 
 import '../data/member_card_data.dart';
@@ -29,6 +30,9 @@ class CardImageBuilder {
     bool hasQrError = false,
   }) async {
     final spec = _ImageSpec.of(layout);
+
+    // Rendering the faces themselves needs the Flutter widget/rendering
+    // pipeline, so it has to stay on the main isolate.
     final faces = await CardFaceRenderer.render(
       data: data,
       layout: layout,
@@ -39,35 +43,71 @@ class CardImageBuilder {
       pixelRatio: spec.pixelRatio,
     );
 
-    final front = img.decodePng(faces[0]);
-    final back = img.decodePng(faces[1]);
-    if (front == null || back == null) {
-      throw StateError('Could not decode the rendered card faces.');
-    }
-
-    final margin = (_margin * spec.pixelRatio).round();
-    final gap = (_gap * spec.pixelRatio).round();
-
-    final canvasWidth = layout == MemberCardLayout.horizontal
-        ? front.width + margin * 2
-        : front.width + gap + back.width + margin * 2;
-    final canvasHeight = layout == MemberCardLayout.horizontal
-        ? front.height + gap + back.height + margin * 2
-        : front.height + margin * 2;
-
-    final canvas = img.Image(width: canvasWidth, height: canvasHeight);
-    img.fill(canvas, color: img.ColorRgb8(255, 255, 255));
-
-    img.compositeImage(canvas, front, dstX: margin, dstY: margin);
-
-    if (layout == MemberCardLayout.horizontal) {
-      img.compositeImage(canvas, back, dstX: margin, dstY: margin + front.height + gap);
-    } else {
-      img.compositeImage(canvas, back, dstX: margin + front.width + gap, dstY: margin);
-    }
-
-    return Uint8List.fromList(img.encodePng(canvas));
+    // Decoding/compositing/encoding the actual pixels, though, is plain
+    // CPU-bound Dart work with no Flutter dependency — done via compute()
+    // on a background isolate so it never blocks the main isolate (which
+    // would otherwise freeze the download button's own spinner animation
+    // for however long this takes).
+    return compute(
+      _composeImage,
+      _ComposeArgs(
+        frontBytes: faces[0],
+        backBytes: faces[1],
+        layout: layout,
+        pixelRatio: spec.pixelRatio,
+      ),
+    );
   }
+}
+
+/// Everything [_composeImage] needs, bundled into one transferable object —
+/// `compute()` sends this across to the background isolate.
+class _ComposeArgs {
+  const _ComposeArgs({
+    required this.frontBytes,
+    required this.backBytes,
+    required this.layout,
+    required this.pixelRatio,
+  });
+
+  final Uint8List frontBytes;
+  final Uint8List backBytes;
+  final MemberCardLayout layout;
+  final double pixelRatio;
+}
+
+/// Runs on a background isolate (see `compute()` above) — must be a
+/// top-level function for that, so it can't be a method on
+/// [CardImageBuilder] itself.
+Uint8List _composeImage(_ComposeArgs args) {
+  final front = img.decodePng(args.frontBytes);
+  final back = img.decodePng(args.backBytes);
+  if (front == null || back == null) {
+    throw StateError('Could not decode the rendered card faces.');
+  }
+
+  final margin = (CardImageBuilder._margin * args.pixelRatio).round();
+  final gap = (CardImageBuilder._gap * args.pixelRatio).round();
+
+  final canvasWidth = args.layout == MemberCardLayout.horizontal
+      ? front.width + margin * 2
+      : front.width + gap + back.width + margin * 2;
+  final canvasHeight = args.layout == MemberCardLayout.horizontal
+      ? front.height + gap + back.height + margin * 2
+      : front.height + margin * 2;
+
+  final canvas = img.Image(width: canvasWidth, height: canvasHeight);
+  img.fill(canvas, color: img.ColorRgb8(255, 255, 255));
+
+  img.compositeImage(canvas, front, dstX: margin, dstY: margin);
+
+  if (args.layout == MemberCardLayout.horizontal) {
+    img.compositeImage(canvas, back, dstX: margin, dstY: margin + front.height + gap);
+  } else {
+    img.compositeImage(canvas, back, dstX: margin + front.width + gap, dstY: margin);
+  }
+
+  return Uint8List.fromList(img.encodePng(canvas));
 }
 
 /// Logical render size + resolution for the combined image — deliberately

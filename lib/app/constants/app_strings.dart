@@ -74,8 +74,11 @@ class AppStrings {
 
 
   // ------------------------------------------------------------
-  // Home — a Foundation dashboard, not a finance one: no balance,
-  // payment, or loan strings belong here.
+  // Home — a Foundation dashboard, not a raw finance ledger: the full
+  // payment/loan history still lives in Passbook/Loans. The membership
+  // countdown and the current-balance summary below are a deliberate
+  // exception — a glance at "when do I activate" and "what's my balance
+  // right now" without leaving Home, not a ledger.
   // ------------------------------------------------------------
 
   static const String dashboard =
@@ -95,6 +98,24 @@ class AppStrings {
   /// content for now.
   static const String recentUpdates =
       'recent_updates';
+
+  // Membership activation countdown (joining date + 365 days) — see
+  // MembershipCountdownCard.
+  static const String membershipCountdownTitle =
+      'membership_countdown_title';
+  static const String membershipCountdownSubtitle =
+      'membership_countdown_subtitle';
+  static const String membershipActiveTitle =
+      'membership_active_title';
+  static const String membershipActiveSubtitle =
+      'membership_active_subtitle';
+  static const String daysLabel = 'days_label';
+  static const String hoursLabel = 'hours_label';
+  static const String minutesLabel = 'minutes_label';
+  static const String secondsLabel = 'seconds_label';
+
+  // Current-balance summary — see HomeBalanceCard.
+  static const String currentBalance = 'current_balance';
 
   // ------------------------------------------------------------
   // Other

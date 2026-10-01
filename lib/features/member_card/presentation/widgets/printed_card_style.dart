@@ -27,6 +27,26 @@ const cardLicence = 'Lic No.:  173515';
 /// Width / height of the chairman's signature block image.
 const chairmanSignatureAspectRatio = 527 / 260;
 
+/// Shown in the member-photo frame instead of leaving it blank white — when
+/// there's no photo on file yet, and as the fallback if the network image
+/// fails to load. [size] is the frame's own already-scaled (`f(...)`)
+/// width, so the icon scales down proportionally with the rest of the card.
+class CardPhotoPlaceholder extends StatelessWidget {
+  const CardPhotoPlaceholder({super.key, required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: cardTeal.withOpacity(.08),
+      child: Center(
+        child: Icon(Icons.person_rounded, color: cardTeal.withOpacity(.45), size: size * .55),
+      ),
+    );
+  }
+}
+
 BoxDecoration printedCardPaper({BorderRadius? shape}) => BoxDecoration(
       color: cardPaperBase,
       borderRadius: shape,
@@ -82,6 +102,37 @@ class CardShell extends StatelessWidget {
   }
 }
 
+/// Width (in the same design-pixel units [CardFieldRow.labelWidth] takes)
+/// that fits the widest of [labels] at [fontSize]/[weight] with room to
+/// spare — so whichever language is active, every label on the card renders
+/// at full size (no [FittedBox] scale-down) and every row's colon lines up,
+/// instead of a width tuned for English clipping a longer Hindi/Gujarati
+/// label and both shrinking its font and crushing its gap before the colon.
+double cardLabelWidth(List<String> labels, {required double fontSize, FontWeight weight = FontWeight.w900}) {
+  var maxWidth = 0.0;
+  for (final label in labels) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: label,
+        // Must match the card's own Text widgets, which — via
+        // DefaultTextStyle — inherit the app theme's fontFamily ('Inter',
+        // see AppTheme.lightTheme). 'Inter' has no Devanagari/Gujarati
+        // glyphs, so both this measurement and the real render fall back to
+        // the system's Devanagari/Gujarati font — but only if both start
+        // from the SAME nominal family. Leaving this unset measured against
+        // Flutter's bare default instead, which resolved the fallback
+        // slightly narrower than the real render and left "जन्म तिथि" still
+        // clipped against its own colon.
+        style: TextStyle(fontSize: fontSize, fontWeight: weight, fontFamily: 'Inter'),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    if (painter.width > maxWidth) maxWidth = painter.width;
+  }
+  return maxWidth + 10;
+}
+
 /// One "Label : value" line on the card front. All sizes are in design
 /// pixels and scaled by [s].
 class CardFieldRow extends StatelessWidget {
@@ -94,7 +145,16 @@ class CardFieldRow extends StatelessWidget {
     this.rowHeight = 62,
     this.labelWidth = 128,
     this.labelSize = 32,
-    this.valueSize = 31,
+    // Was 31 — a 1px-smaller value than its label, combined with the
+    // explicit `height: 1.0` both use, shifted the value's own alphabetic
+    // baseline a couple of pixels off the label/colon's, even though
+    // CrossAxisAlignment.baseline aligns baselines exactly: `height`
+    // compresses each Text's leading proportionally to its OWN fontSize,
+    // so two different font sizes produce two different baseline
+    // offsets-from-top even when "baseline-aligned" to each other up the
+    // tree. Matching the sizes removes the mismatch at its source instead
+    // of fighting it with a manual nudge.
+    this.valueSize = 32,
   });
 
   final String label;
@@ -121,48 +181,121 @@ class CardFieldRow extends StatelessWidget {
   Widget build(BuildContext context) {
     double f(double v) => v * s;
 
-    return SizedBox(
-      height: f(rowHeight),
-      child: Row(
-        // Was `.start` — the label and the value are set in different font
-        // sizes with different explicit line-height factors, so lining up
-        // their top edges actually left the glyphs themselves sitting at
-        // different heights (the value visibly higher than the label it's
-        // next to). Centering both within the row lines up how they
-        // actually look, not just their invisible bounding boxes.
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: f(labelWidth),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                label,
-                maxLines: 1,
-                style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900, height: 1.0),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Only a genuinely wrapped 2nd line (not just "lines > 1 allows
+        // it") gets the extra bottom gap below — measured directly against
+        // the value's own actual available width, rather than guessing
+        // from a line-height multiplier (which added the same extra space
+        // between every line AND after the last one alike, each row's own
+        // specific 2nd line still crowded the next row below it) or always
+        // reserving it (which widened the gap even when the value fit on
+        // one line).
+        final valueAvailableWidth =
+            constraints.maxWidth - f(labelWidth) - _colonWidth(f(labelSize)) - f(14);
+        final wrapsToSecondLine = lines > 1 &&
+            valueAvailableWidth > 0 &&
+            _wrapsToMultipleLines(value, f(valueSize), valueAvailableWidth);
+
+        // A MINIMUM, not a fixed height — [rowHeight] is sized for one
+        // line, so every single-line row (Name/Contact/DOB, and Address
+        // itself whenever the member's actual address happens to be short)
+        // ends up exactly the same height and the gaps between rows stay
+        // even. Only when [value] genuinely wraps to a 2nd line does the
+        // row grow taller than that minimum, on its own, by exactly the
+        // extra line's worth plus [_extraGapBelowWrappedValue] — instead of
+        // every row reserving 2-line space all the time, which left a
+        // visibly bigger gap under Address than between the other rows
+        // even when it only needed 1 line.
+        return Padding(
+          // A small, fixed "mini gap" — only when the value genuinely
+          // wrapped. Zero otherwise, so a 1-line value's row is completely
+          // unaffected (no bigger gap than any other single-line row).
+          padding: EdgeInsets.only(bottom: wrapsToSecondLine ? f(10) : 0),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: f(rowHeight)),
+            child: Row(
+              // CrossAxisAlignment.center (and before that, the FittedBox
+              // this used to wrap the label in) both line up the three
+              // children's *bounding boxes* — fine when they're all the
+              // same script, but Devanagari/Gujarati glyphs sit at a
+              // different position within their own line box than Latin
+              // ones do (different font, via system fallback — 'Inter'
+              // itself has neither script's glyphs). A label like "जन्म
+              // तिथि" next to a plain ':' then centers two boxes whose
+              // actual glyphs don't optically match, so the colon reads as
+              // sitting lower than the label. `.baseline` instead asks
+              // each child for its own real text baseline and lines those
+              // up — the correct cross-script fix, not a box geometry
+              // approximation.
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                SizedBox(
+                  width: f(labelWidth),
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900, height: 1.0),
+                  ),
+                ),
+                Text(':', style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900, height: 1.0)),
+                SizedBox(width: f(14)),
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: lines,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cardInk,
+                      fontSize: f(valueSize),
+                      // A little extra leading between a wrapped value's
+                      // own 2 lines (the gap *below* the 2nd line, before
+                      // the next row, is handled above instead — height
+                      // affects every line equally, including below the
+                      // last one, which isn't where this needed tuning).
+                      height: lines > 1 ? 1.15 : 1.0,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          Text(':', style: TextStyle(color: cardInk, fontSize: f(labelSize), fontWeight: FontWeight.w900, height: 1.0)),
-          SizedBox(width: f(14)),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: lines,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: cardInk,
-                fontSize: f(valueSize),
-                height: lines > 1 ? 1.15 : 1.0,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
+}
+
+/// Width of a single ':' at [fontSize]/w900 — matches the colon
+/// [CardFieldRow] itself renders, for [CardFieldRow]'s own wrap check.
+double _colonWidth(double fontSize) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: ':',
+      style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w900, fontFamily: 'Inter'),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  return painter.width;
+}
+
+/// Whether [text] actually needs more than one line at [fontSize]/w600
+/// when constrained to [maxWidth] — used to decide whether a value
+/// genuinely wrapped (see [CardFieldRow]), not just whether it was
+/// *allowed* to.
+bool _wrapsToMultipleLines(String text, double fontSize, double maxWidth) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w600, fontFamily: 'Inter'),
+    ),
+    textDirection: TextDirection.ltr,
+  )..layout(maxWidth: maxWidth);
+  return painter.computeLineMetrics().length > 1;
 }
 
 /// Round icon on the back's founders timeline.

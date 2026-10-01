@@ -157,6 +157,33 @@ const Map<String, String> enUS = {
   'recent_updates':
   'Recent Updates',
 
+  'membership_countdown_title':
+  'Membership Activation',
+
+  'membership_countdown_subtitle':
+  'Your membership activates in',
+
+  'membership_active_title':
+  'Membership Active',
+
+  'membership_active_subtitle':
+  'Your Parivar Suraksha membership is active.',
+
+  'days_label':
+  'Days',
+
+  'hours_label':
+  'Hours',
+
+  'minutes_label':
+  'Min',
+
+  'seconds_label':
+  'Sec',
+
+  'current_balance':
+  'Current Balance',
+
   'no_images_available':
   'No images available',
 

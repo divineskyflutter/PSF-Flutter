@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
+import 'package:psf_application/shared/widgets/loaders/app_shimmer.dart';
 
 /// One shared card look for every card on the My Profile tabs: a soft
 /// theme-tinted border plus a two-layer shadow, so cards read as raised
@@ -63,15 +64,12 @@ class FramedImage extends StatelessWidget {
             fit: BoxFit.cover,
             loadingBuilder: (context, child, progress) {
               if (progress == null) return child;
-              return Center(
-                child: SizedBox(
-                  width: size * .28,
-                  height: size * .28,
-                  child: const CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppColors.primary,
-                  ),
-                ),
+              // A shimmering placeholder the size of the frame itself, not
+              // a spinner — same loading language the banner carousels
+              // already use (see NetworkBanner), instead of a different
+              // "normal loader" look just for this one widget.
+              return AppShimmer(
+                child: Container(color: Colors.white),
               );
             },
             errorBuilder: (_, __, ___) => _fallback(),

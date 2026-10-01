@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show compute;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
@@ -34,6 +35,9 @@ class PrintedCardPdf {
     bool hasQrError = false,
   }) async {
     final spec = _CardSpec.of(layout);
+
+    // Rendering the faces themselves needs the Flutter widget/rendering
+    // pipeline, so it has to stay on the main isolate.
     final images = await CardFaceRenderer.render(
       data: data,
       layout: layout,
@@ -44,39 +48,83 @@ class PrintedCardPdf {
       pixelRatio: spec.pixelRatio,
     );
 
-    final doc = pw.Document(
-      title: 'PSF Member Card',
-      author: 'Parivar Suraksha Foundation',
-    );
-
-    final front = pw.Image(pw.MemoryImage(images[0]), width: spec.pdfCardWidth, height: spec.pdfCardHeight);
-    final back = pw.Image(pw.MemoryImage(images[1]), width: spec.pdfCardWidth, height: spec.pdfCardHeight);
-
-    doc.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat(spec.pageWidth, spec.pageHeight),
-        margin: const pw.EdgeInsets.all(_CardSpec.margin),
-        build: (context) => layout == MemberCardLayout.horizontal
-            ? pw.Column(
-                children: [
-                  front,
-                  pw.SizedBox(height: _CardSpec.gap),
-                  back,
-                ],
-              )
-            : pw.Row(
-                children: [
-                  front,
-                  pw.SizedBox(width: _CardSpec.gap),
-                  back,
-                ],
-              ),
+    // Building the actual PDF bytes, though, is plain CPU-bound Dart work
+    // (the `pdf` package has no Flutter/platform dependency) — done via
+    // compute() on a background isolate so it never blocks the main
+    // isolate (which would otherwise freeze the download button's own
+    // spinner animation for however long this takes).
+    return compute(
+      _buildPdfBytes,
+      _BuildArgs(
+        frontBytes: images[0],
+        backBytes: images[1],
+        layout: layout,
+        pdfCardWidth: spec.pdfCardWidth,
+        pdfCardHeight: spec.pdfCardHeight,
+        pageWidth: spec.pageWidth,
+        pageHeight: spec.pageHeight,
       ),
     );
-
-    return doc.save();
   }
+}
 
+/// Everything [_buildPdfBytes] needs, bundled into one transferable object —
+/// `compute()` sends this across to the background isolate.
+class _BuildArgs {
+  const _BuildArgs({
+    required this.frontBytes,
+    required this.backBytes,
+    required this.layout,
+    required this.pdfCardWidth,
+    required this.pdfCardHeight,
+    required this.pageWidth,
+    required this.pageHeight,
+  });
+
+  final Uint8List frontBytes;
+  final Uint8List backBytes;
+  final MemberCardLayout layout;
+  final double pdfCardWidth;
+  final double pdfCardHeight;
+  final double pageWidth;
+  final double pageHeight;
+}
+
+/// Runs on a background isolate (see `compute()` above) — must be a
+/// top-level function for that, so it can't be a method on
+/// [PrintedCardPdf] itself.
+Future<Uint8List> _buildPdfBytes(_BuildArgs args) async {
+  final doc = pw.Document(
+    title: 'PSF Member Card',
+    author: 'Parivar Suraksha Foundation',
+  );
+
+  final front = pw.Image(pw.MemoryImage(args.frontBytes), width: args.pdfCardWidth, height: args.pdfCardHeight);
+  final back = pw.Image(pw.MemoryImage(args.backBytes), width: args.pdfCardWidth, height: args.pdfCardHeight);
+
+  doc.addPage(
+    pw.Page(
+      pageFormat: PdfPageFormat(args.pageWidth, args.pageHeight),
+      margin: const pw.EdgeInsets.all(_CardSpec.margin),
+      build: (context) => args.layout == MemberCardLayout.horizontal
+          ? pw.Column(
+              children: [
+                front,
+                pw.SizedBox(height: _CardSpec.gap),
+                back,
+              ],
+            )
+          : pw.Row(
+              children: [
+                front,
+                pw.SizedBox(width: _CardSpec.gap),
+                back,
+              ],
+            ),
+    ),
+  );
+
+  return await doc.save();
 }
 
 /// Sizes for one layout: the logical size the faces are laid out at when

@@ -24,6 +24,20 @@ class CardDownloadSheet extends StatelessWidget {
     );
   }
 
+  // downloadCardAs() renders its card faces into an OverlayEntry it inserts
+  // into the same root-navigator overlay this sheet's own pop (Get.back())
+  // is still animating inside. Firing it in the same frame as Get.back()
+  // raced that still-playing close transition and, on a slow device, could
+  // leave the sheet visually stuck instead of sliding away. Waiting for the
+  // close transition to actually finish before starting the download avoids
+  // the collision; the Download button's own loader already covers the
+  // short extra wait, so nothing feels different to the member.
+  static Future<void> _closeThenDownload(MemberCardController controller, CardDownloadFormat format) async {
+    Get.back();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    controller.downloadCardAs(format);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -68,10 +82,7 @@ class CardDownloadSheet extends StatelessWidget {
               icon: Icons.picture_as_pdf_rounded,
               label: 'download_as_pdf'.tr,
               hint: 'download_as_pdf_hint'.tr,
-              onTap: () {
-                Get.back();
-                controller.downloadCardAs(CardDownloadFormat.pdf);
-              },
+              onTap: () => _closeThenDownload(controller, CardDownloadFormat.pdf),
             ),
             SizedBox(height: 12.px(context)),
             _option(
@@ -79,10 +90,7 @@ class CardDownloadSheet extends StatelessWidget {
               icon: Icons.image_rounded,
               label: 'download_as_image'.tr,
               hint: 'download_as_image_hint'.tr,
-              onTap: () {
-                Get.back();
-                controller.downloadCardAs(CardDownloadFormat.image);
-              },
+              onTap: () => _closeThenDownload(controller, CardDownloadFormat.image),
             ),
           ],
         ),

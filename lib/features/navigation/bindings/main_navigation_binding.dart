@@ -4,10 +4,13 @@ import 'package:psf_application/core/network/auth/no_auth_token_provider.dart';
 import 'package:psf_application/core/network/dio_client.dart';
 import 'package:psf_application/core/network/network_caller.dart';
 
+import 'package:psf_application/features/auth/data/repositories/banner_repository_impl.dart';
+import 'package:psf_application/features/auth/domain/repositories/banner_repository.dart';
 import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle_repository.dart';
 import 'package:psf_application/features/home/data/datasources/home_remote_datasource.dart';
 import 'package:psf_application/features/home/data/repositories/home_repository_impl.dart';
 import 'package:psf_application/features/home/domain/repositories/home_repository.dart';
+import 'package:psf_application/features/home/presentation/controllers/home_banner_controller.dart';
 import 'package:psf_application/features/home/presentation/controllers/home_controller.dart';
 
 import 'package:psf_application/features/loans/data/datasources/loans_remote_datasource.dart';
@@ -56,6 +59,17 @@ class MainNavigationBinding extends Bindings {
       () => HomeRepositoryImpl(Get.find<HomeRemoteDataSource>()),
     );
     Get.put<HomeController>(HomeController(Get.find<HomeRepository>()));
+
+    // Defensive re-registration (no-op if AuthBinding already has it, same
+    // reasoning as NetworkCaller above) — this tab must not depend on the
+    // auth flow's own non-fenix AuthBannerController still being alive.
+    Get.lazyPut<BannerRepository>(
+      () => BannerRepositoryImpl(Get.find<NetworkCaller>()),
+      fenix: true,
+    );
+    Get.put<HomeBannerController>(
+      HomeBannerController(Get.find<BannerRepository>()),
+    );
 
     // ============================================================
     // LOANS

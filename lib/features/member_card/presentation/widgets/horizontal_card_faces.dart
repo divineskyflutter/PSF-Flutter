@@ -150,9 +150,9 @@ class HorizontalCardFront extends StatelessWidget {
                                 // from cache), which read as the photo
                                 // flickering/reloading over and over.
                                 gaplessPlayback: true,
-                                errorBuilder: (_, __, ___) => const SizedBox(),
+                                errorBuilder: (_, __, ___) => CardPhotoPlaceholder(size: f(230)),
                               )
-                            : const SizedBox(),
+                            : CardPhotoPlaceholder(size: f(230)),
                       ),
                     ),
 
@@ -190,32 +190,54 @@ class HorizontalCardFront extends StatelessWidget {
                       left: f(337),
                       right: f(36),
                       top: f(250),
-                      child: Column(
-                        children: [
-                          CardFieldRow(label: 'card_label_name'.tr, value: MemberCardData.orDash(data.name), s: s),
-                          // A 2-line address needs more than the default
-                          // single-line row height — without this, a long
-                          // address's wrapped second line painted straight
-                          // over the Contact row below it instead of
-                          // pushing it down (see CardFieldRow's own doc
-                          // comment: each row is a fixed-height box, so a
-                          // taller one has to be asked for explicitly, the
-                          // same way the vertical card's own address row
-                          // already does).
-                          CardFieldRow(
-                            label: 'address'.tr,
-                            value: MemberCardData.orDash(data.address),
-                            s: s,
-                            lines: 2,
-                            rowHeight: 96,
-                          ),
-                          CardFieldRow(label: 'card_label_contact'.tr, value: MemberCardData.orDash(data.mobile), s: s),
-                          CardFieldRow(
-                            label: 'card_label_dob'.tr,
-                            value: MemberCardData.orDash(data.dateOfBirthNumeric),
-                            s: s,
-                          ),
-                        ],
+                      child: Builder(
+                        builder: (context) {
+                          final nameLabel = 'card_label_name'.tr;
+                          final addressLabel = 'address'.tr;
+                          final contactLabel = 'card_label_contact'.tr;
+                          final dobLabel = 'card_label_dob'.tr;
+                          // Sized to whichever of these labels is widest in
+                          // the active language — see cardLabelWidth's own
+                          // doc for why a width tuned only for English broke
+                          // in Hindi.
+                          final labelWidth = cardLabelWidth([nameLabel, addressLabel, contactLabel, dobLabel], fontSize: 32);
+
+                          return Column(
+                            children: [
+                              CardFieldRow(
+                                label: nameLabel,
+                                value: MemberCardData.orDash(data.name),
+                                s: s,
+                                labelWidth: labelWidth,
+                              ),
+                              // Same rowHeight as every other field here —
+                              // CardFieldRow's own minHeight constraint lets
+                              // this row grow taller on its own, only when
+                              // the address actually wraps to its 2nd line,
+                              // instead of every row reserving 2-line space
+                              // whether it needs it or not.
+                              CardFieldRow(
+                                label: addressLabel,
+                                value: MemberCardData.orDash(data.address),
+                                s: s,
+                                lines: 2,
+                                labelWidth: labelWidth,
+                              ),
+                              CardFieldRow(
+                                label: contactLabel,
+                                value: MemberCardData.orDash(data.mobile),
+                                s: s,
+                                labelWidth: labelWidth,
+                              ),
+                              CardFieldRow(
+                                label: dobLabel,
+                                value: MemberCardData.orDash(data.dateOfBirthNumeric),
+                                s: s,
+                                labelWidth: labelWidth,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ],

@@ -5,8 +5,18 @@ import 'package:psf_application/app/constants/app_colors.dart';
 class ToastUtil {
   ToastUtil._();
 
+  // Get.snackbar() QUEUES rather than replaces — back-to-back calls (e.g. a
+  // failed login attempt's error toast still queued when a quick retry
+  // succeeds) could show a stale toast well after the state it described
+  // was no longer true. Clearing the queue before every new toast means
+  // only the most recent, current one is ever shown.
+  static void _clearPending() {
+    if (Get.isSnackbarOpen) Get.closeAllSnackbars();
+  }
+
   static void success(String message, {String title = 'Success'}) {
     if (message.isEmpty) return;
+    _clearPending();
     Get.snackbar(
       title,
       message,
@@ -29,6 +39,7 @@ class ToastUtil {
 
   static void error(String message, {String title = 'Error'}) {
     if (message.isEmpty) return;
+    _clearPending();
     Get.snackbar(
       title,
       message,
@@ -51,6 +62,7 @@ class ToastUtil {
 
   static void info(String message, {String title = 'Information'}) {
     if (message.isEmpty) return;
+    _clearPending();
     Get.snackbar(
       title,
       message,

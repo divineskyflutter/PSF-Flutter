@@ -182,6 +182,33 @@ const Map<String, String> guIN = {
   'recent_updates':
   'તાજેતરના અપડેટ્સ',
 
+  'membership_countdown_title':
+  'સભ્યપદ સક્રિયકરણ',
+
+  'membership_countdown_subtitle':
+  'તમારું સભ્યપદ આટલામાં સક્રિય થશે',
+
+  'membership_active_title':
+  'સભ્યપદ સક્રિય છે',
+
+  'membership_active_subtitle':
+  'તમારું પરિવાર સુરક્ષા સભ્યપદ સક્રિય છે.',
+
+  'days_label':
+  'દિવસ',
+
+  'hours_label':
+  'કલાક',
+
+  'minutes_label':
+  'મિનિટ',
+
+  'seconds_label':
+  'સેકન્ડ',
+
+  'current_balance':
+  'વર્તમાન બેલેન્સ',
+
   'no_images_available': 'કોઈ છબીઓ ઉપલબ્ધ નથી',
 
   // About Us
