@@ -42,6 +42,14 @@ class ProfileRemoteDataSource {
       ApiEndPoints.getPassbook,
       body: {'memberId': memberId},
       requireToken: false,
+      // Home's own balance card now triggers this automatically as soon as
+      // Home loads (not just when a member opens Passbook directly), so a
+      // "no passbook yet" response would otherwise auto-toast a raw error
+      // message the instant a member reaches Home right after logging in.
+      // Both callers already have their own silent fallback for this (the
+      // balance card shows ₹0, PassbookPage shows its own error view via
+      // hasPassbookError), so the global toast is pure noise either way.
+      suppressErrorToast: true,
     );
   }
 
