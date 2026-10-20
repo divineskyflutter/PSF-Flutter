@@ -1,7 +1,20 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Upload-key details for signing the Play Store build. Lives in
+// android/key.properties (git-ignored, never committed) next to the keystore
+// it points at. When the file is missing, prod falls back to the debug key so
+// a plain `flutter build` still works, but Google Play will reject that build.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    FileInputStream(keystorePropertiesFile).use { keystoreProperties.load(it) }
 }
 
 android {
@@ -28,11 +41,38 @@ android {
         multiDexEnabled = true
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("debug") // replace for prod
+            proguardFiles(
+                getDefaultProguardFile("proguard-android.txt"),
+                "proguard-rules.pro",
+            )
+            // Lets Play Console symbolicate crashes in native code.
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
+            }
+        }
+    }
+
+    // The app switches between English/Hindi/Gujarati from inside the app
+    // (not by the phone's language), so Play must ship every language's
+    // resources to every device instead of only the phone's own.
+    bundle {
+        language {
+            enableSplit = false
         }
     }
 
@@ -41,13 +81,26 @@ android {
     productFlavors {
         create("prod") {
             dimension = "environment"
-            resValue("string", "app_name", "PSF Foundation")
+            // Google Play rejects any application id starting with
+            // "com.example". This is the Play Store identity — it can never
+            // be changed once the app is first uploaded, so confirm it
+            // before the first upload.
+            applicationId = "com.divinesky.psf"
+            resValue("string", "app_name", "PSF Member")
             resValue("string", "domain_url", "psf-foundation.com")
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         create("dev") {
             dimension = "environment"
             resValue("string", "app_name", "PSF Foundation Dev")
             resValue("string", "domain_url", "dev.psf-foundation.com")
+            // Dev builds stay on the debug key so they keep installing
+            // over the existing test installs on the team's phones.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
