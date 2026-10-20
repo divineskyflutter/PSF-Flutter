@@ -145,8 +145,14 @@ class NotificationService {
     try {
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.getNotificationSettings();
-      if (settings.authorizationStatus == AuthorizationStatus.notDetermined) {
-        await messaging.requestPermission(alert: true, badge: true, sound: true);
+
+      // On Android the plugin only ever answers "authorized" or "denied" — never
+      // "not determined" — so a fresh Android 13+ install reads as "denied".
+      // Ask whenever it isn't authorized. (Once the member has refused twice,
+      // Android stops showing the dialog and this returns straight away.)
+      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
+        final result = await messaging.requestPermission(alert: true, badge: true, sound: true);
+        debugPrint('Notifications: permission ${result.authorizationStatus.name}');
       }
     } catch (e) {
       debugPrint('Notifications: permission request failed ($e)');
