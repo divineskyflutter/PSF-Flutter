@@ -11,3 +11,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Firebase client config for this project (push notifications). Kept local, never committed.
+app/google-services.json
+app/src/*/google-services.json
