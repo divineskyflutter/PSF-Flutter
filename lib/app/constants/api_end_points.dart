@@ -152,6 +152,9 @@ class ApiEndPoints {
       '$baseUrl/api/Api/GeneratePdf';
 
   // Full member profile (for the My Profile / Membership Card screens).
+  static String get getMemberById =>
+      '$baseUrl/api/Api/GetMemberById';
+
   static String get getMemberProfile =>
       '$baseUrl/api/Member/GetMemberProfile';
 
@@ -159,7 +162,7 @@ class ApiEndPoints {
       '$baseUrl/api/Member/UpdateMemberProfile';
 
   static String get deleteMemberAccount =>
-      '$baseUrl/api/Member/DeleteAccount';
+      '$baseUrl/api/Member/DeleteMember';
 
   // Passbook — ledger of scheme payments / withdrawals.
   static String get getPassbook => '$baseUrl/api/Member/GetPassbook';

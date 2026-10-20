@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
+import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/widgets/refresh/app_refresh_indicator.dart';
 import 'package:psf_application/shared/widgets/states/app_state_view.dart';
@@ -10,9 +11,12 @@ import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 
+import '../../../profile/presentation/controllers/profile_controller.dart';
+import '../../../profile/presentation/widgets/reference_mismatch_notifier.dart';
 import '../controllers/home_controller.dart';
 import '../widgets/home_balance_card.dart';
 import '../widgets/home_banner_slider.dart';
+import '../widgets/home_membership_fee_card.dart';
 import '../widgets/home_header.dart';
 import '../widgets/member_summary_card.dart';
 import '../widgets/membership_countdown_card.dart';
@@ -33,28 +37,51 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = Get.find<HomeController>();
+    final profile = Get.find<ProfileController>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Obx(() {
+      body: Stack(
+        children: [
+          Obx(() {
         final dashboard = controller.dashboard.value;
+        final member = profile.memberDetails.value;
+        final language = Get.find<LanguageController>().currentAppLanguage;
+
+        String orDash(String? v) => (v != null && v.trim().isNotEmpty) ? v.trim() : '-';
+
+        final memberName = (member?.fullName.isNotEmpty ?? false)
+            ? member!.localizedFullName(language)
+            : ((dashboard?.memberName.isNotEmpty ?? false)
+                ? dashboard!.memberName
+                : AppStrings.appName.tr);
 
         // HomeHeader is itself a SliverAppBar — it collapses down to a
         // normal app-bar height as this CustomScrollView scrolls, instead
         // of sitting fixed above it. See HomeHeader's doc comment.
         return AppRefreshIndicator(
-          onRefresh: controller.refresh,
+          // Both run together so a pull finishes as fast as the slower one.
+          onRefresh: () => Future.wait([controller.refresh(), profile.refreshMemberData()]),
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               HomeHeader(
-                greeting: AppStrings.welcomeBack.tr,
-                memberName: (dashboard?.memberName.isNotEmpty ?? false)
-                    ? dashboard!.memberName
-                    : AppStrings.appName.tr,
-                memberIdLabel: dashboard != null
-                    ? '${AppStrings.memberId.tr}: ${dashboard.memberIdLabel}'
-                    : '',
+                greeting: AppStrings.welcome.tr,
+                memberName: memberName,
+                // Fee / niti / loan amounts have no API yet, so they read "-"
+                // until the backend sends them.
+                infoLines: [
+                  HeaderInfoLine(AppStrings.memberNoLabel.tr, orDash(member?.memberNo)),
+                  HeaderInfoLine(AppStrings.mobileShortLabel.tr, orDash(member?.mobile)),
+                ],
+                // Left column (fee / niti) then right column (loans), each
+                // stacked top to bottom — see HomeHeader.
+                statLines: [
+                  HeaderInfoLine(AppStrings.sabhasadFeeLabel.tr, '-'),
+                  HeaderInfoLine(AppStrings.sangyogNitiLabel.tr, '-'),
+                  HeaderInfoLine(AppStrings.loanTakenLabel.tr, '-'),
+                  HeaderInfoLine(AppStrings.loanPendingLabel.tr, '-'),
+                ],
                 notificationCount: dashboard?.unreadNotificationCount ?? 0,
                 onMenuTap: Get.find<MainNavigationController>().openDrawer,
               ),
@@ -85,6 +112,9 @@ class HomeScreen extends StatelessWidget {
                     const MembershipCountdownCard(),
                     SizedBox(height: 16.px(context)),
                     const HomeBalanceCard(),
+                    // Own section, separate from the balance card.
+                    SizedBox(height: 16.px(context)),
+                    const HomeMembershipFeeCard(),
                     SizedBox(height: 20.px(context)),
                     _SchemeSection(controller: controller, dashboard: dashboard),
                   ]),
@@ -94,6 +124,9 @@ class HomeScreen extends StatelessWidget {
           ),
         );
       }),
+          const ReferenceMismatchNotifier(tabIndex: MainNavigationController.homeTab),
+        ],
+      ),
     );
   }
 }

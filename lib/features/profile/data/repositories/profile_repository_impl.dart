@@ -115,4 +115,26 @@ class ProfileRepositoryImpl implements ProfileRepository {
     final memberId = await _requireMemberId();
     return _remoteDataSource.generatePdf(memberId: memberId);
   }
+
+  @override
+  Future<Uint8List> downloadDocument(String endpoint) async {
+    final memberId = await _requireMemberId();
+    return _remoteDataSource.generatePdf(memberId: memberId, endpoint: endpoint);
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchMemberRecord() async {
+    final memberId = await _requireMemberId();
+
+    final response = await _remoteDataSource.getMemberById(memberId: memberId);
+
+    if (!response.status) {
+      throw Exception(
+        response.message.isEmpty ? 'Failed to refresh your details.' : response.message,
+      );
+    }
+
+    final data = response.data;
+    return data is Map ? Map<String, dynamic>.from(data) : null;
+  }
 }

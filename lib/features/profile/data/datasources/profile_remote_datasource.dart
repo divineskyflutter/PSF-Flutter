@@ -9,6 +9,16 @@ class ProfileRemoteDataSource {
 
   ProfileRemoteDataSource(this._networkCaller);
 
+  /// `GetMemberById` — the member's current record, used by pull-to-refresh.
+  Future<ApiResponseModel> getMemberById({required int memberId}) {
+    return _networkCaller.postRequest(
+      ApiEndPoints.getMemberById,
+      body: {'id': memberId},
+      suppressErrorToast: true,
+      suppressNetworkDialog: true,
+    );
+  }
+
   Future<ApiResponseModel> getMemberProfile({required int memberId}) {
     return _networkCaller.postRequest(
       ApiEndPoints.getMemberProfile,
@@ -32,7 +42,7 @@ class ProfileRemoteDataSource {
   Future<ApiResponseModel> deleteMemberAccount({required int memberId}) {
     return _networkCaller.postRequest(
       ApiEndPoints.deleteMemberAccount,
-      body: {'memberId': memberId},
+      body: {'id': memberId},
       requireToken: false,
     );
   }
@@ -62,9 +72,9 @@ class ProfileRemoteDataSource {
 
   /// `GeneratePdf` returns the PDF file itself, not the usual JSON
   /// envelope — see [ApiEndPoints.generatePdf]'s doc comment.
-  Future<Uint8List> generatePdf({required int memberId}) {
+  Future<Uint8List> generatePdf({required int memberId, String? endpoint}) {
     return _networkCaller.postRequestBytesWithBody(
-      ApiEndPoints.generatePdf,
+      endpoint ?? ApiEndPoints.generatePdf,
       body: {'id': memberId},
       requireToken: false,
     );

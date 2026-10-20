@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 
+import 'package:psf_application/app/constants/app_links.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
@@ -39,6 +41,15 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
     _bannerController = Get.find<AuthBannerController>();
   }
 
+
+  /// Opens [url] in the browser; does nothing while the link isn't set yet
+  /// (see [AppLinks]).
+  Future<void> _openLink(String? url) async {
+    if (url == null || url.isEmpty) return;
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
 
   // ==============================================================
   // DISPOSE
@@ -212,7 +223,7 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                       // ==================================================
 
                       SizedBox(
-                        height: 130.px(context),
+                        height: 28.px(context),
                       ),
 
                       Padding(
@@ -230,7 +241,7 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: AppButton(
-                                label: AppStrings.signIn.tr,
+                                label: AppStrings.authBtnSignin.tr,
                                 onPressed: () {
                                   Get.toNamed(AppRoutes.login);
                                 },
@@ -256,7 +267,7 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                             SizedBox(
                               width: double.infinity,
                               child: AppButton(
-                                label: AppStrings.register.tr,
+                                label: AppStrings.authBtnRegister.tr,
                                 onPressed: () {
                                   Get.toNamed(AppRoutes.registerScreen);
                                 },
@@ -273,6 +284,36 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // ==================================================
+                      // ABOUT US / CONTACT US / RULES — each a short
+                      // sentence with a tappable "click here"
+                      // ==================================================
+
+                      SizedBox(height: 18.px(context)),
+
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20.px(context)),
+                        child: Column(
+                          children: [
+                            _InfoLink(
+                              icon: Icons.info_outline_rounded,
+                              text: AppStrings.authLinkAboutText.tr,
+                              onTap: () => _openLink(AppLinks.aboutUs),
+                            ),
+                            _InfoLink(
+                              icon: Icons.support_agent_rounded,
+                              text: AppStrings.authLinkContactText.tr,
+                              onTap: () => _openLink(AppLinks.contactUs),
+                            ),
+                            _InfoLink(
+                              icon: Icons.gavel_rounded,
+                              text: AppStrings.authLinkRulesText.tr,
+                              onTap: () => _openLink(AppLinks.rulesAndTerms),
                             ),
                           ],
                         ),
@@ -326,6 +367,68 @@ class _AuthChoiceScreenState extends State<AuthChoiceScreen> {
       showIndicators: true,
 
       showEmptyPlaceholder: true,
+    );
+  }
+}
+
+/// One "sentence + click here" row under the sign-in buttons: a small round
+/// icon, the sentence, and the tappable action phrase in the brand color.
+class _InfoLink extends StatelessWidget {
+  const _InfoLink({required this.icon, required this.text, required this.onTap});
+
+  final IconData icon;
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12.px(context)),
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 5.px(context), horizontal: 4.px(context)),
+        child: Row(
+          children: [
+            Container(
+              width: 26.px(context),
+              height: 26.px(context),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(.10),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, size: 14.px(context), color: AppColors.primary),
+            ),
+            SizedBox(width: 12.px(context)),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$text ',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    TextSpan(
+                      text: AppStrings.authLinkAction.tr,
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w700,
+                        decoration: TextDecoration.underline,
+                        decorationColor: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                style: TextStyle(fontSize: 11.5.px(context), height: 1.3),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 17.px(context),
+              color: AppColors.primary.withOpacity(.6),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

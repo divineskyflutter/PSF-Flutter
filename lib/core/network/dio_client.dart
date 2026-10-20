@@ -1,5 +1,6 @@
 // lib/core/network/dio_client.dart
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'auth/auth_token_provider.dart';
 import 'interceptors/auth_interceptor.dart';
 import 'interceptors/error_interceptor.dart';
@@ -23,7 +24,11 @@ class DioClient {
       // comment for the full flow.
       TokenRefreshInterceptor(dio),
       ErrorInterceptor(),
-      LogInterceptor(requestBody: true, responseBody: true), // remove/guard for release builds
+      // Debug builds only: this prints every request/response body and
+      // header (login password, access tokens, Aadhaar/PAN numbers, health
+      // details) to the device log, which anyone with the phone attached
+      // can read — never acceptable in a release build.
+      if (kDebugMode) LogInterceptor(requestBody: true, responseBody: true),
     ]);
 
     return dio;

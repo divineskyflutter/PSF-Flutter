@@ -43,11 +43,17 @@ class ErrorInterceptor extends Interceptor {
     final suppressErrorToast =
         err.requestOptions.extra['suppressErrorToast'] == true;
 
+    final suppressNetworkDialog =
+        err.requestOptions.extra['suppressNetworkDialog'] == true;
+
     if (isNetworkIssue) {
       // A connectivity error cancels every in-flight request, removes the
       // global loader, and displays the single app-wide dialog. Do not emit a
-      // per-request timeout toast.
-      Get.find<ConnectivityService>().handleNetworkFailure();
+      // per-request timeout toast. Background calls opt out of the dialog
+      // (see NetworkCaller.postRequest) and just fail quietly.
+      if (!suppressNetworkDialog) {
+        Get.find<ConnectivityService>().handleNetworkFailure();
+      }
     } else if (!suppressErrorToast) {
       ToastUtil.error(appException.message);
     }

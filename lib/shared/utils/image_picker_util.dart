@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:get/get.dart';
@@ -15,48 +14,6 @@ class ImagePickerUtil {
   ImagePickerUtil._();
 
   static final ImagePicker _picker = ImagePicker();
-
-  // ============================================================
-  // STARTUP PERMISSIONS (ask once, up front — see
-  // LanguageSelectionController.continueToNextScreen, which calls this
-  // right after language selection, on every app start until
-  // registration is fully complete)
-  //
-  // Camera/gallery permission used to only ever be requested the first
-  // time the member tapped an image picker somewhere inside the
-  // registration flow (pickImage() below) — which worked, but meant the
-  // very first photo/document upload always interrupted them with a
-  // native OS permission prompt mid-task. Asking here, right after
-  // language selection near the very start of the app, means that prompt
-  // is already answered by the time they reach an actual upload button,
-  // so pickImage() just finds it already granted.
-  //
-  // Deliberately does NOT show the "permission denied -> open Settings"
-  // dialog that pickImage()/_checkAndRequest() show below — nothing has
-  // been tapped yet at this point for that dialog to be a response to.
-  // If the member denies here (or the OS silently no-ops because it's
-  // already permanently denied from a previous run), that's not a dead
-  // end: the existing _checkAndRequest flow below still runs exactly as
-  // before the first time they actually tap an image picker, asking
-  // again or offering the Settings shortcut as it always has.
-  // ============================================================
-
-  static Future<void> requestStartupPermissions() async {
-    try {
-      await Permission.camera.request();
-
-      if (Platform.isAndroid) {
-        final sdkInt = await _androidSdkInt();
-        final galleryPermission =
-            sdkInt >= 33 ? Permission.photos : Permission.storage;
-        await galleryPermission.request();
-      } else {
-        await Permission.photos.request();
-      }
-    } catch (e) {
-      debugPrint('Startup permission request error: $e');
-    }
-  }
 
   // ============================================================
   // PICK IMAGE (with runtime permission)
@@ -205,61 +162,20 @@ class ImagePickerUtil {
   // ============================================================
 
   static Future<bool> _requestPermission(ImageSource source) async {
-    if (source == ImageSource.camera) {
-      return _checkAndRequest(
-        permission: Permission.camera,
-        deniedMessageKey: 'camera_permission_required',
-      );
-    }
+    // Gallery needs no permission at all: image_picker opens the system
+    // photo picker (Android) / PHPicker (iOS), which hands back only the
+    // photo the member chose. Declaring and requesting broad photo/storage
+    // access (READ_MEDIA_IMAGES / READ_EXTERNAL_STORAGE) just to pick one
+    // picture is what Google Play's photo-and-video-permissions policy
+    // rejects apps for.
+    if (source == ImageSource.gallery) return true;
 
-    // Gallery / Photo Library
-    if (Platform.isAndroid) {
-      // IMPORTANT: Permission.photos does NOT automatically fall back to
-      // READ_EXTERNAL_STORAGE on older Android versions — that was a
-      // wrong assumption in an earlier version of this file. Checked
-      // directly against permission_handler's Android source
-      // (PermissionUtils.getManifestNames): the PERMISSION_GROUP_PHOTOS
-      // case only adds READ_MEDIA_IMAGES when
-      // `Build.VERSION.SDK_INT >= TIRAMISU` (Android 13/API 33) — below
-      // that it resolves to an empty permission list, and
-      // PermissionManager.determinePermissionStatus() then returns
-      // PERMISSION_STATUS_DENIED unconditionally for any empty list on
-      // API 23+. In other words: on Android 12 and lower, Permission.photos
-      // reports "denied" forever, no matter what the user grants in
-      // Settings, because there is no underlying Android permission for it
-      // to ever become granted. So the SDK version must be checked here in
-      // Dart and Permission.storage (READ_EXTERNAL_STORAGE) used instead
-      // for anything below API 33.
-      final sdkInt = await _androidSdkInt();
-
-      final galleryPermission =
-          sdkInt >= 33 ? Permission.photos : Permission.storage;
-
-      return _checkAndRequest(
-        permission: galleryPermission,
-        deniedMessageKey: 'storage_permission_required',
-      );
-    }
-
-    // iOS
+    // Camera is asked for here, at the moment the member taps "Camera" —
+    // never up front at app start.
     return _checkAndRequest(
-      permission: Permission.photos,
-      deniedMessageKey: 'photo_library_permission_required',
+      permission: Permission.camera,
+      deniedMessageKey: 'camera_permission_required',
     );
-  }
-
-  static int? _cachedAndroidSdkInt;
-
-  /// Cached after the first call — the running OS version obviously can't
-  /// change during the app's lifetime, so there's no reason to re-query
-  /// the platform channel on every single photo pick.
-  static Future<int> _androidSdkInt() async {
-    final cached = _cachedAndroidSdkInt;
-    if (cached != null) return cached;
-
-    final info = await DeviceInfoPlugin().androidInfo;
-    _cachedAndroidSdkInt = info.version.sdkInt;
-    return info.version.sdkInt;
   }
 
   // ============================================================

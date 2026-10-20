@@ -119,4 +119,15 @@ class AppPrefs {
 
   static Future<bool> setEnumBundleJson(String json) =>
       _instance.setString(AppPrefsKeys.enumBundle, json);
+
+  // ============================================================
+  // Yojna id (see AppPrefsKeys.yojnaId) — saved at login, never shown
+  // ============================================================
+
+  static int? get yojnaId => _instance.getInt(AppPrefsKeys.yojnaId);
+
+  /// Stores [id], or clears the saved value when [id] is null.
+  static Future<bool> setYojnaId(int? id) => id == null
+      ? _instance.remove(AppPrefsKeys.yojnaId)
+      : _instance.setInt(AppPrefsKeys.yojnaId, id);
 }

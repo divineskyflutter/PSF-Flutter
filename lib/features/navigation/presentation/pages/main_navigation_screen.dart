@@ -6,6 +6,7 @@ import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/features/home/presentation/pages/home_screen.dart';
 import 'package:psf_application/features/member_card/presentation/pages/member_card_screen.dart';
+import 'package:psf_application/features/passbook/presentation/pages/passbook_tabs_screen.dart';
 import 'package:psf_application/features/profile/presentation/pages/profile_screen.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 
@@ -14,7 +15,7 @@ import '../widgets/app_bottom_nav_bar.dart';
 import '../widgets/app_side_drawer.dart';
 
 /// The single bottom-navigation shell for the signed-in app: Profile /
-/// Home (center) / Card, each kept alive in an [IndexedStack] so switching
+/// Home / Card / Passbook, each kept alive in an [IndexedStack] so switching
 /// tabs never loses scroll position or re-triggers an API call. Also hosts
 /// the swipe-from-left-edge side drawer ([AppSideDrawer]).
 ///
@@ -42,6 +43,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ProfileScreen(),
     HomeScreen(),
     MemberCardScreen(),
+    PassbookTabsScreen(),
   ];
 
   DateTime? _lastBackPressTime;
@@ -123,7 +125,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
           bottomNavigationBar: AppBottomNavBar(
             currentIndex: controller.currentIndex.value,
             onTap: controller.changeTab,
-            centerIndex: MainNavigationController.homeTab,
+            centerIndex: null,
             items: [
               AppBottomNavItem(
                 icon: Icons.person_outline_rounded,
@@ -139,6 +141,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 icon: Icons.credit_card_outlined,
                 activeIcon: Icons.credit_card_rounded,
                 label: 'nav_card'.tr,
+              ),
+              AppBottomNavItem(
+                icon: Icons.menu_book_outlined,
+                activeIcon: Icons.menu_book_rounded,
+                label: AppStrings.passbook.tr,
               ),
             ],
           ),

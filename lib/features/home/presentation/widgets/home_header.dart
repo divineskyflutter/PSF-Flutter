@@ -8,12 +8,32 @@ import 'package:psf_application/shared/widgets/common/app_header_curve_clipper.d
 import 'package:psf_application/shared/widgets/common/app_sub_page_header.dart'
     show AppHeaderIconButton;
 
+/// One "label / value" pair shown in [HomeHeader] — as a text line (member
+/// no, mobile) or inside a small tile (fees, loans).
+class HeaderInfoLine {
+  const HeaderInfoLine(this.label, this.value);
+
+  final String label;
+
+  /// Already formatted; "-" when there is nothing to show.
+  final String value;
+}
+
 /// The Home tab's header — a pinned [SliverPersistentHeader] that keeps the
-/// SAME wavy, gradient look at every height. Scrolling the dashboard only
-/// shrinks it: the logo/greeting/name/member-id block fades away and the
-/// member's name fades in centered between the menu and notification
-/// buttons, while the wave along the bottom edge scales down with the
-/// height (it never turns into a flat bar).
+/// SAME wavy, gradient look at every height.
+///
+/// Top bar (always visible): the menu button, then "Welcome" over the
+/// member's name right beside it, and the logo at the far right.
+///
+/// Open: below the top bar, a row with the member no and mobile number
+/// ([infoLines]), then the money figures ([statLines]) as wide frosted tiles
+/// in two columns — the first half of the list stacked in the left column
+/// (fee / niti), the second half stacked in the right column (loans). Every
+/// value shrinks to fit its tile, so long amounts never overflow.
+///
+/// Scrolling shrinks the header: the block under the top bar fades away and
+/// only the top bar remains, while the wave along the bottom edge scales down
+/// with the height (it never turns into a flat bar).
 ///
 /// The background (gradient + wave + soft glows) is ONE painted shape
 /// ([_HeaderBackgroundPainter]) inside its own repaint boundary — not a
@@ -28,7 +48,8 @@ class HomeHeader extends StatelessWidget {
     super.key,
     required this.greeting,
     required this.memberName,
-    required this.memberIdLabel,
+    this.infoLines = const [],
+    this.statLines = const [],
     this.notificationCount = 0,
     this.onNotificationTap,
     this.onMenuTap,
@@ -38,7 +59,12 @@ class HomeHeader extends StatelessWidget {
 
   final String memberName;
 
-  final String memberIdLabel;
+  /// "label: value" items in one row under the top bar (member no, mobile).
+  final List<HeaderInfoLine> infoLines;
+
+  /// Tiles under that row: the first half fills the left column, the second
+  /// half the right column.
+  final List<HeaderInfoLine> statLines;
 
   final int notificationCount;
 
@@ -56,13 +82,14 @@ class HomeHeader extends StatelessWidget {
       delegate: _HomeHeaderDelegate(
         greeting: greeting,
         memberName: memberName,
-        memberIdLabel: memberIdLabel,
+        infoLines: infoLines,
+        statLines: statLines,
         notificationCount: notificationCount,
         onNotificationTap: onNotificationTap,
         onMenuTap: onMenuTap,
         topInset: topInset,
         minHeight: topInset + 76.px(context),
-        maxHeight: topInset + 184.px(context),
+        maxHeight: topInset + (statLines.isEmpty ? 136 : 232).px(context),
         unit: 1.px(context),
       ),
     );
@@ -73,7 +100,8 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   const _HomeHeaderDelegate({
     required this.greeting,
     required this.memberName,
-    required this.memberIdLabel,
+    required this.infoLines,
+    required this.statLines,
     required this.notificationCount,
     required this.onNotificationTap,
     required this.onMenuTap,
@@ -85,7 +113,8 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   final String greeting;
   final String memberName;
-  final String memberIdLabel;
+  final List<HeaderInfoLine> infoLines;
+  final List<HeaderInfoLine> statLines;
   final int notificationCount;
   final VoidCallback? onNotificationTap;
   final VoidCallback? onMenuTap;
@@ -104,11 +133,20 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   double get maxExtent => maxHeight;
 
+  static bool _sameLines(List<HeaderInfoLine> a, List<HeaderInfoLine> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].label != b[i].label || a[i].value != b[i].value) return false;
+    }
+    return true;
+  }
+
   @override
   bool shouldRebuild(covariant _HomeHeaderDelegate old) =>
       greeting != old.greeting ||
       memberName != old.memberName ||
-      memberIdLabel != old.memberIdLabel ||
+      !_sameLines(infoLines, old.infoLines) ||
+      !_sameLines(statLines, old.statLines) ||
       notificationCount != old.notificationCount ||
       topInset != old.topInset ||
       minHeight != old.minHeight ||
@@ -120,10 +158,8 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
     final range = maxHeight - minHeight;
     final t = range <= 0 ? 0.0 : (shrinkOffset / range).clamp(0.0, 1.0);
 
-    // Big block fades out over the first ~55% of the collapse; the centered
-    // name fades in over the last ~45%.
+    // The block under the top bar fades out over the first ~55% of the collapse.
     final expandedOpacity = (1 - t * 1.8).clamp(0.0, 1.0);
-    final titleOpacity = ((t - .55) / .45).clamp(0.0, 1.0);
 
     return RepaintBoundary(
       child: CustomPaint(
@@ -134,7 +170,7 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
         ),
         child: Stack(
           children: [
-            // Menu + notifications, always in the same spot.
+            // Top bar: menu button, "Welcome" over the name, logo.
             Positioned(
               left: 14 * unit,
               right: 14 * unit,
@@ -146,119 +182,220 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                     AppHeaderIconButton(icon: Icons.menu_rounded, onTap: onMenuTap!)
                   else
                     SizedBox(width: 40 * unit),
+                  SizedBox(width: 12 * unit),
                   Expanded(
-                    child: titleOpacity <= 0
-                        ? const SizedBox.shrink()
-                        : Center(
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 8 * unit),
-                              child: Text(
-                                memberName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(titleOpacity),
-                                  fontSize: 17 * unit,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          greeting,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(.82),
+                            fontSize: 11.5 * unit,
+                            height: 1.1,
                           ),
+                        ),
+                        Text(
+                          memberName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17 * unit,
+                            fontWeight: FontWeight.w700,
+                            height: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  // Notification bell hidden for now — kept as a same-size
-                  // placeholder so the member name stays centered between
-                  // the menu button and this side. Swap back to the
-                  // AppHeaderIconButton below to bring it back.
-                  // AppHeaderIconButton(
-                  //   icon: Icons.notifications_outlined,
-                  //   badgeCount: notificationCount,
-                  //   onTap: onNotificationTap ?? () {},
-                  // ),
-                  SizedBox(width: 40 * unit),
+                  SizedBox(width: 10 * unit),
+                  // Logo — a white badge at the far right.
+                  Container(
+                    width: 40 * unit,
+                    height: 40 * unit,
+                    padding: EdgeInsets.all(6 * unit),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(.15),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: SvgPicture.asset(AppAssets.logo, fit: BoxFit.contain),
+                  ),
                 ],
               ),
             ),
 
-            // Logo + greeting + name + member id (only while it can be seen).
+            // Open block: member no + mobile, then the tiles.
             if (expandedOpacity > 0)
               Positioned(
-                left: 22 * unit,
-                right: 22 * unit,
-                top: topInset + 62 * unit - 18 * unit * t,
+                left: 20 * unit,
+                right: 20 * unit,
+                top: topInset + 72 * unit - 14 * unit * t,
                 child: Opacity(
                   opacity: expandedOpacity,
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(
-                        width: 54 * unit,
-                        height: 54 * unit,
-                        padding: EdgeInsets.all(8 * unit),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(.15),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: SvgPicture.asset(
-                          AppAssets.logo,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                      SizedBox(width: 14 * unit),
-                      Expanded(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      if (infoLines.isNotEmpty)
+                        Row(
                           children: [
-                            Text(
-                              greeting,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(.85),
-                                fontSize: 12 * unit,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                            SizedBox(height: 2 * unit),
-                            Text(
-                              memberName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18 * unit,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            if (memberIdLabel.isNotEmpty) ...[
-                              SizedBox(height: 2 * unit),
-                              Text(
-                                memberIdLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(.75),
-                                  fontSize: 11.5 * unit,
-                                  fontWeight: FontWeight.w400,
-                                ),
-                              ),
+                            for (var i = 0; i < infoLines.length; i++) ...[
+                              if (i > 0) SizedBox(width: 18 * unit),
+                              Flexible(child: _InfoLine(line: infoLines[i], unit: unit)),
                             ],
                           ],
                         ),
-                      ),
+                      if (statLines.isNotEmpty) ...[
+                        SizedBox(height: 14 * unit),
+                        _StatTiles(lines: statLines, unit: unit),
+                      ],
                     ],
                   ),
                 ),
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Member No: 5" — muted label, bold value, one line.
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.line, required this.unit});
+
+  final HeaderInfoLine line;
+  final double unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '${line.label}: ',
+            style: TextStyle(
+              color: Colors.white.withOpacity(.75),
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          TextSpan(
+            text: line.value,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(fontSize: 12.5 * unit),
+    );
+  }
+}
+
+/// The money figures as wide frosted tiles in two columns: the first half of
+/// [lines] stacked on the left, the second half stacked on the right. A tile
+/// is a tiny label over a bold value; the value shrinks to fit so a long
+/// amount never overflows.
+class _StatTiles extends StatelessWidget {
+  const _StatTiles({required this.lines, required this.unit});
+
+  final List<HeaderInfoLine> lines;
+  final double unit;
+
+  @override
+  Widget build(BuildContext context) {
+    if (lines.isEmpty) return const SizedBox.shrink();
+
+    final half = (lines.length + 1) ~/ 2;
+    final left = lines.sublist(0, half);
+    final right = lines.sublist(half);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: _TileColumn(lines: left, unit: unit)),
+        SizedBox(width: 10 * unit),
+        Expanded(child: _TileColumn(lines: right, unit: unit)),
+      ],
+    );
+  }
+}
+
+class _TileColumn extends StatelessWidget {
+  const _TileColumn({required this.lines, required this.unit});
+
+  final List<HeaderInfoLine> lines;
+  final double unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < lines.length; i++) ...[
+          if (i > 0) SizedBox(height: 8 * unit),
+          _Tile(line: lines[i], unit: unit),
+        ],
+      ],
+    );
+  }
+}
+
+class _Tile extends StatelessWidget {
+  const _Tile({required this.line, required this.unit});
+
+  final HeaderInfoLine line;
+  final double unit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 12 * unit, vertical: 7 * unit),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(.13),
+        borderRadius: BorderRadius.circular(12 * unit),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            line.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(.78),
+              fontSize: 10 * unit,
+              height: 1.2,
+            ),
+          ),
+          // Shrinks the value to fit the tile instead of overflowing.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              line.value,
+              maxLines: 1,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14 * unit,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

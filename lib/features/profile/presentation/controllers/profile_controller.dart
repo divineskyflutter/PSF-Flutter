@@ -8,6 +8,7 @@ import 'package:psf_application/core/network/auth/token_manager.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/features/auth/data/models/health_declaration_model.dart';
+import 'package:psf_application/features/auth/data/models/login_model.dart';
 import 'package:psf_application/features/auth/data/models/member_model.dart';
 import 'package:psf_application/features/auth/data/models/nominee_model.dart';
 import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
@@ -15,6 +16,8 @@ import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle
 import 'package:psf_application/shared/utils/toast_util.dart';
 
 import '../../data/models/member_profile_model.dart';
+import '../../data/models/scheme_reference_model.dart';
+import 'profile_document.dart';
 import '../../domain/entities/contact_entity.dart';
 import '../../domain/entities/member_profile_entity.dart';
 import '../../domain/entities/passbook_entry_entity.dart';
@@ -91,6 +94,36 @@ class ProfileController extends GetxController {
 
   final RxBool isDeletingAccount = false.obs;
 
+  /// Scheme (yojna) + fee-paid info and reference info from the last login
+  /// (see [loadProfileFromLocalLogin]) — Home's membership-fee card and the
+  /// Profile scheme/reference sections read these.
+  final Rx<MembershipSchemeInfo?> scheme = Rx<MembershipSchemeInfo?>(null);
+  final Rx<MemberReferenceInfo?> references = Rx<MemberReferenceInfo?>(null);
+
+  /// A short alert when the login says references are needed but the number
+  /// actually added (the `refrencemembers` list) differs from the required
+  /// count (`referenceCount`); `null` when they match or none are needed.
+  String? get referenceMismatchMessage {
+    final info = references.value;
+    final required = info?.referenceCount;
+    if (info == null || !info.isReferenceNeeded || required == null) return null;
+
+    final added = info.members.length;
+    if (added == required) return null;
+
+    return 'references_mismatch'.trParams({'added': '$added', 'required': '$required'});
+  }
+
+  /// From the login response's `isHasDeletion` (cached with the signed-in
+  /// member) — the side drawer shows "Delete Account" only while this is true.
+  final RxBool canDeleteAccount = false.obs;
+
+  Future<void> refreshDeletionFlag() async {
+    final storedUser = await AppSecureStorage.getLoggedInUser();
+    canDeleteAccount.value =
+        storedUser != null && _ciGet(storedUser, 'isHasDeletion') == true;
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -122,7 +155,12 @@ class ProfileController extends GetxController {
   Future<void> loadProfileFromLocalLogin() async {
     final storedUser = await AppSecureStorage.getLoggedInUser();
 
+    await refreshDeletionFlag();
+
     if (storedUser == null) return;
+
+    scheme.value = MembershipSchemeInfo.fromJson(storedUser);
+    references.value = MemberReferenceInfo.fromJson(storedUser);
 
     profile.value = MemberProfileModel.fromJson(storedUser);
     memberDetails.value = MemberModel.fromJson(storedUser);
@@ -334,10 +372,13 @@ class ProfileController extends GetxController {
   }
 
   Future<void> _clearSession() async {
+    scheme.value = null;
+    references.value = null;
     await Future.wait([
       TokenManager.instance.clear(),
       AppSecureStorage.deleteMemberId(),
       AppSecureStorage.clearLoggedInUser(),
+      AppPrefs.setYojnaId(null),
       // Set alongside the member id on a successful login (see
       // LoginScreen._onLoginPressed) so SplashScreen._routeNext() skips
       // straight to Home on the next app open — cleared here too so a
@@ -353,20 +394,33 @@ class ProfileController extends GetxController {
 
   final RxBool isDownloadingPdf = false.obs;
 
-  Future<void> downloadApplicationPdf() async {
+  Future<void> downloadApplicationPdf() =>
+      downloadDocument(ProfileDocument.applicationForm);
+
+  /// Downloads [doc] straight to the phone: calls its API, then opens the
+  /// system "save" dialog with the file. A document with no endpoint yet just
+  /// says it isn't available.
+  Future<void> downloadDocument(ProfileDocument doc) async {
+    final endpoint = doc.endpoint;
+
+    if (endpoint == null) {
+      ToastUtil.info('doc_not_available'.tr);
+      return;
+    }
+
     if (isDownloadingPdf.value) return;
 
     isDownloadingPdf.value = true;
 
     try {
-      final bytes = await _repository.generateApplicationPdf();
+      final bytes = await _repository.downloadDocument(endpoint);
 
       final savedPath = await FilePicker.platform.saveFile(
-        fileName: 'PSF_Application.pdf',
+        fileName: doc.fileName,
         bytes: bytes,
         type: FileType.custom,
         allowedExtensions: ['pdf'],
-        dialogTitle: 'download_pdf'.tr,
+        dialogTitle: doc.labelKey.tr,
       );
 
       if (savedPath != null) {
@@ -378,6 +432,99 @@ class ProfileController extends GetxController {
       ToastUtil.error('pdf_generation_failed'.tr);
     } finally {
       isDownloadingPdf.value = false;
+    }
+  }
+
+  // ============================================================
+  // REFRESH — pull-to-refresh on Home and Profile
+  // ============================================================
+
+  bool _isRefreshing = false;
+  DateTime? _lastSyncAt;
+
+
+  /// Re-reads the member's record from the server (`GetMemberById`) and folds
+  /// whatever changed into the cached login data, then reloads everything
+  /// that reads it (profile tabs, scheme/fee, references, header).
+  ///
+  /// [silent] (background syncs, e.g. on switching tabs) never toasts and is
+  /// skipped when a sync already ran in the last [minGap]; pull-to-refresh
+  /// passes `silent: false` so it always runs. A failed refresh is never shown
+  /// to the user (no toast, no dialog) — the saved details just stay on screen.
+  /// Returns whether anything was updated.
+  Future<bool> refreshMemberData({
+    bool silent = false,
+    Duration minGap = const Duration(seconds: 20),
+  }) async {
+    if (_isRefreshing) return false;
+
+    if (silent &&
+        _lastSyncAt != null &&
+        DateTime.now().difference(_lastSyncAt!) < minGap) {
+      return false;
+    }
+
+    _isRefreshing = true;
+
+    try {
+      final record = await _repository.fetchMemberRecord();
+      if (record == null) {
+        return false;
+      }
+
+      // Same shape as the login response's `data` (memberDetail + siblings),
+      // or a flat member record.
+      final detail = record['memberDetail'] is Map
+          ? Map<String, dynamic>.from(record['memberDetail'] as Map)
+          : Map<String, dynamic>.from(record);
+
+      // Only trust something that looks like a member record.
+      if (_ciGet(detail, 'memberId') == null && _ciGet(detail, 'firstName') == null) {
+        return false;
+      }
+
+      // Same fields the login flow never caches.
+      for (final key in const ['password', 'mpin', 'deviceToken', 'qr']) {
+        detail.remove(key);
+      }
+
+      final stored = await AppSecureStorage.getLoggedInUser() ?? <String, dynamic>{};
+
+      // The cached blob also carries a few values LoginModel derived from the
+      // member fields (full name, member code, ...). Drop them so they are
+      // rebuilt from the FRESH fields below instead of staying stale.
+      for (final key in const [
+        'fullName', 'memberCode', 'mobile', 'photoUrl', 'schemeName',
+      ]) {
+        stored.remove(key);
+      }
+
+      final merged = <String, dynamic>{...stored, ...detail};
+
+      // Siblings of `memberDetail` in the response.
+      for (final key in const [
+        'nominees',
+        'healthDeclaration',
+        'refrencemembers',
+        'isHasDeletion',
+        'isInEditMode',
+        'queries',
+      ]) {
+        if (record[key] != null) merged[key] = record[key];
+      }
+
+      final rebuilt = LoginModel.fromJson(merged).toJson();
+
+      await AppSecureStorage.saveLoggedInUser(rebuilt);
+      await AppPrefs.setYojnaId(MembershipSchemeInfo.fromJson(rebuilt).yojnaId);
+      await loadProfileFromLocalLogin();
+
+      _lastSyncAt = DateTime.now();
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _isRefreshing = false;
     }
   }
 }

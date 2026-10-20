@@ -5,6 +5,7 @@ import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/widgets/common/app_sub_page_header.dart';
+import 'package:psf_application/shared/widgets/refresh/app_refresh_indicator.dart';
 import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
 
@@ -12,10 +13,12 @@ import 'package:psf_application/features/navigation/presentation/controllers/mai
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 
 import '../controllers/profile_controller.dart';
+import '../widgets/download_documents_sheet.dart';
 import '../widgets/my_profile_health_tab.dart';
 import '../widgets/my_profile_nominee_tab.dart';
 import '../widgets/my_profile_personal_tab.dart';
 import '../widgets/profile_card_style.dart';
+import '../widgets/reference_mismatch_notifier.dart';
 
 /// The Profile tab — the member's full profile shown directly (no menu in
 /// between). Member photo centered up top (tap to preview), then a shadowed
@@ -61,7 +64,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       // edge sitting right against the floating bottom bar — a soft blend
       // into the page background (matching where the bar floats) rather
       // than a box-looking cutoff, regardless of scroll position.
-      body: ShaderMask(
+      body: Stack(
+        children: [
+          ShaderMask(
         shaderCallback: (bounds) => const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -113,7 +118,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     : AppStateView.empty(message: 'no_data_found'.tr);
             }
 
-            return SingleChildScrollView(
+            return AppRefreshIndicator(
+              onRefresh: _controller.refreshMemberData,
+              edgeOffset: AppSubPageHeader.totalHeight(),
+              child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(
                 18.px(context),
                 AppSubPageHeader.totalHeight() + 12.px(context),
@@ -154,9 +163,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
+            ),
             );
           }),
         ),
+      ),
+          const ReferenceMismatchNotifier(tabIndex: MainNavigationController.profileTab),
+        ],
       ),
     );
   }
@@ -342,8 +355,8 @@ class _TabLabel extends StatelessWidget {
   }
 }
 
-/// Header action that downloads the member's application PDF
-/// (`ProfileController.downloadApplicationPdf`) — same translucent-circle
+/// Header action that opens the download sheet (application form, ID card,
+/// receipt, certificate, agreement — see [DownloadDocumentsSheet]) — same translucent-circle
 /// look as [AppHeaderIconButton], swapping the icon for a small spinner
 /// while the request is in flight so it never looks unresponsive.
 class _DownloadPdfButton extends StatelessWidget {
@@ -362,7 +375,7 @@ class _DownloadPdfButton extends StatelessWidget {
         shape: const CircleBorder(),
         child: InkWell(
           customBorder: const CircleBorder(),
-          onTap: busy ? null : controller.downloadApplicationPdf,
+          onTap: busy ? null : () => DownloadDocumentsSheet.show(controller),
           child: SizedBox(
             width: size,
             height: size,
@@ -377,7 +390,7 @@ class _DownloadPdfButton extends StatelessWidget {
                       ),
                     )
                   : Icon(
-                      Icons.picture_as_pdf_rounded,
+                      Icons.download_rounded,
                       color: Colors.white,
                       size: 20.px(context),
                     ),

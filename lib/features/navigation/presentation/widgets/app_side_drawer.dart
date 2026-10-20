@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
+import 'package:psf_application/app/constants/app_links.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/features/profile/presentation/controllers/profile_controller.dart';
@@ -22,7 +24,8 @@ import '../controllers/main_navigation_controller.dart';
 /// the right, same look as the old Profile summary card — tapping it opens
 /// the Profile tab, same as tapping it in the bottom bar), then a menu:
 /// Membership Card, About Us, Contact Us,
-/// Language, Logout. Both fade/slide in one after another each time it
+/// Language, Privacy Policy, Delete Account (only when the login's
+/// `isHasDeletion` is true), Logout. Both fade/slide in one after another each time it
 /// opens.
 class AppSideDrawer extends StatefulWidget {
   const AppSideDrawer({super.key});
@@ -38,6 +41,14 @@ class _AppSideDrawerState extends State<AppSideDrawer> with SingleTickerProvider
     vsync: this,
     duration: const Duration(milliseconds: 700),
   )..forward();
+
+  @override
+  void initState() {
+    super.initState();
+    // Re-read the login's `isHasDeletion` each time the drawer opens, so a
+    // fresh login is reflected even though ProfileController outlives it.
+    Get.find<ProfileController>().refreshDeletionFlag();
+  }
 
   @override
   void dispose() {
@@ -69,6 +80,35 @@ class _AppSideDrawerState extends State<AppSideDrawer> with SingleTickerProvider
       logoutText: AppStrings.logout.tr,
       cancelText: AppStrings.cancel.tr,
       onLogout: profile.logout,
+    );
+  }
+
+  /// Opens the web privacy policy in the browser — the same page listed on
+  /// Google Play. Falls back to the built-in policy page if no browser opens.
+  Future<void> _openPrivacyPolicy() async {
+    var opened = false;
+    try {
+      opened = await launchUrl(
+        Uri.parse(AppLinks.privacyPolicy),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+    if (!opened) Get.toNamed(AppRoutes.privacyPolicy);
+  }
+
+  void _confirmDeleteAccount(ProfileController profile) {
+    AppDialog.logout(
+      title: AppStrings.deleteAccount.tr,
+      message: AppStrings.deleteAccountQuestion.tr,
+      logoutText: AppStrings.deleteAccount.tr,
+      cancelText: AppStrings.cancel.tr,
+      onLogout: () async {
+        // Calls the delete API (member id only), clears the session, then
+        // lands on the login/register screen — same exit as Logout.
+        if (await profile.deleteAccount()) {
+          Get.offAllNamed(AppRoutes.authChoice);
+        }
+      },
     );
   }
 
@@ -147,6 +187,24 @@ class _AppSideDrawerState extends State<AppSideDrawer> with SingleTickerProvider
                           label: AppStrings.language.tr,
                           onTap: LanguageSettingsSheet.show,
                         ),
+                        // Google Play requires the privacy policy to be
+                        // reachable from inside the app.
+                        AppMenuTile(
+                          icon: Icons.privacy_tip_outlined,
+                          label: AppStrings.privacyPolicy.tr,
+                          onTap: _openPrivacyPolicy,
+                        ),
+                        // Only for members whose login came back with
+                        // `isHasDeletion: true`.
+                        Obx(() => profile.canDeleteAccount.value
+                            ? AppMenuTile(
+                                icon: Icons.delete_outline_rounded,
+                                label: AppStrings.deleteAccount.tr,
+                                iconBackgroundColor: AppColors.danger.withOpacity(.10),
+                                iconColor: AppColors.danger,
+                                onTap: () => _confirmDeleteAccount(profile),
+                              )
+                            : const SizedBox.shrink()),
                         AppMenuTile(
                           icon: Icons.logout_rounded,
                           label: AppStrings.logout.tr,

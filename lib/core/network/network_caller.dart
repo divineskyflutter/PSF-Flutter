@@ -46,6 +46,10 @@ class NetworkCaller {
         // which otherwise auto-toasts the raw `message` on every
         // status:false response regardless of what it actually means.
         bool suppressErrorToast = false,
+        // For background calls (e.g. the silent member-data sync): a network
+        // failure must not raise the app-wide blocking "No internet" dialog
+        // — the caller handles the failure itself.
+        bool suppressNetworkDialog = false,
       }) {
     return _execute(
           (cancelToken) => _dio.post(
@@ -57,6 +61,7 @@ class NetworkCaller {
             'requireToken': requireToken,
             'showSuccessToast': showSuccessToast,
             'suppressErrorToast': suppressErrorToast,
+            'suppressNetworkDialog': suppressNetworkDialog,
           },
         ),
       ),

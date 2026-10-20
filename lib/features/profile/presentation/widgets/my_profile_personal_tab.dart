@@ -12,6 +12,7 @@ import 'package:psf_application/shared/widgets/common/info_row.dart';
 import '../controllers/profile_controller.dart';
 import 'documents_section.dart';
 import 'profile_card_style.dart';
+import 'profile_scheme_reference_sections.dart';
 
 /// "Personal" tab of [MyProfilePage] — every field `MemberModel` carries
 /// (father name, DOB, gender/marital status resolved via
@@ -75,6 +76,13 @@ class MyProfilePersonalTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ==================================================
+        // SCHEME (YOJNA)
+        // ==================================================
+        ProfileSchemeCard(controller: controller),
+
+        gap,
+
+        // ==================================================
         // PERSONAL
         // ==================================================
         card([
@@ -116,6 +124,7 @@ class MyProfilePersonalTab extends StatelessWidget {
           InfoListTile(
             label: AppStrings.address.tr,
             value: localized(member.address, member.hAddress, member.gAddress),
+            multilineValue: true,
           ),
           InfoListTile(
             label: 'village'.tr,
@@ -149,6 +158,15 @@ class MyProfilePersonalTab extends StatelessWidget {
             showDivider: false,
           ),
         ]),
+
+        gap,
+
+        // ==================================================
+        // REFERENCES (only when the login says they are needed) and
+        // "joined through the reference of"
+        // ==================================================
+        ProfileReferencesSection(controller: controller),
+        ProfileReferredBySection(controller: controller),
 
         gap,
 

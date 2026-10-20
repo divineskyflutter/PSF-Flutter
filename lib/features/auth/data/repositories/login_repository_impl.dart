@@ -106,6 +106,15 @@ class LoginRepositoryImpl implements LoginRepository {
       // Also a sibling of `memberDetail` — admin-flagged fields still
       // needing correction. See LoginModel.queries.
       if (data['queries'] != null) 'queries': data['queries'],
+      // Also a sibling of `memberDetail`: `true` when this member may
+      // delete their own account — the side drawer only shows "Delete
+      // Account" then (see ProfileController.canDeleteAccount). Kept in
+      // the cached blob so it survives an app restart.
+      'isHasDeletion': data['isHasDeletion'] == true,
+      // Siblings of `memberDetail` too: the people who joined through this
+      // member's reference (see MemberReferenceInfo).
+      if (data['refrencemembers'] != null)
+        'refrencemembers': data['refrencemembers'],
     };
 
     var result = LoginModel.fromJson(merged);

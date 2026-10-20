@@ -8,6 +8,8 @@ import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle_repository.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
 
+import 'package:psf_application/features/profile/data/models/scheme_reference_model.dart';
+
 import '../../data/models/login_model.dart';
 import '../../domain/repositories/login_repository.dart';
 
@@ -85,6 +87,9 @@ class LoginController extends GetxController {
       // declaration data straight back out of it.
       await AppSecureStorage.saveMemberId(result.memberId);
       await AppSecureStorage.saveLoggedInUser(result.toJson());
+      // The member's scheme (yojna) id is kept in SharedPreferences only —
+      // it is never shown anywhere in the UI.
+      await AppPrefs.setYojnaId(MembershipSchemeInfo.fromJson(result.raw).yojnaId);
 
       if (result.accessToken != null && result.refreshToken != null) {
         await TokenManager.instance.setTokens(

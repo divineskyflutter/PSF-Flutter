@@ -65,6 +65,7 @@ class InfoListTile extends StatelessWidget {
     this.labelColor,
     this.dividerColor,
     this.showDivider = true,
+    this.multilineValue = false,
   });
 
   final String label;
@@ -83,8 +84,35 @@ class InfoListTile extends StatelessWidget {
 
   final bool showDivider;
 
+  /// For free-text values that can wrap onto several lines (an address).
+  /// The row keeps the exact same label / value columns as every other row
+  /// — so the value starts at the same place — but the value's lines are
+  /// left-aligned instead of right-aligned. Right-aligned wrapped text has
+  /// a ragged left edge and reads as stuck to the right side of the card,
+  /// unlike the other rows, whose single-line values all start at one
+  /// column (worse still in Hindi and Gujarati, where addresses wrap more).
+  final bool multilineValue;
+
   @override
   Widget build(BuildContext context) {
+    final labelText = Text(
+      label,
+      style: TextStyle(
+        fontSize: 13.px(context),
+        color: labelColor ?? AppColors.textSecondary,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+    final valueText = Text(
+      value,
+      textAlign: multilineValue ? TextAlign.left : TextAlign.right,
+      style: TextStyle(
+        fontSize: 13.5.px(context),
+        fontWeight: FontWeight.w700,
+        color: valueColor ?? AppColors.textPrimary,
+      ),
+    );
+
     return Column(
       children: [
         Padding(
@@ -92,28 +120,9 @@ class InfoListTile extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13.px(context),
-                    color: labelColor ?? AppColors.textSecondary,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
+              Expanded(child: labelText),
               SizedBox(width: 12.px(context)),
-              Flexible(
-                child: Text(
-                  value,
-                  textAlign: TextAlign.right,
-                  style: TextStyle(
-                    fontSize: 13.5.px(context),
-                    fontWeight: FontWeight.w700,
-                    color: valueColor ?? AppColors.textPrimary,
-                  ),
-                ),
-              ),
+              Flexible(child: valueText),
             ],
           ),
         ),

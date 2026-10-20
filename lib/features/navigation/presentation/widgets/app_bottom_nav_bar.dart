@@ -42,8 +42,9 @@ class AppBottomNavBar extends StatelessWidget {
 
   final ValueChanged<int> onTap;
 
-  /// Which item is the raised center button.
-  final int centerIndex;
+  /// Which item is the raised center button; `null` for a flat bar of equal
+  /// tabs (used when the tab count is even, so nothing can sit dead center).
+  final int? centerIndex;
 
   static double barHeightOf(BuildContext context) => 62.px(context);
 
@@ -65,7 +66,7 @@ class AppBottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final barHeight = barHeightOf(context);
-    final lift = liftOf(context);
+    final lift = centerIndex == null ? 0.0 : liftOf(context);
 
     return SafeArea(
       top: false,

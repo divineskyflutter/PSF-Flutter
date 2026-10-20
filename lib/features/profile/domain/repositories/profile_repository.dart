@@ -22,4 +22,12 @@ abstract class ProfileRepository {
   /// The signed-in member's application, rendered as a PDF by the server —
   /// see `ProfileRemoteDataSource.generatePdf`.
   Future<Uint8List> generateApplicationPdf();
+
+  /// Any downloadable document: POSTs the member id to [endpoint] and returns
+  /// the file bytes.
+  Future<Uint8List> downloadDocument(String endpoint);
+
+  /// The member's current record from `GetMemberById`, or `null` when the
+  /// response isn't a member record.
+  Future<Map<String, dynamic>?> fetchMemberRecord();
 }

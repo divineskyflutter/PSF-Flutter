@@ -40,6 +40,12 @@ class AppPrefsKeys {
   /// AppSecureStorage's memberId (cleared on logout) to decide, on the
   /// next app launch, whether SplashScreen should go straight to Home.
   static const String registrationCompleted = 'registration_completed';
+
+  // ------------------------------------------------------------
+  // Membership scheme (Yojna) the member joined — id only, never shown in UI
+  // ------------------------------------------------------------
+
+  static const String yojnaId = 'yojna_id';
 }
 
 class AppSecureKeys {

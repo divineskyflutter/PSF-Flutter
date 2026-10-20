@@ -17,6 +17,7 @@ import 'package:psf_application/features/profile/presentation/widgets/language_s
 import 'package:psf_application/shared/enums/app_language.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/signature/app_signature_bottom_sheet.dart';
+import 'package:psf_application/shared/signature/signature_source_sheet.dart';
 import 'package:psf_application/shared/utils/app_date_picker.dart';
 import 'package:psf_application/shared/utils/app_validators.dart';
 import 'package:psf_application/shared/utils/enum_option_translator.dart';
@@ -1946,16 +1947,29 @@ class _MemberRegistrationScreenState
   }
 
   Future<void> _openSignature() async {
-    final File? signature =
-    await Get.bottomSheet<File>(
-      const AppSignatureBottomSheet(),
+    // First ask how: draw it on screen, or take an image from the gallery.
+    final source = await Get.bottomSheet<SignatureSource>(
+      const SignatureSourceSheet(),
       isScrollControlled: true,
     );
 
-    if (signature != null) {
-      controller.setSignature(
-        signature,
-      );
+    switch (source) {
+      case SignatureSource.draw:
+        final File? signature =
+        await Get.bottomSheet<File>(
+          const AppSignatureBottomSheet(),
+          isScrollControlled: true,
+        );
+
+        if (signature != null) {
+          controller.setSignature(
+            signature,
+          );
+        }
+      case SignatureSource.gallery:
+        await controller.pickSignatureFromGallery();
+      case null:
+        break;
     }
   }
 

@@ -12,6 +12,9 @@ class HomeRemoteDataSource {
       ApiEndPoints.getMemberDashboard,
       body: {'memberId': memberId},
       requireToken: false,
+      // This endpoint doesn't exist on the server yet (404), and Home already
+      // shows its own empty state for it — no error toast on every open/pull.
+      suppressErrorToast: true,
     );
   }
 }

@@ -1,23 +1,28 @@
 import 'package:dio/dio.dart';
-import 'package:get/get.dart';
 
 import 'package:psf_application/app/constants/api_end_points.dart';
-import 'package:psf_application/app/routes/app_routes.dart';
-import 'package:psf_application/core/network/auth/token_manager.dart';
-import 'package:psf_application/core/storage/app_secure_storage.dart';
-import 'package:psf_application/shared/utils/toast_util.dart';
 
-/// The ONE place session-expiry is handled for every API call in the app.
-/// No feature/repository/controller needs to know an access token can
-/// expire — a request made with an expired token gets a 401, this
-/// interceptor transparently refreshes the token and retries it, and the
-/// original caller just sees its normal successful response (or, if the
-/// refresh itself fails, a normal error — see [_forceLogout]).
+import '../auth/token_refresher.dart';
+
+/// Handles a 401 on any API call: transparently refreshes the token pair
+/// (see [TokenRefresher]), saves the new pair, and retries the failed
+/// request — the original caller just sees its normal successful response.
+/// The user sees no error toast; any global loader keeps spinning until the
+/// retry returns.
+///
+/// If the server REJECTS the refresh token (expired / revoked) the session
+/// ends: the member is signed out and sent to the login choice with a
+/// "session expired" message. A refresh that merely fails because of the
+/// network does NOT log anyone out — the original error is passed on and the
+/// next call tries again.
+///
+/// (Tokens that expire are normally renewed even earlier, before the request
+/// is sent — see `AuthInterceptor`; this covers a token the server refuses
+/// for any other reason.)
 ///
 /// Registered once, in `DioClient.create`, ahead of `ErrorInterceptor` —
 /// so a 401 that gets fixed here never reaches `ErrorInterceptor` as a
-/// user-facing "session expired" toast at all; only a 401 that survives a
-/// refresh attempt (or a refresh-token that has itself expired) does.
+/// user-facing error at all.
 class TokenRefreshInterceptor extends Interceptor {
   TokenRefreshInterceptor(this._dio);
 
@@ -27,30 +32,33 @@ class TokenRefreshInterceptor extends Interceptor {
   /// the freshly-refreshed Authorization header from `AuthInterceptor`).
   final Dio _dio;
 
-  /// Coordinates concurrent 401s (e.g. three widgets each firing an API
-  /// call the moment a token expires): only the FIRST one triggers a real
-  /// `RefreshToken` call; every other 401 that arrives while that call is
-  /// still in flight just awaits this same future instead of firing its
-  /// own duplicate refresh request.
-  static Future<String?>? _refreshFuture;
-
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) async {
     final requestOptions = err.requestOptions;
 
     final isUnauthorized = err.response?.statusCode == 401;
     final alreadyRetried = requestOptions.extra['isTokenRetry'] == true;
-    final isRefreshCall = requestOptions.path == ApiEndPoints.refreshToken;
+    final isSessionCall = requestOptions.path == ApiEndPoints.refreshToken ||
+        requestOptions.path == ApiEndPoints.login;
 
-    if (!isUnauthorized || alreadyRetried || isRefreshCall) {
+    if (!isUnauthorized || alreadyRetried || isSessionCall) {
       handler.next(err);
       return;
     }
 
-    final newAccessToken = await _refreshAccessToken();
+    final result = await TokenRefresher.refresh();
+
+    if (result.rejected) {
+      await TokenRefresher.endSession();
+      handler.next(err);
+      return;
+    }
+
+    final newAccessToken = result.accessToken;
 
     if (newAccessToken == null) {
-      await _forceLogout();
+      // Refresh couldn't run (no connection, server hiccup): keep the
+      // session, let this call fail normally.
       handler.next(err);
       return;
     }
@@ -61,78 +69,13 @@ class TokenRefreshInterceptor extends Interceptor {
 
       final retriedResponse = await _dio.fetch(requestOptions);
       handler.resolve(retriedResponse);
+    } on DioException catch (retryError) {
+      // The retry itself failed — surface THAT error (not the stale 401).
+      // It already went through ErrorInterceptor on its own trip, so it is
+      // rejected straight to the caller instead of being toasted twice.
+      handler.reject(retryError);
     } catch (_) {
-      // The retry itself failed (still unauthorized, or a fresh network
-      // error) — fall through to the normal error path instead of
-      // silently swallowing it.
       handler.next(err);
     }
-  }
-
-  Future<String?> _refreshAccessToken() {
-    return _refreshFuture ??= _performRefresh().whenComplete(() {
-      _refreshFuture = null;
-    });
-  }
-
-  Future<String?> _performRefresh() async {
-    final refreshToken = TokenManager.instance.refreshToken;
-
-    if (refreshToken == null || refreshToken.isEmpty) {
-      return null;
-    }
-
-    try {
-      // A bare Dio with no interceptors — reusing `_dio` here would run
-      // this very interceptor again, and a 401 on the refresh call itself
-      // would recurse straight back into this method.
-      final refreshDio = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 20),
-          receiveTimeout: const Duration(seconds: 20),
-          headers: {'Content-Type': 'application/json', 'accept': '*/*'},
-        ),
-      );
-
-      final response = await refreshDio.post(
-        ApiEndPoints.refreshToken,
-        data: {'refreshToken': refreshToken},
-      );
-
-      final body = response.data;
-      if (body is! Map || body['status'] != true) return null;
-
-      final data = body['data'];
-      if (data is! Map) return null;
-
-      final newAccessToken = data['accessToken']?.toString();
-      final newRefreshToken = data['refreshToken']?.toString();
-
-      if (newAccessToken == null || newAccessToken.isEmpty) return null;
-
-      await TokenManager.instance.setTokens(
-        accessToken: newAccessToken,
-        refreshToken: (newRefreshToken?.isNotEmpty ?? false)
-            ? newRefreshToken!
-            : refreshToken,
-      );
-
-      return newAccessToken;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// The refresh token itself is invalid/expired — there is no way to
-  /// silently recover, so the session ends: clear everything session-
-  /// related and send the member back to sign in, same as
-  /// `ProfileController.logout()`.
-  Future<void> _forceLogout() async {
-    await TokenManager.instance.clear();
-    await AppSecureStorage.deleteMemberId();
-    await AppSecureStorage.clearLoggedInUser();
-
-    ToastUtil.error('session_expired_message'.tr);
-    Get.offAllNamed(AppRoutes.authChoice);
   }
 }

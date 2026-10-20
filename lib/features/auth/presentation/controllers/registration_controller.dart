@@ -3753,6 +3753,23 @@ class RegistrationController extends GetxController {
     if (queryState.isActive) queryState.markTouched(1, 45);
   }
 
+  /// Takes an existing signature image from the gallery instead of drawing
+  /// one. Goes through the same [ImagePickerUtil.pickImage] every other
+  /// photo/document here uses — so gallery permission, the crop step (to
+  /// trim the picture down to just the signature) and the 200 KB limit
+  /// (rejected with the usual toast if over) all apply exactly as they do
+  /// for the other documents — then lands in [setSignature], the same place
+  /// a drawn signature does, so it uploads, previews and (in query/edit
+  /// mode) marks the field as touched identically.
+  Future<void> pickSignatureFromGallery() async {
+    final image = await ImagePickerUtil.pickImage(
+      source: ImageSource.gallery,
+      crop: true,
+    );
+
+    if (image != null) setSignature(image);
+  }
+
   void clearSignature() {
     signatureFile.value = null;
   }
