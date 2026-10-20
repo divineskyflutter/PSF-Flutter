@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:psf_application/core/notifications/notification_navigator.dart';
+import 'package:psf_application/core/notifications/notification_service.dart';
 import 'package:psf_application/features/profile/presentation/controllers/profile_controller.dart';
 
 /// Owns which bottom-nav tab (Profile / Home / Card) is showing inside
@@ -27,6 +29,13 @@ class MainNavigationController extends GetxController {
   void onReady() {
     super.onReady();
     _syncMemberData();
+
+    // A notification tapped before the signed-in shell existed (app started
+    // by the tap, or the member had to log in first) opens now.
+    NotificationNavigator.instance.flushPending();
+
+    // Ask for the notification permission once the member is inside the app.
+    NotificationService.instance.requestPermissionIfNeeded();
   }
 
   void changeTab(int index) {

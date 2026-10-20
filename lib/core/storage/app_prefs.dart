@@ -124,6 +124,21 @@ class AppPrefs {
   // Yojna id (see AppPrefsKeys.yojnaId) — saved at login, never shown
   // ============================================================
 
+  static String? get fcmSentToken => _instance.getString(AppPrefsKeys.fcmSentToken);
+
+  static int? get fcmSentMemberId => _instance.getInt(AppPrefsKeys.fcmSentMemberId);
+
+  /// Remembers which FCM token was uploaded for which member; pass nulls to forget.
+  static Future<void> setFcmSent({required String? token, required int? memberId}) async {
+    if (token == null || memberId == null) {
+      await _instance.remove(AppPrefsKeys.fcmSentToken);
+      await _instance.remove(AppPrefsKeys.fcmSentMemberId);
+      return;
+    }
+    await _instance.setString(AppPrefsKeys.fcmSentToken, token);
+    await _instance.setInt(AppPrefsKeys.fcmSentMemberId, memberId);
+  }
+
   static int? get yojnaId => _instance.getInt(AppPrefsKeys.yojnaId);
 
   /// Stores [id], or clears the saved value when [id] is null.

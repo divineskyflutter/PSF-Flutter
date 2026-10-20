@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -5,6 +6,7 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/network/auth/token_manager.dart';
+import 'package:psf_application/core/notifications/fcm_token_service.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/features/auth/data/models/health_declaration_model.dart';
@@ -372,6 +374,8 @@ class ProfileController extends GetxController {
   }
 
   Future<void> _clearSession() async {
+    // Stop this phone receiving the signed-out member's notifications.
+    unawaited(FcmTokenService.instance.onLogout());
     scheme.value = null;
     references.value = null;
     await Future.wait([

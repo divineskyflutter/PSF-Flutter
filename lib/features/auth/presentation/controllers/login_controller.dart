@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:get/get.dart';
 import 'package:psf_application/core/network/auth/token_manager.dart';
+import 'package:psf_application/core/notifications/fcm_token_service.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/features/enum_bundle/data/repository/enum_bundle_repository.dart';
@@ -97,6 +98,11 @@ class LoginController extends GetxController {
           refreshToken: result.refreshToken!,
         );
       }
+
+      // Register this phone for push notifications. The API needs the access
+      // token that was just saved, and it runs inside the login loader. It
+      // never throws, so a failure here can't fail the login.
+      await FcmTokenService.instance.syncAfterLogin(result.memberId);
 
       ToastUtil.success('login_successful'.tr);
 

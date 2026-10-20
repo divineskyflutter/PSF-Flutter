@@ -46,6 +46,14 @@ class AppPrefsKeys {
   // ------------------------------------------------------------
 
   static const String yojnaId = 'yojna_id';
+
+  // ------------------------------------------------------------
+  // Push notifications: the FCM token last uploaded to the server, and the
+  // member it was uploaded for (see FcmTokenService)
+  // ------------------------------------------------------------
+
+  static const String fcmSentToken = 'fcm_sent_token';
+  static const String fcmSentMemberId = 'fcm_sent_member_id';
 }
 
 class AppSecureKeys {

@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/constants/api_end_points.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/core/notifications/fcm_token_service.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
 import 'package:psf_application/shared/utils/toast_util.dart';
@@ -46,6 +47,7 @@ class TokenRefresher {
     _endingSession = true;
 
     try {
+      await FcmTokenService.instance.onLogout();
       await TokenManager.instance.clear();
       await AppSecureStorage.deleteMemberId();
       await AppSecureStorage.clearLoggedInUser();

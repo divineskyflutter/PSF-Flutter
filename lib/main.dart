@@ -14,6 +14,7 @@ import 'package:psf_application/shared/widgets/network/ConnectivityService.dart'
 
 import 'core/localization/app_translation.dart';
 import 'core/localization/language_controller.dart';
+import 'core/notifications/notification_service.dart';
 import 'core/network/auth/token_manager.dart';
 import 'core/storage/app_prefs.dart';
 
@@ -88,7 +89,11 @@ void startApp(/*FirebaseOptions firebaseOptions*/) async {
     );
     // Initialize Core Services
     // await Get.putAsync(() => DeepLinkService().init());
-    // await Get.putAsync(() => NotificationService().init());
+
+    // Push notifications. Never throws; without a google-services.json in the
+    // build it just logs that push is off. See lib/core/notifications.
+    await NotificationService.instance.init();
+
     runApp(const MyApp());
   }, (error, stack) {
     // Was just `debugPrint('App Error: $error')` — logging only the

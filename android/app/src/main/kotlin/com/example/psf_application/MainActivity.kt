@@ -29,6 +29,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // The logo "conversation" shortcut that notifications attach to.
+        PsfShortcut.publish(applicationContext)
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName)
             .setMethodCallHandler { call, result ->
                 if (call.method == "showPhoneNumberHint") {

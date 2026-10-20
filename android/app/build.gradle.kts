@@ -7,6 +7,24 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase Cloud Messaging (push notifications). The Google Services plugin
+// turns android/app/google-services.json into the app's Firebase config, and
+// FAILS the build when the file is missing — so it is applied only when a
+// google-services.json exists. Without one the app still builds and runs; it
+// just skips push notifications (see lib/core/notifications).
+//
+// Put the file at android/app/google-services.json. One file works for both
+// flavors when the Firebase project has an Android app for each package name
+// (dev: com.example.psf_application, prod: com.divinesky.psf).
+val hasGoogleServicesJson = listOf(
+    "google-services.json",
+    "src/dev/google-services.json",
+    "src/prod/google-services.json",
+).any { file(it).exists() }
+if (hasGoogleServicesJson) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Upload-key details for signing the Play Store build. Lives in
 // android/key.properties (git-ignored, never committed) next to the keystore
 // it points at. When the file is missing, prod falls back to the debug key so

@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_assets.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
+import 'package:psf_application/core/notifications/notification_service.dart';
 import 'package:psf_application/core/storage/app_prefs.dart';
 import 'package:psf_application/features/auth/presentation/controllers/login_controller.dart';
 import 'package:psf_application/features/auth/presentation/controllers/registration_controller.dart';
@@ -57,6 +58,15 @@ class _LoginScreenState extends State<LoginScreen> {
     _mobileFocusNode = FocusNode()..addListener(_onMobileFocusChange);
     _passwordFocusNode = FocusNode();
     _passwordController.addListener(_handlePasswordKeyboardSwitch);
+
+    // Android 13+ keeps notifications off until the app asks. The backend sends
+    // its welcome push the moment login uploads the device token, so the
+    // permission must be asked BEFORE login — not later at Home, when that
+    // first push would already have been dropped. (No-op on older Android,
+    // and once the member has answered.)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationService.instance.requestPermissionIfNeeded();
+    });
   }
 
   /// Fires once, the first time the member taps into the (still empty)

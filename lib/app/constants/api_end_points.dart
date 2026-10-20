@@ -152,6 +152,11 @@ class ApiEndPoints {
       '$baseUrl/api/Api/GeneratePdf';
 
   // Full member profile (for the My Profile / Membership Card screens).
+  /// Saves this phone's FCM device token for the member
+  /// (`{memberId, deviceToken}`, needs the Bearer access token).
+  static String get updateDeviceToken =>
+      '$baseUrl/api/Member/UpdateDevicetoken';
+
   static String get getMemberById =>
       '$baseUrl/api/Api/GetMemberById';
 
