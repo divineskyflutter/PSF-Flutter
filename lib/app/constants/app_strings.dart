@@ -234,6 +234,8 @@ class AppStrings {
   static const String authLinkAction = 'auth_link_action';
   static const String referencesIncompleteTitle = 'references_incomplete_title';
   static const String mobileShortLabel = 'mobile_short_label';
+  static const String notificationsTitle = 'notifications_title';
+  static const String notificationsEmpty = 'notifications_empty';
   static const String deleteAccount = 'delete_account';
 
   // ------------------------------------------------------------

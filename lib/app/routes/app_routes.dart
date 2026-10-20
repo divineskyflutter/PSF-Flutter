@@ -18,6 +18,9 @@ abstract class AppRoutes {
   /// already navigates to on login/registration success.
   static const home = '/home';
 
+  /// The member's notifications (the bell on Home).
+  static const notifications = '/notifications';
+
   // ------------------------------------------------------------
   // Profile
   // ------------------------------------------------------------

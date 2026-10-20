@@ -310,6 +310,8 @@ const Map<String, String> guIN = {
   'auth_link_action': 'અહીં ક્લિક કરો',
   'references_incomplete_title': 'રેફરન્સ અધૂરા છે',
   'mobile_short_label': 'મોબાઇલ',
+  'notifications_title': 'સૂચનાઓ',
+  'notifications_empty': 'હજુ કોઈ સૂચના નથી',
   'delete_account': 'એકાઉન્ટ ડિલીટ કરો',
 
   // ------------------------------------------------------------

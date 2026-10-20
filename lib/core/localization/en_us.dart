@@ -287,6 +287,8 @@ const Map<String, String> enUS = {
   'auth_link_action': 'Click here',
   'references_incomplete_title': 'References incomplete',
   'mobile_short_label': 'Mobile',
+  'notifications_title': 'Notifications',
+  'notifications_empty': 'No notifications yet',
   'delete_account': 'Delete Account',
 
   // ------------------------------------------------------------

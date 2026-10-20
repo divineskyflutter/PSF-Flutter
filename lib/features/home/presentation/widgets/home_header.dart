@@ -204,7 +204,7 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 17 * unit,
+                            fontSize: 16 * unit,
                             fontWeight: FontWeight.w700,
                             height: 1.2,
                           ),
@@ -212,7 +212,16 @@ class _HomeHeaderDelegate extends SliverPersistentHeaderDelegate {
                       ],
                     ),
                   ),
-                  SizedBox(width: 10 * unit),
+                  SizedBox(width: 8 * unit),
+                  // Notification bell, just left of the logo.
+                  if (onNotificationTap != null) ...[
+                    AppHeaderIconButton(
+                      icon: Icons.notifications_outlined,
+                      badgeCount: notificationCount,
+                      onTap: onNotificationTap!,
+                    ),
+                    SizedBox(width: 8 * unit),
+                  ],
                   // Logo — a white badge at the far right.
                   Container(
                     width: 40 * unit,

@@ -14,6 +14,8 @@ import 'package:psf_application/features/loans/presentation/pages/installment_de
 import 'package:psf_application/features/loans/presentation/pages/loans_screen.dart';
 import 'package:psf_application/features/navigation/bindings/main_navigation_binding.dart';
 import 'package:psf_application/features/navigation/presentation/pages/main_navigation_screen.dart';
+import 'package:psf_application/features/notifications/presentation/controllers/notifications_controller.dart';
+import 'package:psf_application/features/notifications/presentation/pages/notifications_screen.dart';
 import 'package:psf_application/features/onboarding/presentation/pages/onboarding_screen.dart';
 import 'package:psf_application/features/profile/presentation/pages/about_us_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/contact_us_page.dart';
@@ -107,6 +109,13 @@ class AppPages {
     GetPage(name: AppRoutes.privacyPolicy, page: () => const PrivacyPolicyPage()),
     GetPage(name: AppRoutes.contactUs, page: () => const ContactUsPage()),
     GetPage(name: AppRoutes.deleteAccount, page: () => const DeleteAccountPage()),
+
+    // Notifications — opened from the bell on Home (or a push notification).
+    GetPage(
+      name: AppRoutes.notifications,
+      page: () => const NotificationsScreen(),
+      binding: BindingsBuilder(() => Get.lazyPut(() => NotificationsController())),
+    ),
 
     // ------------------------------------------------------------
     // Loans — sub-page pushed from the Loans tab.

@@ -311,6 +311,8 @@ const Map<String, String> hiIN = {
   'auth_link_action': 'यहाँ क्लिक करें',
   'references_incomplete_title': 'संदर्भ अधूरे हैं',
   'mobile_short_label': 'मोबाइल',
+  'notifications_title': 'सूचनाएं',
+  'notifications_empty': 'अभी कोई सूचना नहीं',
   'delete_account': 'खाता हटाएं',
 
   // ------------------------------------------------------------

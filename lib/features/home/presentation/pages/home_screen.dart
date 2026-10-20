@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
+import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/widgets/refresh/app_refresh_indicator.dart';
@@ -84,6 +85,7 @@ class HomeScreen extends StatelessWidget {
                 ],
                 notificationCount: dashboard?.unreadNotificationCount ?? 0,
                 onMenuTap: Get.find<MainNavigationController>().openDrawer,
+                onNotificationTap: () => Get.toNamed(AppRoutes.notifications),
               ),
               // Its own sliver, outside the padded content below — so it
               // can use its own horizontalPadding (matching
