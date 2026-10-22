@@ -70,8 +70,8 @@ class NotificationDisplay {
   static Future<void> show(RemoteMessage message) async {
     await initialize();
 
-    final title = _first(message.notification?.title, message.data[NotificationConstants.titleKey]) ?? 'PSF';
-    final body = _first(message.notification?.body, message.data[NotificationConstants.bodyKey]) ?? '';
+    final title = _first(message.notification?.title, NotificationConstants.titleFrom(message.data)) ?? 'PSF';
+    final body = _first(message.notification?.body, NotificationConstants.bodyFrom(message.data)) ?? '';
 
     final id = (message.messageId ?? '$title|$body|${message.data}').hashCode & 0x7fffffff;
     if (_recent.contains(id)) return; // already drawn
@@ -109,15 +109,9 @@ class NotificationDisplay {
   }
 
   static NotificationDetails _details(String title, String body) {
-    // Messaging style: the logo is the "sender" picture, which Android draws
-    // large and in full colour at the LEFT of the notification, with the white
-    // small icon as a badge. The title is shown as the sender's name.
-    final sender = Person(
-      name: title,
-      key: NotificationConstants.shortcutId,
-      icon: const DrawableResourceAndroidIcon(NotificationConstants.logoAvatar),
-    );
-
+    // Plain big-text style, no large icon: it looks the same as a notification
+    // Android draws itself (the messaging style we used before showed only the
+    // small app icon on Samsung One UI).
     return NotificationDetails(
       android: AndroidNotificationDetails(
         NotificationConstants.channelId,
@@ -125,17 +119,11 @@ class NotificationDisplay {
         channelDescription: NotificationConstants.channelDescription,
         importance: Importance.max,
         priority: Priority.high,
-        category: AndroidNotificationCategory.message,
-        shortcutId: NotificationConstants.shortcutId,
         playSound: true,
         sound: const RawResourceAndroidNotificationSound(NotificationConstants.soundResource),
         icon: NotificationConstants.smallIcon,
         color: const Color(0xFF258077),
-        styleInformation: MessagingStyleInformation(
-          sender,
-          groupConversation: false,
-          messages: [Message(body, DateTime.now(), sender)],
-        ),
+        styleInformation: BigTextStyleInformation(body, contentTitle: title),
       ),
     );
   }

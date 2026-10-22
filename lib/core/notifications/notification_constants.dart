@@ -42,4 +42,25 @@ class NotificationConstants {
   static const routeKeyAlias = 'screen';
   static const titleKey = 'title';
   static const bodyKey = 'body';
+
+  /// Every key name the backend may use for each value. Matching ignores case,
+  /// so `Title`, `TITLE` and `title` are the same key.
+  static const _routeNames = [routeKey, routeKeyAlias, 'screenname'];
+  static const _titleNames = [titleKey];
+  static const _bodyNames = [bodyKey, 'message'];
+
+  static String? routeFrom(Map<String, dynamic> data) => _read(data, _routeNames);
+  static String? titleFrom(Map<String, dynamic> data) => _read(data, _titleNames);
+  static String? bodyFrom(Map<String, dynamic> data) => _read(data, _bodyNames);
+
+  static String? _read(Map<String, dynamic> data, List<String> names) {
+    for (final name in names) {
+      for (final entry in data.entries) {
+        if (entry.key.toLowerCase() != name) continue;
+        final text = entry.value?.toString();
+        if (text != null && text.trim().isNotEmpty) return text;
+      }
+    }
+    return null;
+  }
 }

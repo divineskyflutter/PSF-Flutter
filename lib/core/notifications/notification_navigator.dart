@@ -37,9 +37,7 @@ class NotificationNavigator {
 
   /// A notification was tapped. [data] is its `data` map.
   void handleTap(Map<String, dynamic> data, {String? messageId}) {
-    final route = (data[NotificationConstants.routeKey] ??
-            data[NotificationConstants.routeKeyAlias])
-        ?.toString();
+    final route = NotificationConstants.routeFrom(data);
 
     final key = messageId ?? '${route ?? ''}|${DateTime.now().millisecondsSinceEpoch ~/ 2000}';
     if (_handled.contains(key)) return;
