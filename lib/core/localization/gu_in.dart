@@ -312,6 +312,18 @@ const Map<String, String> guIN = {
   'mobile_short_label': 'મોબાઇલ',
   'notifications_title': 'સૂચનાઓ',
   'notifications_empty': 'હજુ કોઈ સૂચના નથી',
+  'deposit_account_tab': 'ડિપોઝિટ ખાતું',
+  'profile_form_details_title': 'ફોર્મ વિગતો',
+  'profile_form_details_hint': 'તમે ભરેલી વિગતો જોવા માટે ટેપ કરો',
+  'profile_payment_progress': 'ચુકવણી પ્રગતિ',
+  'profile_percent_paid': '@percent% પૂર્ણ',
+  'profile_payment_history': 'ચુકવણીનો હિસાબ',
+  'profile_no_payments': 'હજુ કોઈ ચુકવણી નથી',
+  'col_no': 'ક્રમ',
+  'col_date': 'તારીખ',
+  'col_amount': 'રકમ',
+  'col_type': 'પ્રકાર',
+  'col_status': 'સ્થિતિ',
   'delete_account': 'એકાઉન્ટ ડિલીટ કરો',
 
   // ------------------------------------------------------------

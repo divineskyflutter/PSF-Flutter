@@ -69,20 +69,21 @@ class HomeScreen extends StatelessWidget {
               HomeHeader(
                 greeting: AppStrings.welcome.tr,
                 memberName: memberName,
-                // Fee / niti / loan amounts have no API yet, so they read "-"
-                // until the backend sends them.
                 infoLines: [
                   HeaderInfoLine(AppStrings.memberNoLabel.tr, orDash(member?.memberNo)),
                   HeaderInfoLine(AppStrings.mobileShortLabel.tr, orDash(member?.mobile)),
                 ],
                 // Left column (fee / niti) then right column (loans), each
-                // stacked top to bottom — see HomeHeader.
+                // stacked top to bottom — see HomeHeader. Fee / niti / loan
+                // amounts have no API yet, so these four are hidden (the
+                // header shrinks to fit) until the backend sends a value:
+                // put the real amount in as a line's value and it appears.
                 statLines: [
                   HeaderInfoLine(AppStrings.sabhasadFeeLabel.tr, '-'),
                   HeaderInfoLine(AppStrings.sangyogNitiLabel.tr, '-'),
                   HeaderInfoLine(AppStrings.loanTakenLabel.tr, '-'),
                   HeaderInfoLine(AppStrings.loanPendingLabel.tr, '-'),
-                ],
+                ].where((line) => line.value.trim().isNotEmpty && line.value.trim() != '-').toList(),
                 notificationCount: dashboard?.unreadNotificationCount ?? 0,
                 onMenuTap: Get.find<MainNavigationController>().openDrawer,
                 onNotificationTap: () => Get.toNamed(AppRoutes.notifications),

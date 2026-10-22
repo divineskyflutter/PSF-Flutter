@@ -236,6 +236,18 @@ class AppStrings {
   static const String mobileShortLabel = 'mobile_short_label';
   static const String notificationsTitle = 'notifications_title';
   static const String notificationsEmpty = 'notifications_empty';
+  static const String depositAccountTab = 'deposit_account_tab';
+  static const String profileFormDetailsTitle = 'profile_form_details_title';
+  static const String profileFormDetailsHint = 'profile_form_details_hint';
+  static const String profilePaymentProgress = 'profile_payment_progress';
+  static const String profilePercentPaid = 'profile_percent_paid';
+  static const String profilePaymentHistory = 'profile_payment_history';
+  static const String profileNoPayments = 'profile_no_payments';
+  static const String colNo = 'col_no';
+  static const String colDate = 'col_date';
+  static const String colAmount = 'col_amount';
+  static const String colType = 'col_type';
+  static const String colStatus = 'col_status';
   static const String deleteAccount = 'delete_account';
 
   // ------------------------------------------------------------

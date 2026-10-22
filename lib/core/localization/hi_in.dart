@@ -313,6 +313,18 @@ const Map<String, String> hiIN = {
   'mobile_short_label': 'मोबाइल',
   'notifications_title': 'सूचनाएं',
   'notifications_empty': 'अभी कोई सूचना नहीं',
+  'deposit_account_tab': 'जमा खाता',
+  'profile_form_details_title': 'फॉर्म विवरण',
+  'profile_form_details_hint': 'आपके भरे हुए विवरण देखने के लिए टैप करें',
+  'profile_payment_progress': 'भुगतान प्रगति',
+  'profile_percent_paid': '@percent% पूर्ण',
+  'profile_payment_history': 'भुगतान का हिसाब',
+  'profile_no_payments': 'अभी कोई भुगतान नहीं',
+  'col_no': 'क्र.',
+  'col_date': 'तारीख',
+  'col_amount': 'राशि',
+  'col_type': 'प्रकार',
+  'col_status': 'स्थिति',
   'delete_account': 'खाता हटाएं',
 
   // ------------------------------------------------------------

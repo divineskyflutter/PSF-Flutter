@@ -289,6 +289,18 @@ const Map<String, String> enUS = {
   'mobile_short_label': 'Mobile',
   'notifications_title': 'Notifications',
   'notifications_empty': 'No notifications yet',
+  'deposit_account_tab': 'Deposit Account',
+  'profile_form_details_title': 'Form details',
+  'profile_form_details_hint': 'Tap to view the details you submitted',
+  'profile_payment_progress': 'Payment progress',
+  'profile_percent_paid': '@percent% paid',
+  'profile_payment_history': 'Payment history',
+  'profile_no_payments': 'No payments yet',
+  'col_no': 'No.',
+  'col_date': 'Date',
+  'col_amount': 'Amount',
+  'col_type': 'Type',
+  'col_status': 'Status',
   'delete_account': 'Delete Account',
 
   // ------------------------------------------------------------

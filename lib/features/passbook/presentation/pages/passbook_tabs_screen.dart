@@ -10,10 +10,10 @@ import 'package:psf_application/shared/extensions/new_responsive_extensions.dart
 import 'package:psf_application/shared/widgets/common/app_sub_page_header.dart';
 import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 
-/// The Passbook tab of the bottom bar: three account tabs — Sabhasad
-/// Account, Sangyog Niti Account and Loan Account. No passbook API feeds
-/// these yet, so each tab shows its empty state; when an API arrives, only
-/// [_AccountTab] needs to render its entries.
+/// The Passbook tab of the bottom bar: two account tabs — Deposit Account and
+/// Loan Account — switched by tapping a tab OR swiping the page sideways. No
+/// passbook API feeds these yet, so each tab shows its empty state; when an
+/// API arrives, only [_AccountTab] needs to render its entries.
 class PassbookTabsScreen extends StatefulWidget {
   const PassbookTabsScreen({super.key});
 
@@ -22,13 +22,18 @@ class PassbookTabsScreen extends StatefulWidget {
 }
 
 class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
-  int _selected = 0;
+  final PageController _pages = PageController();
+
+  @override
+  void dispose() {
+    _pages.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final labels = [
-      AppStrings.sabhasadAccountTab.tr,
-      AppStrings.sangyogNitiAccountTab.tr,
+      AppStrings.depositAccountTab.tr,
       AppStrings.loanAccountTab.tr,
     ];
 
@@ -54,14 +59,24 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
             children: [
               _AccountTabSelector(
                 labels: labels,
-                selectedIndex: _selected,
-                onChanged: (i) => setState(() => _selected = i),
+                pages: _pages,
+                onTap: (i) => _pages.animateToPage(
+                  i,
+                  duration: const Duration(milliseconds: 280),
+                  curve: Curves.easeOutCubic,
+                ),
               ),
               SizedBox(height: 18.px(context)),
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(bottom: AppBottomNavBar.occupiedHeight(context)),
-                  child: _AccountTab(key: ValueKey(_selected), index: _selected),
+                  // Swipe sideways to change tab; the selector above follows.
+                  child: PageView(
+                    controller: _pages,
+                    children: [
+                      for (var i = 0; i < labels.length; i++) _AccountTab(index: i),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -74,7 +89,7 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
 
 /// Body of one account tab. Empty for now (see the screen's doc comment).
 class _AccountTab extends StatelessWidget {
-  const _AccountTab({super.key, required this.index});
+  const _AccountTab({required this.index});
 
   final int index;
 
@@ -85,20 +100,35 @@ class _AccountTab extends StatelessWidget {
 }
 
 /// Segmented control with a sliding gradient pill — same look as the Profile
-/// tab selector, but text-only.
+/// tab selector, but text-only. The pill is driven by [pages]' scroll
+/// position, so it slides along with the finger while the page is swiped.
 class _AccountTabSelector extends StatelessWidget {
   const _AccountTabSelector({
     required this.labels,
-    required this.selectedIndex,
-    required this.onChanged,
+    required this.pages,
+    required this.onTap,
   });
 
   final List<String> labels;
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
+  final PageController pages;
+  final ValueChanged<int> onTap;
 
   @override
   Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: pages,
+      builder: (context, _) {
+        final position = pages.hasClients && pages.position.haveDimensions
+            ? (pages.page ?? 0).clamp(0.0, labels.length - 1.0)
+            : 0.0;
+        return _buildSelector(context, position);
+      },
+    );
+  }
+
+  Widget _buildSelector(BuildContext context, double position) {
+    final selectedIndex = position.round();
+
     return Container(
       padding: EdgeInsets.all(4.px(context)),
       decoration: profileCardDecoration(context).copyWith(
@@ -107,10 +137,8 @@ class _AccountTabSelector extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: AnimatedAlign(
-              duration: const Duration(milliseconds: 280),
-              curve: Curves.easeOutBack,
-              alignment: Alignment(-1 + selectedIndex * (2 / (labels.length - 1)), 0),
+            child: Align(
+              alignment: Alignment(-1 + position * (2 / (labels.length - 1)), 0),
               child: FractionallySizedBox(
                 widthFactor: 1 / labels.length,
                 heightFactor: 1,
@@ -136,7 +164,7 @@ class _AccountTabSelector extends StatelessWidget {
                 Expanded(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: () => onChanged(i),
+                    onTap: () => onTap(i),
                     child: Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: 4.px(context),
