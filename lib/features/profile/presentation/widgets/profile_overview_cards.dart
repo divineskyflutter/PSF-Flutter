@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
+import 'package:psf_application/core/localization/language_controller.dart';
 import 'package:psf_application/features/profile/domain/entities/passbook_entry_entity.dart';
+import 'package:psf_application/shared/utils/localized_field.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/utils/app_date_format.dart';
 import 'package:psf_application/shared/widgets/windows/common_image_preview.dart';
@@ -575,105 +577,319 @@ class _TableRow extends StatelessWidget {
 // FORM DETAILS — tap an option to open it
 // ===========================================================================
 
-/// The "Form details" options. Each one opens [ProfileFormDetailsPage] on the
-/// matching tab (Personal / Nominee / Health Declaration), where the member
-/// can also swipe between them.
+/// One "Form details" tile. It opens [ProfileFormDetailsPage], where the
+/// submitted form is split into Personal / Nominee / Health Declaration tabs
+/// that can be tapped or swiped.
 class ProfileFormDetailsOptions extends StatelessWidget {
   const ProfileFormDetailsOptions({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final items = [
-      (Icons.badge_rounded, AppStrings.personalTab.tr),
-      (Icons.family_restroom_rounded, AppStrings.nomineeTab.tr),
-      (Icons.health_and_safety_rounded, AppStrings.healthDeclarationTab.tr),
-    ];
+    final radius = BorderRadius.circular(18.px(context));
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(16.px(context)),
       decoration: profileCardDecoration(context),
-      child: Column(
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: radius,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: () => Get.to(() => const ProfileFormDetailsPage()),
+          child: Padding(
+            padding: EdgeInsets.all(16.px(context)),
+            child: Row(
+              children: [
+                Container(
+                  width: 42.px(context),
+                  height: 42.px(context),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.buttonGradient,
+                    borderRadius: BorderRadius.circular(13.px(context)),
+                  ),
+                  child: Icon(Icons.assignment_rounded,
+                      color: Colors.white, size: 22.px(context)),
+                ),
+                SizedBox(width: 14.px(context)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.profileFormDetailsTitle.tr,
+                        style: TextStyle(
+                          fontSize: 15.px(context),
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                      SizedBox(height: 2.px(context)),
+                      Text(
+                        AppStrings.profileFormDetailsHint.tr,
+                        style: TextStyle(
+                          fontSize: 12.5.px(context),
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded,
+                    color: AppColors.primaryDark, size: 26.px(context)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// FEE INFO — a short green note under the fee / payments
+// ===========================================================================
+
+class ProfileFeeInfoBar extends StatelessWidget {
+  const ProfileFeeInfoBar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(14.px(context)),
+      decoration: BoxDecoration(
+        color: AppColors.success.withOpacity(.10),
+        borderRadius: BorderRadius.circular(16.px(context)),
+        border: Border.all(color: AppColors.success.withOpacity(.25)),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardTitle(
-            icon: Icons.assignment_rounded,
-            title: AppStrings.profileFormDetailsTitle.tr,
-          ),
-          SizedBox(height: 4.px(context)),
-          Text(
-            AppStrings.profileFormDetailsHint.tr,
-            style: TextStyle(
-              fontSize: 12.5.px(context),
-              color: AppColors.textSecondary,
+          Icon(Icons.info_rounded, color: AppColors.success, size: 20.px(context)),
+          SizedBox(width: 10.px(context)),
+          Expanded(
+            child: Text(
+              AppStrings.profileFeeInfo.tr,
+              style: TextStyle(
+                fontSize: 12.5.px(context),
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
-          SizedBox(height: 12.px(context)),
-          for (var i = 0; i < items.length; i++) ...[
-            if (i > 0) SizedBox(height: 10.px(context)),
-            _OptionTile(
-              icon: items[i].$1,
-              label: items[i].$2,
-              onTap: () => Get.to(() => ProfileFormDetailsPage(initialTab: i)),
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-class _OptionTile extends StatelessWidget {
-  const _OptionTile({required this.icon, required this.label, required this.onTap});
+// ===========================================================================
+// SUPPORTING ACCOUNT — the references, "Required" / "Not required"
+// ===========================================================================
 
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
+/// The Supporting Account (references) status, read from the login response
+/// (`isReferenceNeeded`, `referenceCount`, `refrencemembers`):
+///  * not needed (or nothing in the response) → "Not required";
+///  * needed → "Required", how many are added of how many, and each added
+///    person (name, mobile, member no.) — or a "-" row while none are added.
+class ProfileSupportingAccountCard extends StatelessWidget {
+  const ProfileSupportingAccountCard({super.key, required this.controller});
+
+  final ProfileController controller;
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(16.px(context));
+    return Obx(() {
+      final info = controller.references.value;
+      final required = info?.isReferenceNeeded == true;
+      final language = Get.find<LanguageController>().currentAppLanguage;
+      final color = required ? AppColors.warning : AppColors.success;
 
-    return Material(
-      color: AppColors.primary.withOpacity(.07),
-      borderRadius: radius,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12.px(context), vertical: 12.px(context)),
-          child: Row(
-            children: [
-              Container(
-                width: 38.px(context),
-                height: 38.px(context),
-                decoration: BoxDecoration(
-                  gradient: AppColors.buttonGradient,
-                  borderRadius: BorderRadius.circular(12.px(context)),
-                ),
-                child: Icon(icon, color: Colors.white, size: 20.px(context)),
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.all(16.px(context)),
+        decoration: profileCardDecoration(context),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _CardTitle(
+              icon: Icons.groups_rounded,
+              title: AppStrings.supportingAccountTitle.tr,
+              trailing: _StatusPill(
+                text: required
+                    ? AppStrings.supportingRequired.tr
+                    : AppStrings.supportingNotRequired.tr,
+                color: color,
               ),
-              SizedBox(width: 12.px(context)),
+            ),
+            if (required) ...[
+              SizedBox(height: 12.px(context)),
+              Text(
+                info!.referenceCount != null
+                    ? AppStrings.supportingAddedCount.trParams({
+                        'added': '${info.members.length}',
+                        'required': '${info.referenceCount}',
+                      })
+                    : '${info.members.length}',
+                style: TextStyle(
+                  fontSize: 13.px(context),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SizedBox(height: 8.px(context)),
+              if (info.members.isEmpty)
+                Text(
+                  '-  ${AppStrings.referencesNoneYet.tr}',
+                  style: TextStyle(
+                    fontSize: 12.5.px(context),
+                    color: AppColors.textSecondary,
+                  ),
+                )
+              else
+                for (final m in info.members)
+                  _PersonLine(
+                    name: localizedField(
+                      language,
+                      plain: m.name,
+                      hindi: m.hindiName,
+                      gujarati: m.gujaratiName,
+                    ),
+                    mobile: m.mobile,
+                    memberNo: m.memberNo,
+                  ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _PersonLine extends StatelessWidget {
+  const _PersonLine({required this.name, this.mobile, this.memberNo});
+
+  final String name;
+  final String? mobile;
+  final String? memberNo;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = [
+      if (mobile != null && mobile!.isNotEmpty) mobile!,
+      if (memberNo != null && memberNo!.isNotEmpty)
+        '${AppStrings.memberNoLabel.tr}: $memberNo',
+    ].join('  ·  ');
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(top: 6.px(context)),
+      padding: EdgeInsets.symmetric(horizontal: 12.px(context), vertical: 10.px(context)),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(.06),
+        borderRadius: BorderRadius.circular(12.px(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            _orDash(name),
+            style: TextStyle(
+              fontSize: 13.5.px(context),
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          if (details.isNotEmpty)
+            Text(
+              details,
+              style: TextStyle(
+                fontSize: 12.px(context),
+                color: AppColors.textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// IMPORTANT NOTES — at the end of the page
+// ===========================================================================
+
+class ProfileImportantNotes extends StatelessWidget {
+  const ProfileImportantNotes({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final notes = [
+      AppStrings.profileNote1.tr,
+      AppStrings.profileNote2.tr,
+      AppStrings.profileNote3.tr,
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.px(context)),
+      decoration: BoxDecoration(
+        color: AppColors.accentGold.withOpacity(.22),
+        borderRadius: BorderRadius.circular(18.px(context)),
+        border: Border.all(color: AppColors.accentGold.withOpacity(.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.campaign_rounded,
+                  color: AppColors.warning, size: 24.px(context)),
+              SizedBox(width: 8.px(context)),
               Expanded(
                 child: Text(
-                  label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  AppStrings.profileImportantTitle.tr,
                   style: TextStyle(
-                    fontSize: 14.px(context),
-                    fontWeight: FontWeight.w700,
+                    fontSize: 15.px(context),
+                    fontWeight: FontWeight.w800,
                     color: AppColors.textPrimary,
                   ),
                 ),
               ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: AppColors.primaryDark,
-                size: 24.px(context),
-              ),
             ],
           ),
-        ),
+          SizedBox(height: 10.px(context)),
+          for (final note in notes)
+            Padding(
+              padding: EdgeInsets.only(bottom: 6.px(context)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(top: 6.px(context), right: 8.px(context)),
+                    child: Container(
+                      width: 6.px(context),
+                      height: 6.px(context),
+                      decoration: const BoxDecoration(
+                        color: AppColors.textPrimary,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      note,
+                      style: TextStyle(
+                        fontSize: 12.5.px(context),
+                        height: 1.35,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

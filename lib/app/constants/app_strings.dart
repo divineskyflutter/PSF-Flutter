@@ -248,6 +248,15 @@ class AppStrings {
   static const String colAmount = 'col_amount';
   static const String colType = 'col_type';
   static const String colStatus = 'col_status';
+  static const String supportingAccountTitle = 'supporting_account_title';
+  static const String supportingRequired = 'supporting_required';
+  static const String supportingNotRequired = 'supporting_not_required';
+  static const String supportingAddedCount = 'supporting_added_count';
+  static const String profileFeeInfo = 'profile_fee_info';
+  static const String profileImportantTitle = 'profile_important_title';
+  static const String profileNote1 = 'profile_note_1';
+  static const String profileNote2 = 'profile_note_2';
+  static const String profileNote3 = 'profile_note_3';
   static const String deleteAccount = 'delete_account';
 
   // ------------------------------------------------------------

@@ -325,6 +325,15 @@ const Map<String, String> hiIN = {
   'col_amount': 'राशि',
   'col_type': 'प्रकार',
   'col_status': 'स्थिति',
+  'supporting_account_title': 'सपोर्टिंग अकाउंट',
+  'supporting_required': 'आवश्यक',
+  'supporting_not_required': 'आवश्यक नहीं',
+  'supporting_added_count': '@required में से @added जोड़े गए',
+  'profile_fee_info': 'आप फीस एक साथ या किस्तों में भर सकते हैं। इसे 365 दिनों के भीतर पूरा करना ज़रूरी है।',
+  'profile_important_title': 'महत्वपूर्ण सूचना',
+  'profile_note_1': 'आपकी तय सदस्यता फीस 365 दिनों के भीतर पूरी करनी होगी।',
+  'profile_note_2': 'आप एक साथ या अपनी सुविधा अनुसार साप्ताहिक रूप से फीस भर सकते हैं।',
+  'profile_note_3': '50 वर्ष से अधिक आयु के सदस्यों को आवश्यक सपोर्टिंग अकाउंट की जानकारी समय पर देनी होगी।',
   'delete_account': 'खाता हटाएं',
 
   // ------------------------------------------------------------

@@ -324,6 +324,15 @@ const Map<String, String> guIN = {
   'col_amount': 'રકમ',
   'col_type': 'પ્રકાર',
   'col_status': 'સ્થિતિ',
+  'supporting_account_title': 'સપોર્ટિંગ એકાઉન્ટ',
+  'supporting_required': 'જરૂરી',
+  'supporting_not_required': 'જરૂરી નથી',
+  'supporting_added_count': '@required માંથી @added ઉમેરાયા',
+  'profile_fee_info': 'તમે એકસાથે અથવા હપ્તામાં ફી પૂર્ણ કરી શકો છો. 365 દિવસની અંદર પૂર્ણ કરવી જરૂરી છે.',
+  'profile_important_title': 'મહત્વપૂર્ણ સૂચના',
+  'profile_note_1': 'તમારી નક્કી થયેલી સભાસદ ફી 365 દિવસની અંદર પૂર્ણ કરવાની રહેશે.',
+  'profile_note_2': 'તમે એકસાથે અથવા તમારી અનુકૂળતા મુજબ હપ્તામાં ફી ભરી શકો છો.',
+  'profile_note_3': '50 વર્ષથી ઉપરની ઉંમર ધરાવતા સભાસદોએ જરૂરી Supporting Account ની વિગતો સમયસર રજૂ કરવી જરૂરી છે.',
   'delete_account': 'એકાઉન્ટ ડિલીટ કરો',
 
   // ------------------------------------------------------------

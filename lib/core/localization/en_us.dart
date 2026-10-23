@@ -301,6 +301,15 @@ const Map<String, String> enUS = {
   'col_amount': 'Amount',
   'col_type': 'Type',
   'col_status': 'Status',
+  'supporting_account_title': 'Supporting Account',
+  'supporting_required': 'Required',
+  'supporting_not_required': 'Not required',
+  'supporting_added_count': '@added of @required added',
+  'profile_fee_info': 'You can pay the fee in one go or in installments. It must be completed within 365 days.',
+  'profile_important_title': 'Important notes',
+  'profile_note_1': 'Your fixed membership fee must be completed within 365 days.',
+  'profile_note_2': 'You can pay in one go, or weekly as it suits you.',
+  'profile_note_3': 'Members above 50 years of age must submit the required Supporting Account details on time.',
   'delete_account': 'Delete Account',
 
   // ------------------------------------------------------------
