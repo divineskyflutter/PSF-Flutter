@@ -21,6 +21,10 @@ abstract class AppRoutes {
   /// The member's notifications (the bell on Home).
   static const notifications = '/notifications';
 
+  /// A ledger as a paper book (fee entries today; loan / deposit later). Open
+  /// with `arguments: PassbookEntriesArgs(...)`.
+  static const passbookEntries = '/passbook-entries';
+
   // ------------------------------------------------------------
   // Profile
   // ------------------------------------------------------------

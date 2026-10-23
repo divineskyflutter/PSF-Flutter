@@ -8,7 +8,8 @@ import 'package:psf_application/features/navigation/presentation/widgets/app_bot
 import 'package:psf_application/features/profile/presentation/widgets/profile_card_style.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/widgets/common/app_sub_page_header.dart';
-import 'package:psf_application/shared/widgets/states/app_state_view.dart';
+import 'package:psf_application/shared/widgets/passbook_book/passbook_book_view.dart';
+import 'package:psf_application/shared/widgets/passbook_book/passbook_record.dart';
 
 /// The Passbook tab of the bottom bar: two account tabs — Deposit Account and
 /// Loan Account — switched by tapping a tab OR swiping the page sideways. No
@@ -23,12 +24,19 @@ class PassbookTabsScreen extends StatefulWidget {
 
 class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
   final PageController _pages = PageController();
+  int _selected = 0;
 
   @override
   void dispose() {
     _pages.dispose();
     super.dispose();
   }
+
+  void _goTo(int i) => _pages.animateToPage(
+        i,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -57,24 +65,32 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
           ),
           child: Column(
             children: [
-              _AccountTabSelector(
-                labels: labels,
-                pages: _pages,
-                onTap: (i) => _pages.animateToPage(
-                  i,
-                  duration: const Duration(milliseconds: 280),
-                  curve: Curves.easeOutCubic,
+              // The book below takes sideways swipes (they turn its pages), so
+              // the tabs change by tapping them or by swiping on this bar.
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragEnd: (d) {
+                  final v = d.primaryVelocity ?? 0;
+                  if (v.abs() < 200) return;
+                  _goTo((_selected + (v < 0 ? 1 : -1)).clamp(0, labels.length - 1));
+                },
+                child: _AccountTabSelector(
+                  labels: labels,
+                  pages: _pages,
+                  onTap: _goTo,
                 ),
               ),
-              SizedBox(height: 18.px(context)),
+              SizedBox(height: 12.px(context)),
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.only(bottom: AppBottomNavBar.occupiedHeight(context)),
                   // Swipe sideways to change tab; the selector above follows.
                   child: PageView(
                     controller: _pages,
+                    onPageChanged: (i) => setState(() => _selected = i),
                     children: [
-                      for (var i = 0; i < labels.length; i++) _AccountTab(index: i),
+                      for (var i = 0; i < labels.length; i++)
+                        _AccountTab(index: i, active: i == _selected),
                     ],
                   ),
                 ),
@@ -87,15 +103,23 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
   }
 }
 
-/// Body of one account tab. Empty for now (see the screen's doc comment).
+/// Body of one account tab: its ledger as a paper book. No passbook API feeds
+/// these yet, so each is one blank ruled page with just the headings; when an
+/// API arrives, swap the empty [ListPassbookPageSource] for a real
+/// [PassbookPageSource] (it pages as the member turns pages). The book is only
+/// built while its tab is selected, so every visit starts with whole pages.
 class _AccountTab extends StatelessWidget {
-  const _AccountTab({required this.index});
+  const _AccountTab({required this.index, required this.active});
 
   final int index;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
-    return AppStateView.empty(message: AppStrings.passbookTabEmpty.tr);
+    return PassbookBookView(
+      source: const ListPassbookPageSource([]),
+      active: active,
+    );
   }
 }
 

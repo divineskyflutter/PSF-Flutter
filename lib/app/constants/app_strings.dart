@@ -258,6 +258,22 @@ class AppStrings {
   static const String profileNote2 = 'profile_note_2';
   static const String profileNote3 = 'profile_note_3';
   static const String profileApplicableFee = 'profile_applicable_fee';
+  static const String colPaymentType = 'col_payment_type';
+  static const String colReceipt = 'col_receipt';
+  static const String pageOfTotal = 'page_of_total';
+  static const String receiptNotAvailable = 'receipt_not_available';
+  static const String profileFeeEntriesTitle = 'profile_fee_entries_title';
+  static const String profileLastDate = 'profile_last_date';
+  static const String profileMemberName = 'profile_member_name';
+  static const String profileJoinedOn = 'profile_joined_on';
+  static const String profileAge = 'profile_age';
+  static const String profileAgeYears = 'profile_age_years';
+  static const String supportingAgeRule = 'supporting_age_rule';
+  static const String sangyogCardTitle = 'sangyog_card_title';
+  static const String sangyogCardDesc = 'sangyog_card_desc';
+  static const String sangyogInitialDeposit = 'sangyog_initial_deposit';
+  static const String sangyogDepositDone = 'sangyog_deposit_done';
+  static const String sangyogNote = 'sangyog_note';
   static const String deleteAccount = 'delete_account';
 
   // ------------------------------------------------------------

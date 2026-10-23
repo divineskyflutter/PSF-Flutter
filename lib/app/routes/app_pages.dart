@@ -22,6 +22,7 @@ import 'package:psf_application/features/profile/presentation/pages/contact_us_p
 import 'package:psf_application/features/profile/presentation/pages/delete_account_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/membership_card_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/passbook_page.dart';
+import 'package:psf_application/shared/widgets/passbook_book/passbook_entries_screen.dart';
 import 'package:psf_application/features/profile/presentation/pages/privacy_policy_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/terms_conditions_page.dart';
 import 'package:psf_application/features/splash/bindings/splash_binding.dart';
@@ -104,6 +105,10 @@ class AppPages {
 
     GetPage(name: AppRoutes.membershipCard, page: () => const MembershipCardPage()),
     GetPage(name: AppRoutes.passbook, page: () => const PassbookPage()),
+    GetPage(
+      name: AppRoutes.passbookEntries,
+      page: () => PassbookEntriesScreen(args: Get.arguments as PassbookEntriesArgs),
+    ),
     GetPage(name: AppRoutes.aboutUs, page: () => const AboutUsPage()),
     GetPage(name: AppRoutes.termsAndConditions, page: () => const TermsConditionsPage()),
     GetPage(name: AppRoutes.privacyPolicy, page: () => const PrivacyPolicyPage()),

@@ -15,13 +15,33 @@ class MembershipSchemeInfo {
     this.totalAmount = 0,
     this.isFeePaid,
     this.paidAmountRaw,
+    this.sangyogNiti = false,
   });
+
+  /// The login-response keys that say the member has the Sangyog Niti
+  /// (support fund) deposit — the first one found counts, and it is on when
+  /// its value is `1` / `true`. Change the key here once the backend's name
+  /// is final.
+  static const sangyogNitiKeys = [
+    'sangyogNiti',
+    'isSangyogNiti',
+    'sahyogNidhi',
+    'isSahyogNidhi',
+    'sangyogNidhi',
+    'isSangyogNidhi',
+  ];
+
+  /// What the Sangyog Niti deposit is, in rupees.
+  static const double sangyogNitiAmount = 3000;
 
   final int? yojnaId;
   final String? yojnaName;
   final double totalAmount;
   final bool? isFeePaid;
   final double? paidAmountRaw;
+
+  /// Show the Sangyog Niti card on Profile (see [sangyogNitiKeys]).
+  final bool sangyogNiti;
 
   /// Nothing to show when the member has no scheme amount and no name yet.
   bool get hasScheme => totalAmount > 0 || (yojnaName?.isNotEmpty ?? false);
@@ -47,6 +67,9 @@ class MembershipSchemeInfo {
       totalAmount: _toDouble(_ciGet(json, 'yojnaAmount')) ?? 0,
       isFeePaid: _toBool(_ciGet(json, 'isMemberShipFeePaid')),
       paidAmountRaw: _toDouble(_ciGet(json, 'yojnaAmountPaid')),
+      sangyogNiti: sangyogNitiKeys
+          .map((k) => _toBool(_ciGet(json, k)))
+          .any((v) => v == true),
     );
   }
 }

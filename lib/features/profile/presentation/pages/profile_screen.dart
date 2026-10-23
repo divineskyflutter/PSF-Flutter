@@ -12,11 +12,22 @@ import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 
+import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
+
 import '../../data/models/scheme_reference_model.dart';
 import '../controllers/profile_controller.dart';
 import '../widgets/download_documents_sheet.dart';
 import '../widgets/profile_overview_cards.dart';
 import '../widgets/reference_mismatch_notifier.dart';
+
+int? _ageFrom(String? dateOfBirth) {
+  final dob = DateTime.tryParse(dateOfBirth ?? '');
+  if (dob == null) return null;
+  final now = DateTime.now();
+  var age = now.year - dob.year;
+  if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) age--;
+  return age < 0 ? null : age;
+}
 
 /// The Profile tab — an at-a-glance overview of the member: a hero card (photo,
 /// name, member number, status, mobile, scheme), the membership fee (total /
@@ -88,6 +99,26 @@ class ProfileScreen extends StatelessWidget {
                     ? member!.localizedFullName(language)
                     : (profile?.fullName ?? '');
 
+                // Joining date and the fee's last date (joining + 365 days).
+                final joinedOn = profile?.joiningDate;
+                final lastDate = joinedOn?.add(const Duration(days: 365));
+
+                // Status in the app language AND in English, e.g. "સક્રિય (Active)".
+                String? status;
+                if (member != null && member.status != null) {
+                  final local = controller.memberStatusName(member.status);
+                  final english = EnumBundleModel.nameFor(
+                    controller.enumBundle.value?.memberStatus ?? const [],
+                    member.status,
+                    localized: false,
+                  );
+                  status = (english.isEmpty || english == local)
+                      ? local
+                      : '$local ($english)';
+                }
+
+                final age = _ageFrom(member?.dateOfBirth);
+
                 final gap = SizedBox(height: 16.px(context));
 
                 return AppRefreshIndicator(
@@ -108,24 +139,23 @@ class ProfileScreen extends StatelessWidget {
                       children: [
                         ProfileHeroCard(
                           photoUrl: photoUrl,
-                          name: displayName,
                           memberNo: member?.memberNo,
-                          status: member != null
-                              ? controller.memberStatusName(member.status)
-                              : null,
-                          mobile: member?.mobile ?? profile?.mobile,
-                          schemeName: scheme.yojnaName,
+                          name: displayName,
+                          joinedOn: joinedOn,
+                          age: age,
+                          status: status,
                         ),
                         gap,
-                        ProfileFeeCard(scheme: scheme),
+                        ProfileFeeCard(scheme: scheme, lastDate: lastDate),
                         gap,
-                        ProfilePaymentTable(controller: controller),
+                        ProfilePaymentSection(controller: controller),
                         gap,
                         const ProfileFeeInfoBar(),
                         gap,
-                        const ProfileSangyogNitiCard(),
-                        gap,
-                        ProfileSupportingAccountCard(controller: controller),
+                        // Only drawn when the login response flags it (it
+                        // brings its own bottom gap).
+                        ProfileSangyogNitiCard(scheme: scheme),
+                        ProfileSupportingAccountCard(controller: controller, age: age),
                         gap,
                         const ProfileFormDetailsOptions(),
                         gap,
