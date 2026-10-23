@@ -27,6 +27,14 @@ String _rupees(double value) {
   return NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2).format(value);
 }
 
+/// Same as [_rupees], but a crore or more becomes e.g. "₹1.2Cr" so a very
+/// large amount stays readable inside a narrow tile.
+String _rupeesShort(double value) {
+  if (value.abs() < 10000000) return _rupees(value);
+  return NumberFormat.compactCurrency(locale: 'en_IN', symbol: '₹', decimalDigits: 2)
+      .format(value);
+}
+
 // ===========================================================================
 // HERO — photo, name, member number, status, mobile and scheme
 // ===========================================================================
@@ -282,7 +290,7 @@ class ProfileFeeCard extends StatelessWidget {
         ? percent.toStringAsFixed(0)
         : percent.toStringAsFixed(1);
 
-    String money(double v) => hasAmount ? _rupees(v) : '-';
+    String money(double v) => hasAmount ? _rupeesShort(v) : '-';
 
     return Container(
       width: double.infinity,
@@ -301,7 +309,52 @@ class ProfileFeeCard extends StatelessWidget {
                   )
                 : null,
           ),
-          SizedBox(height: 14.px(context)),
+          SizedBox(height: 12.px(context)),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 12.px(context), vertical: 10.px(context)),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(.08),
+              borderRadius: BorderRadius.circular(12.px(context)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    AppStrings.profileApplicableFee.tr,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5.px(context),
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 8.px(context)),
+                Expanded(
+                  flex: 2,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      hasAmount ? _rupees(scheme.totalAmount) : '-',
+                      maxLines: 1,
+                      style: TextStyle(
+                        fontSize: 14.px(context),
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryDark,
+                      ),
+                    ),
+                  ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 12.px(context)),
           // IntrinsicHeight: "stretch" needs a bounded height, and this sits
           // inside a scrolling column — the tiles all take the tallest one.
           IntrinsicHeight(
@@ -675,6 +728,58 @@ class ProfileFeeInfoBar extends StatelessWidget {
                 height: 1.35,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ===========================================================================
+// SANGYOG NITI — the support fund; no amount in the login response yet
+// ===========================================================================
+
+/// The Sangyog Niti (support fund) card. The login response carries no fund
+/// amount yet, so the value reads "-" until the backend sends one — pass it as
+/// [amount] then.
+class ProfileSangyogNitiCard extends StatelessWidget {
+  const ProfileSangyogNitiCard({super.key, this.amount});
+
+  final double? amount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(16.px(context)),
+      decoration: profileCardDecoration(context),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: _CardTitle(
+              icon: Icons.savings_rounded,
+              title: AppStrings.sangyogNitiLabel.tr,
+            ),
+          ),
+          SizedBox(width: 8.px(context)),
+          Expanded(
+            flex: 2,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                amount != null && amount! > 0 ? _rupeesShort(amount!) : '-',
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 16.px(context),
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.primaryDark,
+                ),
+              ),
               ),
             ),
           ),

@@ -257,6 +257,7 @@ class AppStrings {
   static const String profileNote1 = 'profile_note_1';
   static const String profileNote2 = 'profile_note_2';
   static const String profileNote3 = 'profile_note_3';
+  static const String profileApplicableFee = 'profile_applicable_fee';
   static const String deleteAccount = 'delete_account';
 
   // ------------------------------------------------------------

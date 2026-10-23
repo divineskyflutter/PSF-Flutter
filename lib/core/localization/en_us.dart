@@ -310,6 +310,7 @@ const Map<String, String> enUS = {
   'profile_note_1': 'Your fixed membership fee must be completed within 365 days.',
   'profile_note_2': 'You can pay in one go, or weekly as it suits you.',
   'profile_note_3': 'Members above 50 years of age must submit the required Supporting Account details on time.',
+  'profile_applicable_fee': 'Applicable fee (at joining)',
   'delete_account': 'Delete Account',
 
   // ------------------------------------------------------------

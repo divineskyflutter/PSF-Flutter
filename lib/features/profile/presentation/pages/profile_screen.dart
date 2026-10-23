@@ -123,6 +123,8 @@ class ProfileScreen extends StatelessWidget {
                         gap,
                         const ProfileFeeInfoBar(),
                         gap,
+                        const ProfileSangyogNitiCard(),
+                        gap,
                         ProfileSupportingAccountCard(controller: controller),
                         gap,
                         const ProfileFormDetailsOptions(),
