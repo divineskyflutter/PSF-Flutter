@@ -94,7 +94,6 @@ class ProfileHeroCard extends StatelessWidget {
         _AnimatedAvatar(
           photoUrl: photoUrl,
           size: 104.px(context),
-          verified: (status ?? '').trim().isNotEmpty,
           onTap: hasPhoto
               ? () => CommonImagePreview.show(
                     context: context,
@@ -128,20 +127,18 @@ class ProfileHeroCard extends StatelessWidget {
 }
 
 /// The profile photo with some life: a ring of teal-and-gold that turns
-/// slowly, a glow that breathes behind it, a small "verified" badge, and a
-/// gentle pop-in when it first appears. The animation runs only while the
+/// slowly, a glow that breathes behind it, and a gentle pop-in when it first
+/// appears. The animation runs only while the
 /// Profile tab is the one showing.
 class _AnimatedAvatar extends StatefulWidget {
   const _AnimatedAvatar({
     required this.photoUrl,
     required this.size,
-    required this.verified,
     required this.onTap,
   });
 
   final String? photoUrl;
   final double size;
-  final bool verified;
   final VoidCallback? onTap;
 
   @override
@@ -236,31 +233,6 @@ class _AnimatedAvatarState extends State<_AnimatedAvatar>
                   circle: true,
                   fallbackIcon: Icons.person_rounded,
                 ),
-                if (widget.verified)
-                  Positioned(
-                    right: -size * .01,
-                    bottom: size * .02,
-                    child: Container(
-                      padding: EdgeInsets.all(size * .025),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Container(
-                        width: size * .20,
-                        height: size * .20,
-                        decoration: const BoxDecoration(
-                          color: AppColors.success,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.check_rounded,
-                          color: Colors.white,
-                          size: size * .14,
-                        ),
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
