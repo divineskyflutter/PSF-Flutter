@@ -98,7 +98,9 @@ class _TearablePageState extends State<TearablePage>
   final List<List<Offset>> _fallen = [];
 
   _Tear? _active;
-  bool _soundPlayed = false;
+  bool _soundOn = false;
+  bool _soundPaused = false;
+  Timer? _idle;
 
   @override
   void initState() {
@@ -120,17 +122,40 @@ class _TearablePageState extends State<TearablePage>
           iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
         ),
       );
-      await _audio.setReleaseMode(ReleaseMode.stop);
+      // The clip loops while the page is being dragged.
+      await _audio.setReleaseMode(ReleaseMode.loop);
       await _audio.setSource(AssetSource(_ripSound));
     } catch (e) {
       debugPrint('[tear-audio] could not prepare: $e');
     }
   }
 
-  Future<void> _playRip() async {
+  /// The rip sounds while the finger drags, as loud as the drag is fast, and
+  /// falls quiet the moment the finger stops moving.
+  void _ripSoundFollows(double dragPixels) {
+    final volume = (.3 + dragPixels / 22).clamp(.3, 1.0);
+    unawaited(_audio.setVolume(volume));
+
+    if (!_soundOn) {
+      _soundOn = true;
+      unawaited(_startRip());
+    } else if (_soundPaused) {
+      _soundPaused = false;
+      unawaited(_audio.resume());
+    }
+
+    _idle?.cancel();
+    _idle = Timer(const Duration(milliseconds: 110), () {
+      if (_soundOn && !_soundPaused) {
+        _soundPaused = true;
+        unawaited(_audio.pause());
+      }
+    });
+  }
+
+  Future<void> _startRip() async {
     try {
-      await _audio.setPlaybackRate(.9 + _random.nextDouble() * .25);
-      await _audio.setVolume(1);
+      await _audio.setPlaybackRate(.92 + _random.nextDouble() * .2);
       await _audio.seek(Duration.zero);
       await _audio.resume();
     } catch (e) {
@@ -138,8 +163,27 @@ class _TearablePageState extends State<TearablePage>
     }
   }
 
+  void _stopRip({Duration after = Duration.zero}) {
+    _idle?.cancel();
+    void stop() {
+      _soundOn = false;
+      _soundPaused = false;
+      unawaited(_audio.stop());
+    }
+
+    if (after == Duration.zero) {
+      stop();
+    } else {
+      // keep ripping for a moment while the torn piece falls
+      if (_soundPaused) unawaited(_audio.resume());
+      _soundPaused = false;
+      _idle = Timer(after, stop);
+    }
+  }
+
   @override
   void dispose() {
+    _idle?.cancel();
     for (final t in _tears) {
       t.fall?.dispose();
     }
@@ -151,7 +195,8 @@ class _TearablePageState extends State<TearablePage>
 
   void _onDragStart(DragStartDetails details, Size size) {
     final at = details.localPosition;
-    _soundPlayed = false;
+    _soundOn = false;
+    _soundPaused = false;
 
     final r = _random.nextDouble();
     final style = r < .38
@@ -209,14 +254,14 @@ class _TearablePageState extends State<TearablePage>
 
     if (!_tears.contains(tear)) _tears.add(tear);
 
-    if (!_soundPlayed) {
-      _soundPlayed = true;
-      unawaited(_playRip());
-      HapticFeedback.lightImpact();
-    }
+    if (!_soundOn) HapticFeedback.lightImpact();
+    _ripSoundFollows(details.delta.dy.abs());
 
     setState(() => tear.progress = next);
-    if (tear.complete) _startFall(tear, size);
+    if (tear.complete) {
+      _startFall(tear, size);
+      _stopRip(after: const Duration(milliseconds: 650));
+    }
   }
 
   void _onDragEnd() {
@@ -224,7 +269,7 @@ class _TearablePageState extends State<TearablePage>
     _active = null;
     if (tear == null) return;
     if (tear.complete) return; // the rip sound carries on with the fall
-    unawaited(_audio.stop());
+    _stopRip();
     if (_tears.contains(tear)) widget.onSettled?.call();
   }
 

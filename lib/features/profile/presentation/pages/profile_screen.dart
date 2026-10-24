@@ -12,8 +12,6 @@ import 'package:psf_application/shared/widgets/states/app_state_view.dart';
 import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 
-import 'package:psf_application/features/enum_bundle/data/models/enum_bundle_model.dart';
-
 import '../../data/models/scheme_reference_model.dart';
 import '../controllers/profile_controller.dart';
 import '../widgets/download_documents_sheet.dart';
@@ -103,19 +101,10 @@ class ProfileScreen extends StatelessWidget {
                 final joinedOn = profile?.joiningDate;
                 final lastDate = joinedOn?.add(const Duration(days: 365));
 
-                // Status in the app language AND in English, e.g. "સક્રિય (Active)".
-                String? status;
-                if (member != null && member.status != null) {
-                  final local = controller.memberStatusName(member.status);
-                  final english = EnumBundleModel.nameFor(
-                    controller.enumBundle.value?.memberStatus ?? const [],
-                    member.status,
-                    localized: false,
-                  );
-                  status = (english.isEmpty || english == local)
-                      ? local
-                      : '$local ($english)';
-                }
+                // Status in the app language only.
+                final status = (member != null && member.status != null)
+                    ? controller.memberStatusName(member.status)
+                    : null;
 
                 final age = _ageFrom(member?.dateOfBirth);
 

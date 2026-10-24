@@ -83,52 +83,46 @@ class ProfileHeroCard extends StatelessWidget {
       (Icons.verified_rounded, AppStrings.memberStatus.tr, _orDash(status)),
     ];
 
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(10.px(context)),
-      decoration: profileCardDecoration(context),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: hasPhoto
-                ? () => CommonImagePreview.show(
-                      context: context,
-                      images: [PreviewImageItem(imagePath: photoUrl!)],
-                      mode: ImagePreviewMode.dialog,
-                    )
-                : null,
-            child: FramedImage(
-              url: photoUrl,
-              size: 78.px(context),
-              circle: true,
-              fallbackIcon: Icons.person_rounded,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // The photo stands straight on the page (no card behind it).
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: hasPhoto
+              ? () => CommonImagePreview.show(
+                    context: context,
+                    images: [PreviewImageItem(imagePath: photoUrl!)],
+                    mode: ImagePreviewMode.dialog,
+                  )
+              : null,
+          child: FramedImage(
+            url: photoUrl,
+            size: 88.px(context),
+            circle: true,
+            fallbackIcon: Icons.person_rounded,
+          ),
+        ),
+        SizedBox(width: 12.px(context)),
+        // Only the details are on the white card.
+        Expanded(
+          child: Container(
+            padding: EdgeInsets.symmetric(horizontal: 12.px(context), vertical: 4.px(context)),
+            decoration: profileCardDecoration(context),
+            child: Column(
+              children: [
+                for (var i = 0; i < rows.length; i++)
+                  _HeroRow(
+                    icon: rows[i].$1,
+                    label: rows[i].$2,
+                    value: rows[i].$3,
+                    divider: i != rows.length - 1,
+                  ),
+              ],
             ),
           ),
-          SizedBox(width: 10.px(context)),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(.06),
-                borderRadius: BorderRadius.circular(14.px(context)),
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 9.px(context)),
-              child: Column(
-                children: [
-                  for (var i = 0; i < rows.length; i++)
-                    _HeroRow(
-                      icon: rows[i].$1,
-                      label: rows[i].$2,
-                      value: rows[i].$3,
-                      divider: i != rows.length - 1,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -313,57 +307,63 @@ class ProfileFeeCard extends StatelessWidget {
             ),
           ),
           SizedBox(height: 10.px(context)),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      hasAmount
-                          ? '${_rupeesShort(scheme.paidAmount)} / ${_rupeesShort(scheme.totalAmount)}'
-                          : '-',
-                      maxLines: 1,
-                      style: TextStyle(
-                        fontSize: 14.px(context),
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                hasAmount
+                    ? '${_rupeesShort(scheme.paidAmount)} / ${_rupeesShort(scheme.totalAmount)}'
+                    : '-',
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 14.px(context),
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+          ),
+          SizedBox(height: 12.px(context)),
+          // Last date: icon and label on the left, the date on the right —
+          // the label wraps instead of squeezing the date, in every language.
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 12.px(context), vertical: 10.px(context)),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(.07),
+              borderRadius: BorderRadius.circular(12.px(context)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.event_rounded, size: 20.px(context), color: AppColors.primaryDark),
+                SizedBox(width: 8.px(context)),
+                Expanded(
+                  child: Text(
+                    AppStrings.profileLastDate.tr,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.px(context),
+                      height: 1.25,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ),
-              ),
-              SizedBox(width: 8.px(context)),
-              Icon(Icons.event_rounded, size: 22.px(context), color: AppColors.primaryDark),
-              SizedBox(width: 6.px(context)),
-              Flexible(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      AppStrings.profileLastDate.tr,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10.5.px(context),
-                        height: 1.2,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    Text(
-                      lastDate != null ? AppDateFormat.medium(lastDate!) : '-',
-                      style: TextStyle(
-                        fontSize: 12.5.px(context),
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
+                SizedBox(width: 8.px(context)),
+                Text(
+                  lastDate != null ? AppDateFormat.medium(lastDate!) : '-',
+                  maxLines: 1,
+                  textAlign: TextAlign.end,
+                  style: TextStyle(
+                    fontSize: 13.px(context),
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),
@@ -457,20 +457,6 @@ class _ProfilePaymentSectionState extends State<ProfilePaymentSection> {
     // Read first, so the surrounding Obx always has something to watch.
     widget.controller.passbook.length;
 
-    // Test aid: `--dart-define=PSF_FAKE_LEDGER=true` fills the ledger with 23
-    // sample entries, to try the multi-page book (flip, tear, page numbers).
-    if (const bool.fromEnvironment('PSF_FAKE_LEDGER')) {
-      return [
-        for (var i = 0; i < 23; i++)
-          PassbookRecord(
-            no: i + 1,
-            date: DateTime(2026, 10, 1).add(Duration(days: i * 7)),
-            amount: 500.0 + i * 100,
-            type: i.isEven ? 'Online' : 'Installment',
-            status: 'Paid',
-          ),
-      ];
-    }
     final payments = widget.controller.passbook
         .where((e) => e.paidAmount > 0)
         .toList(growable: false);
@@ -594,35 +580,25 @@ class _ProfilePaymentSectionState extends State<ProfilePaymentSection> {
           child: Column(
             children: [
               _tableRow(context, headings, header: true),
-              if (rows.isEmpty)
-                _tableRow(context, const ['-', '-', '-', '-', '-'])
-              else
-                for (var i = 0; i < rows.length; i++)
-                  _tableRow(
-                    context,
-                    [
-                      '${rows[i].no}',
-                      rows[i].date != null ? AppDateFormat.medium(rows[i].date!) : '-',
-                      rows[i].amount != null ? _rupees(rows[i].amount!) : '-',
-                      _orDash(rows[i].type),
-                      _orDash(rows[i].status),
-                    ],
-                    shaded: i.isOdd,
-                    onDownload: () => _download(rows[i]),
-                  ),
+              // Always three rows: the latest entries, then empty ruled rows.
+              for (var i = 0; i < 3; i++)
+                i < rows.length
+                    ? _tableRow(
+                        context,
+                        [
+                          '${rows[i].no}',
+                          rows[i].date != null ? AppDateFormat.medium(rows[i].date!) : '-',
+                          rows[i].amount != null ? _rupees(rows[i].amount!) : '-',
+                          _orDash(rows[i].type),
+                          _orDash(rows[i].status),
+                        ],
+                        shaded: i.isOdd,
+                        onDownload: () => _download(rows[i]),
+                      )
+                    : _tableRow(context, const [], shaded: i.isOdd),
             ],
           ),
         ),
-        if (rows.isEmpty) ...[
-          SizedBox(height: 10.px(context)),
-          Text(
-            AppStrings.profileNoPayments.tr,
-            style: TextStyle(
-              fontSize: 12.5.px(context),
-              color: AppColors.textSecondary,
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -635,9 +611,15 @@ class _ProfilePaymentSectionState extends State<ProfilePaymentSection> {
     VoidCallback? onDownload,
   }) {
     return Container(
-      color: header
-          ? AppColors.primary.withOpacity(.14)
-          : (shaded ? AppColors.primary.withOpacity(.04) : Colors.transparent),
+      decoration: BoxDecoration(
+        color: header
+            ? AppColors.primary.withOpacity(.14)
+            : (shaded ? AppColors.primary.withOpacity(.04) : Colors.transparent),
+        // A thin ruled line under each entry row (empty ones too).
+        border: header
+            ? null
+            : Border(bottom: BorderSide(color: AppColors.primary.withOpacity(.16))),
+      ),
       padding: EdgeInsets.symmetric(horizontal: 4.px(context), vertical: header ? 10.px(context) : 6.px(context)),
       constraints: BoxConstraints(minHeight: header ? 0 : 40.px(context)),
       child: Row(
@@ -746,9 +728,11 @@ class ProfileFeeInfoBar extends StatelessWidget {
 // SANGYOG NITI — the support-fund card, only when the member has it
 // ===========================================================================
 
-/// The Sangyog Niti (support fund) card: shown only while the login response
-/// flags it for the member ([MembershipSchemeInfo.sangyogNiti]); otherwise it
-/// takes no space. The amount is [MembershipSchemeInfo.sangyogNitiAmount].
+/// The Sangyog Niti (support fund) card. Today it is always shown; later it
+/// can be limited to members the login response flags
+/// ([MembershipSchemeInfo.sangyogNiti]) by setting
+/// [MembershipSchemeInfo.sangyogNitiAlwaysShown] to false — then it takes no
+/// space for the others. The amount is [MembershipSchemeInfo.sangyogNitiAmount].
 class ProfileSangyogNitiCard extends StatelessWidget {
   const ProfileSangyogNitiCard({super.key, required this.scheme});
 
@@ -756,7 +740,12 @@ class ProfileSangyogNitiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!scheme.sangyogNiti) return const SizedBox.shrink();
+    // For now the card is always shown; flip
+    // `MembershipSchemeInfo.sangyogNitiAlwaysShown` to false to show it only
+    // when the login response flags the member.
+    if (!MembershipSchemeInfo.sangyogNitiAlwaysShown && !scheme.sangyogNiti) {
+      return const SizedBox.shrink();
+    }
 
     final amount = _rupees(MembershipSchemeInfo.sangyogNitiAmount);
 

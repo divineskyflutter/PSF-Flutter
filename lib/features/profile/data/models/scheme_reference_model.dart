@@ -34,6 +34,10 @@ class MembershipSchemeInfo {
   /// What the Sangyog Niti deposit is, in rupees.
   static const double sangyogNitiAmount = 3000;
 
+  /// Show the Sangyog Niti card to every member for now. Set to false to show
+  /// it only when [sangyogNiti] is on (the login response flags it as 1).
+  static const bool sangyogNitiAlwaysShown = true;
+
   final int? yojnaId;
   final String? yojnaName;
   final double totalAmount;

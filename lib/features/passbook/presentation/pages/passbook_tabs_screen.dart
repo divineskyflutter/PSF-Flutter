@@ -54,8 +54,11 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
         onBack: () => Get.find<MainNavigationController>()
             .changeTab(MainNavigationController.homeTab),
       ),
+      // No SafeArea bottom: the bottom-bar height below already includes the
+      // system inset, and counting it twice left a gap under the page.
       body: SafeArea(
         top: false,
+        bottom: false,
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             18.px(context),
@@ -83,7 +86,9 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
               SizedBox(height: 12.px(context)),
               Expanded(
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: AppBottomNavBar.occupiedHeight(context)),
+                  padding: EdgeInsets.only(
+                    bottom: AppBottomNavBar.occupiedHeight(context) - 6.px(context),
+                  ),
                   // Swipe sideways to change tab; the selector above follows.
                   child: PageView(
                     controller: _pages,
