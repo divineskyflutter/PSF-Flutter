@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +8,7 @@ import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/localization/language_controller.dart';
+import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
 import 'package:psf_application/shared/utils/app_date_format.dart';
 import 'package:psf_application/shared/utils/localized_field.dart';
@@ -86,9 +89,12 @@ class ProfileHeroCard extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // The photo stands straight on the page (no card behind it).
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
+        // The photo stands straight on the page (no card behind it), inside
+        // a slowly turning ring with a soft glow.
+        _AnimatedAvatar(
+          photoUrl: photoUrl,
+          size: 104.px(context),
+          verified: (status ?? '').trim().isNotEmpty,
           onTap: hasPhoto
               ? () => CommonImagePreview.show(
                     context: context,
@@ -96,14 +102,8 @@ class ProfileHeroCard extends StatelessWidget {
                     mode: ImagePreviewMode.dialog,
                   )
               : null,
-          child: FramedImage(
-            url: photoUrl,
-            size: 88.px(context),
-            circle: true,
-            fallbackIcon: Icons.person_rounded,
-          ),
         ),
-        SizedBox(width: 12.px(context)),
+        SizedBox(width: 8.px(context)),
         // Only the details are on the white card.
         Expanded(
           child: Container(
@@ -125,6 +125,180 @@ class ProfileHeroCard extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The profile photo with some life: a ring of teal-and-gold that turns
+/// slowly, a glow that breathes behind it, a small "verified" badge, and a
+/// gentle pop-in when it first appears. The animation runs only while the
+/// Profile tab is the one showing.
+class _AnimatedAvatar extends StatefulWidget {
+  const _AnimatedAvatar({
+    required this.photoUrl,
+    required this.size,
+    required this.verified,
+    required this.onTap,
+  });
+
+  final String? photoUrl;
+  final double size;
+  final bool verified;
+  final VoidCallback? onTap;
+
+  @override
+  State<_AnimatedAvatar> createState() => _AnimatedAvatarState();
+}
+
+class _AnimatedAvatarState extends State<_AnimatedAvatar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 7),
+  );
+  Worker? _tabWatcher;
+
+  @override
+  void initState() {
+    super.initState();
+    final nav = Get.find<MainNavigationController>();
+    void sync(int index) {
+      if (!mounted) return;
+      if (index == MainNavigationController.profileTab) {
+        if (!_spin.isAnimating) _spin.repeat();
+      } else {
+        _spin.stop();
+      }
+    }
+
+    sync(nav.currentIndex.value);
+    _tabWatcher = ever<int>(nav.currentIndex, sync);
+  }
+
+  @override
+  void dispose() {
+    _tabWatcher?.dispose();
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size;
+    final photo = size * .80;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: .82, end: 1),
+      duration: const Duration(milliseconds: 650),
+      curve: Curves.easeOutBack,
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: AnimatedBuilder(
+            animation: _spin,
+            builder: (context, child) {
+              // glow breathes between .55 and 1
+              final breath = .775 + .225 * math.sin(_spin.value * 2 * math.pi * 2);
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: size,
+                    height: size,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          AppColors.primary.withOpacity(.30 * breath),
+                          AppColors.primary.withOpacity(0),
+                        ],
+                        stops: const [.55, 1],
+                      ),
+                    ),
+                  ),
+                  CustomPaint(
+                    size: Size.square(size * .92),
+                    painter: _RingPainter(turn: _spin.value, width: size * .035),
+                  ),
+                  child!,
+                ],
+              );
+            },
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                FramedImage(
+                  url: widget.photoUrl,
+                  size: photo,
+                  circle: true,
+                  fallbackIcon: Icons.person_rounded,
+                ),
+                if (widget.verified)
+                  Positioned(
+                    right: -size * .01,
+                    bottom: size * .02,
+                    child: Container(
+                      padding: EdgeInsets.all(size * .025),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Container(
+                        width: size * .20,
+                        height: size * .20,
+                        decoration: const BoxDecoration(
+                          color: AppColors.success,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: size * .14,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A ring painted with a teal-to-gold sweep gradient, turned by [turn] (0..1).
+class _RingPainter extends CustomPainter {
+  const _RingPainter({required this.turn, required this.width});
+
+  final double turn;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = width
+      ..strokeCap = StrokeCap.round
+      ..shader = SweepGradient(
+        colors: const [
+          AppColors.primary,
+          AppColors.primaryLight,
+          AppColors.accentGold,
+          AppColors.primaryLight,
+          AppColors.primary,
+        ],
+        transform: GradientRotation(turn * 2 * math.pi),
+      ).createShader(rect);
+    canvas.drawCircle(rect.center, size.width / 2 - width / 2, paint);
+  }
+
+  @override
+  bool shouldRepaint(_RingPainter old) => old.turn != turn;
 }
 
 class _HeroRow extends StatelessWidget {
