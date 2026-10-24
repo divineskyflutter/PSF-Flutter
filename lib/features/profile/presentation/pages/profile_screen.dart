@@ -36,8 +36,38 @@ int? _ageFrom(String? dateOfBirth) {
 ///
 /// Whatever the backend has not sent yet reads "-" (or shows an empty state)
 /// instead of being hidden, so the layout stays the same as data arrives.
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final ScrollController _scroll = ScrollController();
+  Worker? _tabWatcher;
+
+  @override
+  void initState() {
+    super.initState();
+    // The tabs are kept alive, so Profile would otherwise reopen wherever it
+    // was left. Every time the Profile tab is selected, start from the top.
+    _tabWatcher = ever<int>(
+      Get.find<MainNavigationController>().currentIndex,
+      (index) {
+        if (index == MainNavigationController.profileTab && _scroll.hasClients) {
+          _scroll.jumpTo(0);
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabWatcher?.dispose();
+    _scroll.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -114,6 +144,7 @@ class ProfileScreen extends StatelessWidget {
                   onRefresh: controller.refreshMemberData,
                   edgeOffset: AppSubPageHeader.totalHeight(),
                   child: SingleChildScrollView(
+                    controller: _scroll,
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(
                       18.px(context),
