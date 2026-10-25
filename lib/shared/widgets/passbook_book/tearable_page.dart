@@ -99,6 +99,17 @@ class _TearablePageState extends State<TearablePage>
 
   _Tear? _active;
   bool _soundOn = false;
+
+  // A tear only starts for a FORCEFUL pull. A normal, unhurried touch or drag
+  // does nothing. Speeds are in logical pixels per second.
+  static const _armSpeed = 900.0;     // how fast the pull must be to start a tear
+  static const _armDistance = 36.0;   // ...over at least this much movement
+  static const _keepSpeed = 320.0;    // once started, it only rips while pulled this hard
+
+  final Stopwatch _clock = Stopwatch()..start();
+  final List<(int, double)> _samples = [];
+  bool _armed = false;
+  double _pulled = 0;
   bool _soundPaused = false;
   Timer? _idle;
 
@@ -197,6 +208,9 @@ class _TearablePageState extends State<TearablePage>
     final at = details.localPosition;
     _soundOn = false;
     _soundPaused = false;
+    _samples.clear();
+    _armed = false;
+    _pulled = 0;
 
     final r = _random.nextDouble();
     final style = r < .38
@@ -248,8 +262,25 @@ class _TearablePageState extends State<TearablePage>
     final tear = _active;
     if (tear == null || tear.complete) return;
 
-    final next = (tear.progress + details.delta.dy.abs() / (size.height * .75))
-        .clamp(0.0, 1.0);
+    // How hard is the page being pulled right now? Distance covered over the
+    // last ~120 ms.
+    final now = _clock.elapsedMilliseconds;
+    final move = details.delta.dy.abs();
+    _samples.add((now, move));
+    _samples.removeWhere((e) => now - e.$1 > 120);
+    final span = (now - _samples.first.$1).clamp(16, 120);
+    final speed = _samples.fold<double>(0, (sum, e) => sum + e.$2) / span * 1000;
+
+    _pulled += move;
+    if (!_armed) {
+      // Slow or gentle: leave the page alone.
+      if (speed < _armSpeed || _pulled < _armDistance) return;
+      _armed = true;
+    } else if (speed < _keepSpeed) {
+      return; // the pull eased off: the rip stalls until it is yanked again
+    }
+
+    final next = (tear.progress + move / (size.height * .75)).clamp(0.0, 1.0);
     if (next == tear.progress) return;
 
     if (!_tears.contains(tear)) _tears.add(tear);
