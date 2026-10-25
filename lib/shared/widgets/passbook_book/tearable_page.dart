@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -104,11 +105,11 @@ class _TearablePageState extends State<TearablePage>
   // quick, never tears. First the page must be GRIPPED: the finger rests on
   // it, hardly moving, for [_gripTime]. Only then does a hard, fast yank start
   // a tear. Speeds are in logical pixels per second.
-  static const _gripTime = Duration(milliseconds: 380);
-  static const _gripWobble = 14.0;    // the finger may drift this far while gripping
-  static const _armSpeed = 1100.0;    // how fast the yank must be to start a tear
-  static const _armDistance = 40.0;   // ...over at least this much movement
-  static const _keepSpeed = 320.0;    // once started, it only rips while pulled this hard
+  static const _gripTime = Duration(milliseconds: 300);
+  static const _gripWobble = 22.0;    // a real finger drifts: it may move this far while gripping
+  static const _armSpeed = 650.0;     // how fast the yank must be to start a tear
+  static const _armDistance = 26.0;   // ...over at least this much movement
+  static const _keepSpeed = 230.0;    // once started, it only rips while pulled this hard
 
   Timer? _gripTimer;
   Offset? _downAt;
@@ -213,7 +214,11 @@ class _TearablePageState extends State<TearablePage>
 
   // ----------------------------------------------------------------- gestures
 
+  int? _gripPointer;
+
   void _onPointerDown(PointerDownEvent e) {
+    if (_gripPointer != null) return; // a second finger (pinch) is not a grip
+    _gripPointer = e.pointer;
     _downAt = e.localPosition;
     _gripTimer?.cancel();
     _gripTimer = Timer(_gripTime, () {
@@ -224,6 +229,7 @@ class _TearablePageState extends State<TearablePage>
   }
 
   void _onPointerMove(PointerMoveEvent e) {
+    if (e.pointer != _gripPointer) return;
     final from = _downAt;
     // Moved before the grip formed: that is a swipe, not a grip.
     if (!_gripped && from != null && (e.localPosition - from).distance > _gripWobble) {
@@ -231,14 +237,15 @@ class _TearablePageState extends State<TearablePage>
     }
   }
 
-  void _onPointerEnd() {
+  void _onPointerEnd(PointerEvent e) {
+    if (e.pointer != _gripPointer) return;
+    _gripPointer = null;
     _gripTimer?.cancel();
     _downAt = null;
     if (_gripped) setState(() => _gripped = false);
   }
 
-  void _onDragStart(DragStartDetails details, Size size) {
-    final at = details.localPosition;
+  void _onDragStart(Offset at, Size size) {
     _soundOn = false;
     _soundPaused = false;
     _samples.clear();
@@ -291,14 +298,14 @@ class _TearablePageState extends State<TearablePage>
     _active = tear;
   }
 
-  void _onDragUpdate(DragUpdateDetails details, Size size) {
+  void _onDragUpdate(Offset delta, Size size) {
     final tear = _active;
     if (tear == null || tear.complete) return;
 
     // How hard is the page being pulled right now? Distance covered over the
     // last ~120 ms.
     final now = _clock.elapsedMilliseconds;
-    final move = details.delta.dy.abs();
+    final move = delta.distance;
     _samples.add((now, move));
     _samples.removeWhere((e) => now - e.$1 > 120);
     final span = (now - _samples.first.$1).clamp(16, 120);
@@ -319,7 +326,7 @@ class _TearablePageState extends State<TearablePage>
     if (!_tears.contains(tear)) _tears.add(tear);
 
     if (!_soundOn) HapticFeedback.lightImpact();
-    _ripSoundFollows(details.delta.dy.abs());
+    _ripSoundFollows(move);
 
     setState(() => tear.progress = next);
     if (tear.complete) {
@@ -448,14 +455,28 @@ class _TearablePageState extends State<TearablePage>
           behavior: HitTestBehavior.translucent,
           onPointerDown: _onPointerDown,
           onPointerMove: _onPointerMove,
-          onPointerUp: (_) => _onPointerEnd(),
-          onPointerCancel: (_) => _onPointerEnd(),
-          child: GestureDetector(
+          onPointerUp: _onPointerEnd,
+          onPointerCancel: _onPointerEnd,
+          // Once the page is gripped this recognizer claims the touch in ANY
+          // direction, so the page-turn swipe can never steal it; before the
+          // grip it steps aside at the first real movement, so ordinary
+          // swipes still turn the page.
+          child: RawGestureDetector(
             behavior: HitTestBehavior.translucent,
-            onVerticalDragStart: (d) => _onDragStart(d, size),
-            onVerticalDragUpdate: (d) => _onDragUpdate(d, size),
-            onVerticalDragEnd: (_) => _onDragEnd(),
-            onVerticalDragCancel: _onDragEnd,
+            gestures: {
+              _GripPullRecognizer:
+                  GestureRecognizerFactoryWithHandlers<_GripPullRecognizer>(
+                () => _GripPullRecognizer(),
+                (r) {
+                  r
+                    ..isGripped = (() => _gripped)
+                    ..wobble = _gripWobble
+                    ..onStart = ((at) => _onDragStart(at, size))
+                    ..onUpdate = ((delta) => _onDragUpdate(delta, size))
+                    ..onEnd = _onDragEnd;
+                },
+              ),
+            },
             child: (_tears.isEmpty && _fallen.isEmpty)
                 // The page shrinks a touch once gripped, ready to be yanked.
                 ? AnimatedScale(
@@ -554,6 +575,93 @@ class _TearablePageState extends State<TearablePage>
       ],
     );
   }
+}
+
+/// Claims a touch for tearing once the page has been gripped (finger held
+/// still for a moment); until then it never claims anything and gives way to
+/// other gestures (page turn) as soon as the finger really moves.
+class _GripPullRecognizer extends OneSequenceGestureRecognizer {
+  bool Function() isGripped = () => false;
+  double wobble = 22;
+  void Function(Offset at)? onStart;
+  void Function(Offset delta)? onUpdate;
+  VoidCallback? onEnd;
+
+  int? _pointer;
+  Offset? _down;
+  Offset? _last;
+  bool _accepted = false;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    if (_pointer != null) return; // follow a single finger
+    startTrackingPointer(event.pointer, event.transform);
+    _pointer = event.pointer;
+    _down = event.localPosition;
+    _last = event.localPosition;
+    _accepted = false;
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event.pointer != _pointer) return;
+
+    if (event is PointerMoveEvent) {
+      if (!_accepted) {
+        _last = event.localPosition; // the latest spot, for when we are accepted
+        if (isGripped()) {
+          resolve(GestureDisposition.accepted);
+        } else if ((event.localPosition - _down!).distance > wobble) {
+          // Moved before gripping: an ordinary swipe — step aside.
+          resolve(GestureDisposition.rejected);
+          stopTrackingPointer(event.pointer);
+          _reset();
+        }
+        return;
+      }
+      final delta = event.localPosition - _last!;
+      _last = event.localPosition;
+      onUpdate?.call(delta);
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      if (_accepted) onEnd?.call();
+      stopTrackingPointer(event.pointer);
+      _reset();
+    }
+  }
+
+  @override
+  void acceptGesture(int pointer) {
+    if (pointer != _pointer) return;
+    _accepted = true;
+    onStart?.call(_down!);
+    // Deliver everything moved since the touch, so no pull is lost while the
+    // arena was deciding.
+    final here = _last!;
+    _last = _down;
+    onUpdate?.call(here - _down!);
+    _last = here;
+  }
+
+  @override
+  void rejectGesture(int pointer) {
+    if (pointer == _pointer) {
+      stopTrackingPointer(pointer);
+      _reset();
+    }
+  }
+
+  @override
+  void didStopTrackingLastPointer(int pointer) {}
+
+  void _reset() {
+    _pointer = null;
+    _down = null;
+    _last = null;
+    _accepted = false;
+  }
+
+  @override
+  String get debugDescription => 'grip-pull';
 }
 
 class _Geometry {
