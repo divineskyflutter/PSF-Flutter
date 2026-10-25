@@ -100,11 +100,19 @@ class _TearablePageState extends State<TearablePage>
   _Tear? _active;
   bool _soundOn = false;
 
-  // A tear only starts for a FORCEFUL pull. A normal, unhurried touch or drag
-  // does nothing. Speeds are in logical pixels per second.
-  static const _armSpeed = 900.0;     // how fast the pull must be to start a tear
-  static const _armDistance = 36.0;   // ...over at least this much movement
+  // A tear needs a DELIBERATE, FORCEFUL pull — an ordinary swipe, however
+  // quick, never tears. First the page must be GRIPPED: the finger rests on
+  // it, hardly moving, for [_gripTime]. Only then does a hard, fast yank start
+  // a tear. Speeds are in logical pixels per second.
+  static const _gripTime = Duration(milliseconds: 380);
+  static const _gripWobble = 14.0;    // the finger may drift this far while gripping
+  static const _armSpeed = 1100.0;    // how fast the yank must be to start a tear
+  static const _armDistance = 40.0;   // ...over at least this much movement
   static const _keepSpeed = 320.0;    // once started, it only rips while pulled this hard
+
+  Timer? _gripTimer;
+  Offset? _downAt;
+  bool _gripped = false;
 
   final Stopwatch _clock = Stopwatch()..start();
   final List<(int, double)> _samples = [];
@@ -195,6 +203,7 @@ class _TearablePageState extends State<TearablePage>
   @override
   void dispose() {
     _idle?.cancel();
+    _gripTimer?.cancel();
     for (final t in _tears) {
       t.fall?.dispose();
     }
@@ -203,6 +212,30 @@ class _TearablePageState extends State<TearablePage>
   }
 
   // ----------------------------------------------------------------- gestures
+
+  void _onPointerDown(PointerDownEvent e) {
+    _downAt = e.localPosition;
+    _gripTimer?.cancel();
+    _gripTimer = Timer(_gripTime, () {
+      if (!mounted) return;
+      HapticFeedback.mediumImpact();
+      setState(() => _gripped = true);
+    });
+  }
+
+  void _onPointerMove(PointerMoveEvent e) {
+    final from = _downAt;
+    // Moved before the grip formed: that is a swipe, not a grip.
+    if (!_gripped && from != null && (e.localPosition - from).distance > _gripWobble) {
+      _gripTimer?.cancel();
+    }
+  }
+
+  void _onPointerEnd() {
+    _gripTimer?.cancel();
+    _downAt = null;
+    if (_gripped) setState(() => _gripped = false);
+  }
 
   void _onDragStart(DragStartDetails details, Size size) {
     final at = details.localPosition;
@@ -273,8 +306,8 @@ class _TearablePageState extends State<TearablePage>
 
     _pulled += move;
     if (!_armed) {
-      // Slow or gentle: leave the page alone.
-      if (speed < _armSpeed || _pulled < _armDistance) return;
+      // Not gripped first, or not yanked hard: leave the page alone.
+      if (!_gripped || speed < _armSpeed || _pulled < _armDistance) return;
       _armed = true;
     } else if (speed < _keepSpeed) {
       return; // the pull eased off: the rip stalls until it is yanked again
@@ -411,15 +444,27 @@ class _TearablePageState extends State<TearablePage>
       builder: (context, constraints) {
         final size = constraints.biggest;
 
-        return GestureDetector(
+        return Listener(
           behavior: HitTestBehavior.translucent,
-          onVerticalDragStart: (d) => _onDragStart(d, size),
-          onVerticalDragUpdate: (d) => _onDragUpdate(d, size),
-          onVerticalDragEnd: (_) => _onDragEnd(),
-          onVerticalDragCancel: _onDragEnd,
-          child: (_tears.isEmpty && _fallen.isEmpty)
-              ? widget.child
-              : _buildTorn(size),
+          onPointerDown: _onPointerDown,
+          onPointerMove: _onPointerMove,
+          onPointerUp: (_) => _onPointerEnd(),
+          onPointerCancel: (_) => _onPointerEnd(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onVerticalDragStart: (d) => _onDragStart(d, size),
+            onVerticalDragUpdate: (d) => _onDragUpdate(d, size),
+            onVerticalDragEnd: (_) => _onDragEnd(),
+            onVerticalDragCancel: _onDragEnd,
+            child: (_tears.isEmpty && _fallen.isEmpty)
+                // The page shrinks a touch once gripped, ready to be yanked.
+                ? AnimatedScale(
+                    scale: _gripped ? .985 : 1,
+                    duration: const Duration(milliseconds: 120),
+                    child: widget.child,
+                  )
+                : _buildTorn(size),
+          ),
         );
       },
     );
