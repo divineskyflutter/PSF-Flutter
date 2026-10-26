@@ -252,6 +252,9 @@ class AppStrings {
   static const String supportingRequired = 'supporting_required';
   static const String supportingNotRequired = 'supporting_not_required';
   static const String supportingAddedCount = 'supporting_added_count';
+  static const String supportingCompleted = 'supporting_completed';
+  static const String supportingPending = 'supporting_pending';
+  static const String supportingNone = 'supporting_none';
   static const String profileFeeInfo = 'profile_fee_info';
   static const String profileImportantTitle = 'profile_important_title';
   static const String profileNote1 = 'profile_note_1';

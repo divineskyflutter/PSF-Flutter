@@ -1015,12 +1015,17 @@ class ProfileSangyogNitiCard extends StatelessWidget {
 // SUPPORTING ACCOUNT — age / rule and the references, Required / Not required
 // ===========================================================================
 
-/// The Supporting Account (references) status, read from the login response
-/// (`isReferenceNeeded`, `referenceCount`, `refrencemembers`), under the
-/// member's age and the age rule:
-///  * not needed (or nothing in the response) → "Not required";
-///  * needed → "Required", how many are added of how many, and each added
-///    person (name, mobile, member no.) — or a "-" row while none are added.
+/// The Supporting Account (references), read from the login response
+/// (`isReferenceNeeded`, `referenceCount`, `refrencemembers`):
+///
+///  * `isReferenceNeeded` is true → the full section: "Required", the age and
+///    rule, how many are added of how many (and how many are still pending),
+///    and each added person.
+///  * `isReferenceNeeded` is false, but a count is set → the same section with
+///    its list: "Completed" when the added people meet the count, otherwise
+///    with the pending count.
+///  * Nothing needed and nothing added → just a small note that the member has
+///    no reference account.
 class ProfileSupportingAccountCard extends StatelessWidget {
   const ProfileSupportingAccountCard({
     super.key,
@@ -1035,9 +1040,32 @@ class ProfileSupportingAccountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final info = controller.references.value;
-      final required = info?.isReferenceNeeded == true;
+      final needed = info?.isReferenceNeeded == true;
+      final count = info?.referenceCount ?? 0;
+      final added = info?.members.length ?? 0;
+      final pending = count > added ? count - added : 0;
+      final fulfilled = count > 0 && added >= count;
+
+      // Nothing needed, nothing counted, nobody added: a small note only.
+      if (!needed && count == 0 && added == 0) {
+        return _NoReferenceNote(
+          message: AppStrings.supportingNone.tr,
+        );
+      }
+
       final language = Get.find<LanguageController>().currentAppLanguage;
-      final color = required ? AppColors.warning : AppColors.success;
+      final String statusText;
+      final Color color;
+      if (needed) {
+        statusText = AppStrings.supportingRequired.tr;
+        color = AppColors.warning;
+      } else if (fulfilled || pending == 0) {
+        statusText = AppStrings.supportingCompleted.tr;
+        color = AppColors.success;
+      } else {
+        statusText = AppStrings.supportingPending.trParams({'pending': '$pending'});
+        color = AppColors.warning;
+      }
 
       return Container(
         width: double.infinity,
@@ -1049,12 +1077,7 @@ class ProfileSupportingAccountCard extends StatelessWidget {
             _CardTitle(
               icon: Icons.groups_rounded,
               title: AppStrings.supportingAccountTitle.tr,
-              trailing: _StatusPill(
-                text: required
-                    ? AppStrings.supportingRequired.tr
-                    : AppStrings.supportingNotRequired.tr,
-                color: color,
-              ),
+              trailing: _StatusPill(text: statusText, color: color),
             ),
             SizedBox(height: 12.px(context)),
             Container(
@@ -1074,47 +1097,97 @@ class ProfileSupportingAccountCard extends StatelessWidget {
                 ),
               ),
             ),
-            if (required) ...[
-              SizedBox(height: 12.px(context)),
-              Text(
-                info!.referenceCount != null
-                    ? AppStrings.supportingAddedCount.trParams({
-                        'added': '${info.members.length}',
-                        'required': '${info.referenceCount}',
-                      })
-                    : '${info.members.length}',
-                style: TextStyle(
-                  fontSize: 13.px(context),
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              SizedBox(height: 8.px(context)),
-              if (info.members.isEmpty)
-                Text(
-                  '-  ${AppStrings.referencesNoneYet.tr}',
-                  style: TextStyle(
-                    fontSize: 12.5.px(context),
-                    color: AppColors.textSecondary,
-                  ),
-                )
-              else
-                for (final m in info.members)
-                  _PersonLine(
-                    name: localizedField(
-                      language,
-                      plain: m.name,
-                      hindi: m.hindiName,
-                      gujarati: m.gujaratiName,
+            SizedBox(height: 12.px(context)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    count > 0
+                        ? AppStrings.supportingAddedCount.trParams({
+                            'added': '$added',
+                            'required': '$count',
+                          })
+                        : '$added',
+                    style: TextStyle(
+                      fontSize: 13.px(context),
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
-                    mobile: m.mobile,
-                    memberNo: m.memberNo,
                   ),
-            ],
+                ),
+                if (pending > 0)
+                  Text(
+                    AppStrings.supportingPending.trParams({'pending': '$pending'}),
+                    style: TextStyle(
+                      fontSize: 12.5.px(context),
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.danger,
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(height: 8.px(context)),
+            if (added == 0)
+              Text(
+                '-  ${AppStrings.referencesNoneYet.tr}',
+                style: TextStyle(
+                  fontSize: 12.5.px(context),
+                  color: AppColors.textSecondary,
+                ),
+              )
+            else
+              for (final m in info!.members)
+                _PersonLine(
+                  name: localizedField(
+                    language,
+                    plain: m.name,
+                    hindi: m.hindiName,
+                    gujarati: m.gujaratiName,
+                  ),
+                  mobile: m.mobile,
+                  memberNo: m.memberNo,
+                ),
           ],
         ),
       );
     });
+  }
+}
+
+/// The small replacement for the Supporting Account section when the member
+/// has no reference account at all.
+class _NoReferenceNote extends StatelessWidget {
+  const _NoReferenceNote({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 14.px(context), vertical: 12.px(context)),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(.07),
+        borderRadius: BorderRadius.circular(14.px(context)),
+        border: Border.all(color: AppColors.primary.withOpacity(.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.groups_outlined, size: 20.px(context), color: AppColors.primaryDark),
+          SizedBox(width: 10.px(context)),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12.5.px(context),
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
