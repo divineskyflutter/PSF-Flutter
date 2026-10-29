@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:psf_application/app/constants/app_colors.dart';
 import 'package:psf_application/app/constants/app_strings.dart';
 import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
+import 'package:psf_application/features/passbook/presentation/passbook_tab_request.dart';
 import 'package:psf_application/features/navigation/presentation/widgets/app_bottom_nav_bar.dart';
 import 'package:psf_application/features/profile/presentation/widgets/profile_card_style.dart';
 import 'package:psf_application/shared/extensions/new_responsive_extensions.dart';
@@ -27,9 +28,39 @@ class _PassbookTabsScreenState extends State<PassbookTabsScreen> {
   int _selected = 0;
 
   @override
+  void initState() {
+    super.initState();
+    PassbookTabRequest.requested.addListener(_applyRequest);
+    _applyRequest();
+  }
+
+  @override
   void dispose() {
+    PassbookTabRequest.requested.removeListener(_applyRequest);
     _pages.dispose();
     super.dispose();
+  }
+
+  /// A notification asked for a particular tab: slide to it, then clear the
+  /// request so a later normal visit is not affected.
+  void _applyRequest() {
+    final tab = PassbookTabRequest.requested.value;
+    if (tab == null) return;
+    PassbookTabRequest.requested.value = null;
+
+    void go() {
+      if (!mounted) return;
+      if (_pages.hasClients) {
+        _goTo(tab.clamp(0, 1));
+      } else {
+        // Not laid out yet: try once more on the next frame.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _pages.hasClients) _goTo(tab.clamp(0, 1));
+        });
+      }
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) => go());
   }
 
   void _goTo(int i) => _pages.animateToPage(

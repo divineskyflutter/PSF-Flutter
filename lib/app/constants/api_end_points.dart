@@ -157,6 +157,14 @@ class ApiEndPoints {
   static String get updateDeviceToken =>
       '$baseUrl/api/Member/UpdateDevicetoken';
 
+  /// The member's push notifications, paged (`skipRecords` / `takeRecords`).
+  static String get getAllPushNotification =>
+      '$baseUrl/api/Notification/GetAllPushNotification';
+
+  /// Marks one push notification as read (`{id}`).
+  static String get readPushNotification =>
+      '$baseUrl/api/Notification/readPushNotification';
+
   static String get getMemberById =>
       '$baseUrl/api/Api/GetMemberById';
 

@@ -22,6 +22,7 @@ import 'package:psf_application/features/profile/presentation/pages/contact_us_p
 import 'package:psf_application/features/profile/presentation/pages/delete_account_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/membership_card_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/passbook_page.dart';
+import 'package:psf_application/features/profile/presentation/utils/fee_entries.dart';
 import 'package:psf_application/shared/widgets/passbook_book/passbook_entries_screen.dart';
 import 'package:psf_application/features/profile/presentation/pages/privacy_policy_page.dart';
 import 'package:psf_application/features/profile/presentation/pages/terms_conditions_page.dart';
@@ -107,7 +108,13 @@ class AppPages {
     GetPage(name: AppRoutes.passbook, page: () => const PassbookPage()),
     GetPage(
       name: AppRoutes.passbookEntries,
-      page: () => PassbookEntriesScreen(args: Get.arguments as PassbookEntriesArgs),
+      // Opened with its entries (Profile's "View all") or, from a
+      // notification, with none: then it builds the fee entries itself.
+      page: () => PassbookEntriesScreen(
+        args: Get.arguments is PassbookEntriesArgs
+            ? Get.arguments as PassbookEntriesArgs
+            : feeEntriesArgs(),
+      ),
     ),
     GetPage(name: AppRoutes.aboutUs, page: () => const AboutUsPage()),
     GetPage(name: AppRoutes.termsAndConditions, page: () => const TermsConditionsPage()),

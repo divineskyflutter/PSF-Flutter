@@ -20,6 +20,7 @@ import 'package:psf_application/shared/widgets/windows/common_image_preview.dart
 import '../../data/models/scheme_reference_model.dart';
 import '../controllers/profile_controller.dart';
 import '../pages/profile_form_details_page.dart';
+import '../utils/fee_entries.dart';
 import 'profile_card_style.dart';
 
 String _orDash(String? value) =>
@@ -599,23 +600,7 @@ class _ProfilePaymentSectionState extends State<ProfilePaymentSection> {
 
   static const _flex = [2, 4, 4, 5, 4, 3];
 
-  List<PassbookRecord> _records() {
-    // Read first, so the surrounding Obx always has something to watch.
-    widget.controller.passbook.length;
-
-    final payments = widget.controller.passbook
-        .where((e) => e.paidAmount > 0)
-        .toList(growable: false);
-    return [
-      for (var i = 0; i < payments.length; i++)
-        PassbookRecord(
-          no: i + 1,
-          date: payments[i].date,
-          amount: payments[i].paidAmount,
-          type: payments[i].details,
-        ),
-    ];
-  }
+  List<PassbookRecord> _records() => feeEntryRecords(widget.controller);
 
   void _download(PassbookRecord record) =>
       ToastUtil.info(AppStrings.receiptNotAvailable.tr);

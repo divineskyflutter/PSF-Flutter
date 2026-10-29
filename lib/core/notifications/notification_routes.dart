@@ -9,10 +9,14 @@ import 'package:psf_application/features/navigation/presentation/controllers/mai
 /// behaves normally. Only screens that open without extra arguments are listed
 /// — an unknown value is ignored (the app just opens) and never crashes.
 class NotificationTarget {
-  const NotificationTarget._({this.tabIndex, this.page, required this.label});
+  const NotificationTarget._({this.tabIndex, this.subTab, this.page, required this.label});
 
   /// Bottom-bar tab to show (see [MainNavigationController]).
   final int? tabIndex;
+
+  /// Tab inside the bottom-bar tab (Passbook: 0 Deposit Account, 1 Loan
+  /// Account); `null` leaves the tab as it was.
+  final int? subTab;
 
   /// Named page to push.
   final String? page;
@@ -20,8 +24,8 @@ class NotificationTarget {
   /// Human description (for the docs).
   final String label;
 
-  const NotificationTarget.tab(int index, String label)
-      : this._(tabIndex: index, label: label);
+  const NotificationTarget.tab(int index, String label, {int? subTab})
+      : this._(tabIndex: index, subTab: subTab, label: label);
 
   const NotificationTarget.page(String route, String label)
       : this._(page: route, label: label);
@@ -37,10 +41,18 @@ class NotificationRoutes {
     '/profile': NotificationTarget.tab(MainNavigationController.profileTab, 'Profile tab'),
     '/card': NotificationTarget.tab(MainNavigationController.cardTab, 'Member card tab'),
     '/passbook': NotificationTarget.tab(MainNavigationController.passbookTab, 'Passbook tab'),
+    '/passbook/deposit': NotificationTarget.tab(
+        MainNavigationController.passbookTab, 'Passbook - Deposit Account tab',
+        subTab: 0),
+    '/passbook/loan': NotificationTarget.tab(
+        MainNavigationController.passbookTab, 'Passbook - Loan Account tab',
+        subTab: 1),
 
     // --- pages ----------------------------------------------------------------
     AppRoutes.notifications:
         NotificationTarget.page(AppRoutes.notifications, 'Notifications list'),
+    AppRoutes.passbookEntries:
+        NotificationTarget.page(AppRoutes.passbookEntries, 'Fee entries (Profile - View all)'),
     AppRoutes.aboutUs: NotificationTarget.page(AppRoutes.aboutUs, 'About Us'),
     AppRoutes.contactUs: NotificationTarget.page(AppRoutes.contactUs, 'Contact Us'),
     AppRoutes.termsAndConditions:

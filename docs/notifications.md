@@ -95,6 +95,9 @@ to a killed app unless the user allows autostart / removes battery limits.
 | `/profile` | Profile tab |
 | `/card` | Member card tab |
 | `/passbook` | Passbook tab |
+| `/passbook/deposit` | Passbook tab, Deposit Account tab |
+| `/passbook/loan` | Passbook tab, Loan Account tab |
+| `/passbook-entries` | Fee entries book (Profile - "View all") |
 | `/notifications` | Notifications screen (the bell on Home) |
 | `/profile/about-us` | About Us page |
 | `/profile/contact-us` | Contact Us page |

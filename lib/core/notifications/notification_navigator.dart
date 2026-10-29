@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/features/navigation/presentation/controllers/main_navigation_controller.dart';
+import 'package:psf_application/features/passbook/presentation/passbook_tab_request.dart';
 
 import 'notification_constants.dart';
 import 'notification_routes.dart';
@@ -85,6 +86,7 @@ class NotificationNavigator {
     final tab = target.tabIndex;
     if (target.page != null && Get.currentRoute == target.page) return;
     if (tab != null &&
+        target.subTab == null &&
         Get.currentRoute == AppRoutes.home &&
         nav.currentIndex.value == tab) {
       return;
@@ -98,6 +100,8 @@ class NotificationNavigator {
 
     if (tab != null) {
       nav.changeTab(tab);
+      // Passbook: which of its tabs (Deposit / Loan) to show.
+      if (target.subTab != null) PassbookTabRequest.request(target.subTab!);
     } else if (target.page != null) {
       Get.toNamed(target.page!);
     }
