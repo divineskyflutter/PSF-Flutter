@@ -158,7 +158,7 @@ class _NotificationList extends StatelessWidget {
                           message: AppStrings.somethingWentWrong.tr,
                           onRetry: controller.retry,
                         )
-                      : AppStateView.empty(message: AppStrings.notificationsEmpty.tr),
+                      : const _EmptyNotifications(),
                 ),
               ),
             ],
@@ -185,6 +185,67 @@ class _NotificationList extends StatelessWidget {
         },
       );
     });
+  }
+}
+
+/// Nothing to show: a medium bell, "no notifications yet" and a hint that the
+/// list can be pulled down to look for new ones.
+class _EmptyNotifications extends StatelessWidget {
+  const _EmptyNotifications();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 36.px(context)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 104.px(context),
+            height: 104.px(context),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.primary.withOpacity(.10),
+              border: Border.all(color: AppColors.primary.withOpacity(.18), width: 1.4),
+            ),
+            child: Icon(
+              Icons.notifications_none_rounded,
+              size: 52.px(context),
+              color: AppColors.primary,
+            ),
+          ),
+          SizedBox(height: 22.px(context)),
+          Text(
+            AppStrings.notificationsEmpty.tr,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 17.px(context),
+              fontWeight: FontWeight.w800,
+              color: AppColors.primaryDark,
+            ),
+          ),
+          SizedBox(height: 8.px(context)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_downward_rounded, size: 16.px(context), color: AppColors.textSecondary),
+              SizedBox(width: 6.px(context)),
+              Flexible(
+                child: Text(
+                  AppStrings.notificationsEmptyHint.tr,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.px(context),
+                    height: 1.35,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 

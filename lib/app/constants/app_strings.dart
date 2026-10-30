@@ -236,6 +236,7 @@ class AppStrings {
   static const String mobileShortLabel = 'mobile_short_label';
   static const String notificationsTitle = 'notifications_title';
   static const String notificationsEmpty = 'notifications_empty';
+  static const String notificationsEmptyHint = 'notifications_empty_hint';
   static const String notificationsFilterLabel = 'notifications_filter_label';
   static const String notificationsFilterAll = 'notifications_filter_all';
   static const String notificationsFilterUnread = 'notifications_filter_unread';

@@ -312,6 +312,7 @@ const Map<String, String> guIN = {
   'mobile_short_label': 'મોબાઇલ',
   'notifications_title': 'સૂચનાઓ',
   'notifications_empty': 'હજુ કોઈ સૂચના નથી',
+  'notifications_empty_hint': 'નવી સૂચનાઓ જોવા માટે નીચે ખેંચીને રિફ્રેશ કરો.',
   'notifications_filter_label': 'ફિલ્ટર',
   'notifications_filter_all': 'બધી',
   'notifications_filter_unread': 'વણવાંચેલી',

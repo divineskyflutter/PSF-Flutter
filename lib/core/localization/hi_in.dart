@@ -313,6 +313,7 @@ const Map<String, String> hiIN = {
   'mobile_short_label': 'मोबाइल',
   'notifications_title': 'सूचनाएं',
   'notifications_empty': 'अभी कोई सूचना नहीं',
+  'notifications_empty_hint': 'नई सूचनाएं देखने के लिए नीचे खींचकर रिफ्रेश करें।',
   'notifications_filter_label': 'फ़िल्टर',
   'notifications_filter_all': 'सभी',
   'notifications_filter_unread': 'अपठित',

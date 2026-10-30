@@ -9,6 +9,7 @@ import 'package:psf_application/core/storage/app_secure_storage.dart';
 
 import 'fcm_token_service.dart';
 import 'notification_display.dart';
+import 'notification_events.dart';
 import 'notification_navigator.dart';
 
 /// Runs when a push arrives while the app is in the BACKGROUND or KILLED
@@ -168,6 +169,8 @@ class NotificationService {
   /// A push arrived with the app OPEN: Android doesn't draw it, we do.
   void _onForegroundMessage(RemoteMessage message) {
     NotificationDisplay.show(message);
+    // The open notification list (if any) refreshes itself.
+    NotificationEvents.push();
   }
 
   /// Tap on a notification Android drew while the app was in the background.

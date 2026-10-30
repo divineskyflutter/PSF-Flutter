@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import 'package:psf_application/app/routes/app_routes.dart';
 import 'package:psf_application/core/notifications/notification_constants.dart';
+import 'package:psf_application/core/notifications/notification_events.dart';
 import 'package:psf_application/core/notifications/notification_navigator.dart';
 import 'package:psf_application/core/notifications/notification_routes.dart';
 import 'package:psf_application/core/storage/app_secure_storage.dart';
@@ -48,17 +49,32 @@ class NotificationsController extends GetxController {
   int _generation = 0;
   int? _memberId;
 
+  Timer? _arrivalTimer;
+
   @override
   void onInit() {
     super.onInit();
     scroll.addListener(_onScroll);
+    NotificationEvents.received.addListener(_onPushArrived);
     load();
   }
 
   @override
   void onClose() {
+    NotificationEvents.received.removeListener(_onPushArrived);
+    _arrivalTimer?.cancel();
     scroll.dispose();
     super.onClose();
+  }
+
+  /// A push arrived while this screen is open: reload quietly (no shimmer, the
+  /// list stays until the new one is in). The short wait lets the server file
+  /// the notification first; several pushes in a row reload once.
+  void _onPushArrived() {
+    _arrivalTimer?.cancel();
+    _arrivalTimer = Timer(const Duration(milliseconds: 1200), () {
+      if (!isLoading.value && !isLoadingMore.value) load(silent: true);
+    });
   }
 
   void _onScroll() {

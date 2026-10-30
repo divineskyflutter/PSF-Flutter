@@ -289,6 +289,7 @@ const Map<String, String> enUS = {
   'mobile_short_label': 'Mobile',
   'notifications_title': 'Notifications',
   'notifications_empty': 'No notifications yet',
+  'notifications_empty_hint': 'Pull down to refresh and check for new ones.',
   'notifications_filter_label': 'Filter',
   'notifications_filter_all': 'All',
   'notifications_filter_unread': 'Unread',
